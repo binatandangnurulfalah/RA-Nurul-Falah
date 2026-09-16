@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+export { AttendanceScannerNative as AttendanceScannerPage } from './AttendanceScannerNative'
 
 type AttendanceRecord = {
   id: string
