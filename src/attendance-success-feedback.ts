@@ -4,6 +4,7 @@ type ParsedAttendance = {
   name: string
   action: 'masuk' | 'pulang'
   time: string
+  status?: string
 }
 
 let installed = false
@@ -70,12 +71,22 @@ function playSuccessSound() {
 }
 
 function parseAttendance(text: string): ParsedAttendance | null {
-  const match = text.match(/^(.+?) berhasil (masuk|pulang) pukul ([0-9.:]+) WIB\.?$/i)
-  if (!match) return null
+  const legacy = text.match(/^(.+?) berhasil (masuk|pulang) pukul ([0-9.:]+) WIB\.?$/i)
+  if (legacy) {
+    return {
+      name: legacy[1].trim(),
+      action: legacy[2].toLowerCase() as ParsedAttendance['action'],
+      time: legacy[3],
+    }
+  }
+
+  const current = text.match(/^(.+?) berhasil (masuk|pulang) · ([0-9.:]+) WIB · (.+)$/i)
+  if (!current) return null
   return {
-    name: match[1].trim(),
-    action: match[2].toLowerCase() as ParsedAttendance['action'],
-    time: match[3],
+    name: current[1].trim(),
+    action: current[2].toLowerCase() as ParsedAttendance['action'],
+    time: current[3],
+    status: current[4].trim(),
   }
 }
 
@@ -97,6 +108,7 @@ function createPopup() {
       <div class="attendance-success-meta">
         <span class="attendance-success-action"></span>
         <span class="attendance-success-time"></span>
+        <span class="attendance-success-status"></span>
       </div>
     </div>
     <div class="attendance-success-progress" aria-hidden="true"><i></i></div>
@@ -115,11 +127,16 @@ function showPopup(text: string) {
   const name = popup.querySelector<HTMLElement>('.attendance-success-name')
   const action = popup.querySelector<HTMLElement>('.attendance-success-action')
   const time = popup.querySelector<HTMLElement>('.attendance-success-time')
+  const status = popup.querySelector<HTMLElement>('.attendance-success-status')
   const progress = popup.querySelector<HTMLElement>('.attendance-success-progress i')
 
   if (name) name.textContent = parsed.name
   if (action) action.textContent = parsed.action === 'masuk' ? 'Masuk' : 'Pulang'
   if (time) time.textContent = `${parsed.time} WIB`
+  if (status) {
+    status.textContent = parsed.status ?? ''
+    status.hidden = !parsed.status
+  }
 
   popup.classList.remove('show')
   if (progress) {
@@ -134,11 +151,12 @@ function showPopup(text: string) {
     popup?.classList.remove('show')
   }, 2000)
 
-  playSuccessSound()
+  // Portal V2 already plays its own success tone. Keep this sound only for the legacy scanner.
+  if (!parsed.status) playSuccessSound()
 }
 
 function inspectFeedback() {
-  const success = document.querySelector<HTMLElement>('.scan-feedback.success')
+  const success = document.querySelector<HTMLElement>('.v2-scan-feedback.success, .scan-feedback.success')
   const text = success?.textContent?.trim() ?? ''
   if (!text || !text.includes('berhasil')) return
 
