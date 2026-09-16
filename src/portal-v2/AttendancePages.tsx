@@ -11,7 +11,6 @@ import {
   Search,
   ShieldCheck,
   Trash2,
-  UsersRound,
   X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
