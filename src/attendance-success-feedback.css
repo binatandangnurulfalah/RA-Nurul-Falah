@@ -63,6 +63,7 @@
 .attendance-success-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 3px;
   font-size: 12px;
@@ -78,6 +79,15 @@
 
 .attendance-success-time {
   color: #65786f;
+}
+
+.attendance-success-status {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #fff1d5;
+  color: #8b681b;
+  font-size: 10px;
+  font-weight: 850;
 }
 
 .attendance-success-progress {
@@ -116,6 +126,11 @@
 
   .attendance-success-name {
     font-size: 16px;
+  }
+
+  .attendance-success-meta {
+    gap: 6px;
+    font-size: 11px;
   }
 }
 
