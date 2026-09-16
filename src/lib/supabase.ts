@@ -17,9 +17,9 @@ export type UserProfile = {
   id: string
   role: AppRole
   display_name: string | null
-  phone: string | null
-  address: string | null
-  bio: string | null
+  phone?: string | null
+  address?: string | null
+  bio?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
