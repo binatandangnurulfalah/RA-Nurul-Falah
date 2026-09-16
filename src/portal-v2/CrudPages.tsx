@@ -1,10 +1,12 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   CheckCircle2,
   Edit3,
   GraduationCap,
   Megaphone,
   Plus,
+  QrCode,
   Save,
   Search,
   Trash2,
@@ -112,6 +114,7 @@ export function StudentsPage({ role }: { role: 'admin' | 'teacher' }) {
   const [classFilter, setClassFilter] = useState('all')
   const [editing, setEditing] = useState<Student | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
+  const [qrStudent, setQrStudent] = useState<Student | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
 
   const load = async () => {
@@ -140,11 +143,16 @@ export function StudentsPage({ role }: { role: 'admin' | 'teacher' }) {
     setDeleting(null); setMessage({ tone: 'success', text: 'Data murid berhasil dihapus.' }); await load()
   }
 
-  return <div className="v2-stack"><PageTitle eyebrow="AKADEMIK" title="Data Murid" text={role === 'admin' ? 'Tambah, edit, hubungkan wali, tampilkan QR, dan hapus data murid.' : 'Tambah, edit, hubungkan wali, dan tampilkan data murid.'} action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</button>} />{message && <Notice {...message} />}
-    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, NIS, atau NISN..." /></label><select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}><option value="all">Semua kelompok</option>{classes.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="v2-card-grid">{filtered.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nis ? `NIS ${student.nis}` : 'NIS belum diisi'} · {student.is_active ? 'Aktif' : 'Nonaktif'}</small></div><div className="v2-inline-actions"><button title="Edit" onClick={() => setEditing(student)}><Edit3 size={17} /></button>{role === 'admin' && <button className="danger" title="Hapus" onClick={() => setDeleting(student)}><Trash2 size={17} /></button>}</div></article>)}</div> : <EmptyCard text="Tidak ada murid yang sesuai pencarian." />}</section>
-    {editing && <StudentModal student={editing === 'new' ? null : editing} parents={parents} classes={classes} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: editing === 'new' ? 'Murid berhasil ditambahkan.' : 'Data murid berhasil diperbarui.' }); await load() }} />}
+  return <div className="v2-stack"><PageTitle eyebrow="AKADEMIK" title="Data Murid" text={role === 'admin' ? 'Tambah, edit, hubungkan wali, tampilkan QR, dan hapus data murid.' : 'Tambah, edit, hubungkan wali, dan tampilkan QR murid.'} action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</button>} />{message && <Notice {...message} />}
+    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, NIS, atau NISN..." /></label><select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}><option value="all">Semua kelompok</option>{classes.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="v2-card-grid">{filtered.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nis ? `NIS ${student.nis}` : 'NIS belum diisi'} · {student.is_active ? 'Aktif' : 'Nonaktif'}</small></div><div className="v2-inline-actions"><button title="Tampilkan QR" onClick={() => setQrStudent(student)}><QrCode size={17} /></button><button title="Edit" onClick={() => setEditing(student)}><Edit3 size={17} /></button>{role === 'admin' && <button className="danger" title="Hapus" onClick={() => setDeleting(student)}><Trash2 size={17} /></button>}</div></article>)}</div> : <EmptyCard text="Tidak ada murid yang sesuai pencarian." />}</section>
+    {editing && <StudentModal student={editing === 'new' ? null : editing} parents={parents} classes={classes} onClose={() => setEditing(null)} onDone={async () => { const wasNew = editing === 'new'; setEditing(null); setMessage({ tone: 'success', text: wasNew ? 'Murid berhasil ditambahkan.' : 'Data murid berhasil diperbarui.' }); await load() }} />}
     {deleting && <ConfirmModal title="Hapus data murid?" text={`${deleting.full_name} beserta riwayat absensi dan hubungan walinya akan terhapus.`} confirm="Ya, Hapus" danger onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    {qrStudent && <StudentQrModal student={qrStudent} onClose={() => setQrStudent(null)} />}
   </div>
+}
+
+function StudentQrModal({ student, onClose }: { student: Student; onClose: () => void }) {
+  return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup QR" onClick={onClose} /><section className="v2-modal qr"><button className="v2-close" aria-label="Tutup QR" onClick={onClose}><X size={19} /></button><span className="v2-modal-icon"><QrCode /></span><h2>{student.full_name}</h2><p>{student.nis ? `NIS ${student.nis} · ` : ''}{student.class_name || 'RA Nurul Falah'}</p><div className="v2-qr"><QRCodeSVG value={`RA-NF:${student.qr_token}`} size={230} level="H" includeMargin /></div><small>QR digunakan untuk absensi masuk dan pulang.</small><button className="v2-primary full-button" onClick={() => window.print()}><QrCode size={17} /> Cetak QR</button></section></div>
 }
 
 function StudentModal({ student, parents, classes, onClose, onDone }: { student: Student | null; parents: Account[]; classes: SchoolClass[]; onClose: () => void; onDone: () => void }) {
@@ -296,7 +304,7 @@ function AnnouncementModal({ value, onClose, onDone }: { value: Announcement | n
   return <Modal title={value ? 'Edit Pengumuman' : 'Buat Pengumuman'} onClose={onClose} wide><form className="v2-form" onSubmit={submit}><label>Judul<input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label><label>Isi pengumuman<textarea required rows={6} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} /></label><label>Ditujukan untuk<select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value as 'all' | 'teacher' | 'parent' })}><option value="all">Semua pengguna</option><option value="teacher">Guru</option><option value="parent">Orang Tua/Wali</option></select></label><label className="v2-toggle"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} /><span>Publikasikan sekarang</span></label>{errorText && <p className="v2-field-error">{errorText}</p>}<button className="v2-primary" disabled={busy}><Save size={17} /> Simpan Pengumuman</button></form></Modal>
 }
 
-function Modal({ title, onClose, wide = false, children }: { title: string; onClose: () => void; wide?: boolean; children: React.ReactNode }) { return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className={`v2-modal ${wide ? 'wide' : ''}`}><header><div><small>FORMULIR</small><h2>{title}</h2></div><button className="v2-close" onClick={onClose}><X size={19} /></button></header>{children}</section></div> }
+function Modal({ title, onClose, wide = false, children }: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) { return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className={`v2-modal ${wide ? 'wide' : ''}`}><header><div><small>FORMULIR</small><h2>{title}</h2></div><button className="v2-close" onClick={onClose}><X size={19} /></button></header>{children}</section></div> }
 function ConfirmModal({ title, text, confirm, danger = false, onClose, onConfirm }: { title: string; text: string; confirm: string; danger?: boolean; onClose: () => void; onConfirm: () => void }) { return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className="v2-modal confirm"><span className={`v2-modal-icon ${danger ? 'danger' : ''}`}>{danger ? <Trash2 /> : <CheckCircle2 />}</span><h2>{title}</h2><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className={danger ? 'v2-danger' : 'v2-primary'} onClick={onConfirm}>{confirm}</button></div></section></div> }
 function MiniStat({ label, value, tone }: { label: string; value: number; tone: string }) { return <article className={`v2-stat mini ${tone}`}><span><UsersRound size={20} /></span><div><small>{label}</small><strong>{value}</strong><p>Terdaftar</p></div></article> }
 function initials(name?: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
