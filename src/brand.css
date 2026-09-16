@@ -1,0 +1,19 @@
+.brand-mark,
+.portal-brand > span {
+  background-color: white !important;
+  background-image: url('/RA-Nurul-Falah/logo-ra-nurul-falah.svg') !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: contain !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  overflow: hidden;
+}
+
+.brand-mark {
+  border-radius: 20px;
+}
+
+.portal-brand > span {
+  border-radius: 13px;
+}
