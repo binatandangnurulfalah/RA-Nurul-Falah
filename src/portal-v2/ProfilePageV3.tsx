@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   BadgeCheck,
   Check,
@@ -227,7 +227,7 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
   )
 }
 
-function InfoRow({ icon, label, value, filled }: { icon: React.ReactNode; label: string; value: string; filled: boolean }) {
+function InfoRow({ icon, label, value, filled }: { icon: ReactNode; label: string; value: string; filled: boolean }) {
   return <div className="profile-v3-info-row"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div><i className={filled ? 'filled' : ''}>{filled ? <Check size={13} /> : '—'}</i></div>
 }
 
