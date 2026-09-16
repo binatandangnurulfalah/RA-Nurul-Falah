@@ -1,0 +1,164 @@
+.native-scanner-panel { overflow: hidden; }
+
+.native-camera {
+  position: relative;
+  width: 100%;
+  min-height: 330px;
+  border: 1.5px dashed #cbded4;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #f8fbf9, #edf6f1);
+}
+
+.native-camera.active {
+  border-style: solid;
+  border-color: #c5dcd1;
+  background: #111;
+}
+
+.native-camera video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: transparent;
+}
+
+.native-camera:not(.active) video { visibility: hidden; }
+
+.native-camera-empty {
+  min-height: 330px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  padding: 22px;
+  text-align: center;
+}
+
+.native-camera-empty > span {
+  width: 82px;
+  height: 82px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: #e4f2ea;
+  color: var(--v2-green);
+}
+
+.native-camera-empty h3 { margin: 4px 0 0; }
+.native-camera-empty p { margin: 0 0 9px; color: var(--v2-muted); font-size: 11px; }
+
+.native-camera-guide {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+
+.native-camera-guide::before {
+  content: '';
+  width: min(66%, 270px);
+  aspect-ratio: 1;
+  border-radius: 20px;
+  box-shadow: 0 0 0 999px rgba(0,0,0,.16);
+}
+
+.native-camera-guide span {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-color: #fff;
+  border-style: solid;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,.25));
+}
+
+.native-camera-guide span:nth-child(1) { left: calc(50% - min(33%, 135px)); top: calc(50% - min(33%, 135px)); border-width: 4px 0 0 4px; border-radius: 12px 0 0 0; }
+.native-camera-guide span:nth-child(2) { right: calc(50% - min(33%, 135px)); top: calc(50% - min(33%, 135px)); border-width: 4px 4px 0 0; border-radius: 0 12px 0 0; }
+.native-camera-guide span:nth-child(3) { left: calc(50% - min(33%, 135px)); bottom: calc(50% - min(33%, 135px)); border-width: 0 0 4px 4px; border-radius: 0 0 0 12px; }
+.native-camera-guide span:nth-child(4) { right: calc(50% - min(33%, 135px)); bottom: calc(50% - min(33%, 135px)); border-width: 0 4px 4px 0; border-radius: 0 0 12px 0; }
+
+.native-camera-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.native-camera-name {
+  display: block;
+  margin: 7px 3px 0;
+  color: var(--v2-muted);
+  text-align: center;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.native-decoder-note {
+  margin: 9px 0 0;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #fff5dd;
+  color: #7b611c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .native-scanner-panel { padding: 14px; }
+  .native-camera { min-height: min(58vh, 470px); }
+  .native-camera-empty { min-height: min(58vh, 470px); }
+
+  .v2-bottom-nav button.scan-center-item {
+    align-self: start;
+    transform: translateY(-14px);
+  }
+
+  .v2-bottom-nav button.scan-center-item > span {
+    width: 54px;
+    height: 54px;
+    border-radius: 17px;
+    background: linear-gradient(145deg, #2e775c, #225f49);
+    color: #fff;
+    box-shadow: 0 9px 22px rgba(37,103,79,.28);
+    border: 4px solid #fff;
+  }
+
+  .v2-bottom-nav button.scan-center-item.active > span {
+    background: linear-gradient(145deg, #2e775c, #225f49);
+    color: #fff;
+  }
+
+  .v2-bottom-nav button.scan-center-item small {
+    margin-top: 1px;
+    color: var(--v2-green-dark);
+    font-weight: 900;
+  }
+
+  .v2-bottom-nav button.center-item:not(.scan-center-item) {
+    align-self: end;
+    transform: none;
+  }
+
+  .v2-bottom-nav button.center-item:not(.scan-center-item) > span {
+    width: 34px;
+    height: 30px;
+    border: 0;
+    border-radius: 10px;
+    box-shadow: none;
+    background: transparent;
+    color: inherit;
+  }
+}
+
+@media (max-width: 430px) {
+  .native-camera { min-height: 380px; }
+  .native-camera-empty { min-height: 380px; }
+  .native-camera-actions { grid-template-columns: 1fr; }
+}

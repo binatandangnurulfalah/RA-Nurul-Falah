@@ -23,14 +23,14 @@ import {
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { AccountsPage, AnnouncementsPage, ClassesPage, SchedulePage, StudentsPage } from './portal-v2/CrudPages'
 import { AttendanceDataManager } from './portal-v2/AttendancePages'
-import { AttendanceScannerFixed } from './portal-v2/AttendanceScannerFixed'
+import { AttendanceScannerNative } from './portal-v2/AttendanceScannerNative'
 import { ChildrenPage, DashboardPage, SettingsPage } from './portal-v2/PortalPages'
 import { ProfilePageV3 } from './portal-v2/ProfilePageV3'
 import { DocumentsPage, ModuleLaunchpad, PaymentsPage, ReportsPage, TeachersPage } from './portal-v2/SchoolModules'
 import './portal-v2.css'
 import './portal-v2-polish.css'
 import './school-modules.css'
-import './scanner-mobile-fix.css'
+import './scanner-native.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
 
@@ -169,7 +169,7 @@ export default function RolePortalV4({ profile }: { profile: UserProfile }) {
 function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; page: string; profile: UserProfile; setProfile: (profile: UserProfile) => void; go: (page: string) => void }) {
   if (page === 'dashboard') return <><DashboardPage role={role} profile={profile} go={go} /><ModuleLaunchpad role={role} go={go} /></>
   if (page === 'attendance-data') return <AttendanceDataManager canManage={role !== 'parent'} parentView={role === 'parent'} />
-  if (page === 'attendance' && role !== 'parent') return <AttendanceScannerFixed />
+  if (page === 'attendance' && role !== 'parent') return <AttendanceScannerNative />
   if (page === 'accounts' && role === 'admin') return <AccountsPage />
   if (page === 'students' && role !== 'parent') return <StudentsPage role={role} />
   if (page === 'teachers' && role === 'admin') return <TeachersPage />
