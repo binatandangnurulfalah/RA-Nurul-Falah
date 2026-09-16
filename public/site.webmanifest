@@ -1,0 +1,18 @@
+{
+  "name": "RA Nurul Falah",
+  "short_name": "RA Nurul Falah",
+  "description": "Sistem informasi Raudhatul Athfal Nurul Falah",
+  "start_url": "/RA-Nurul-Falah/",
+  "scope": "/RA-Nurul-Falah/",
+  "display": "standalone",
+  "background_color": "#f5f7f5",
+  "theme_color": "#174b3b",
+  "icons": [
+    {
+      "src": "/RA-Nurul-Falah/logo-ra-nurul-falah.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
