@@ -51,6 +51,24 @@
 .native-camera-empty h3 { margin: 4px 0 0; }
 .native-camera-empty p { margin: 0 0 9px; color: var(--v2-muted); font-size: 11px; }
 
+.native-start-actions {
+  width: min(100%, 390px);
+  display: grid;
+  gap: 9px;
+}
+
+.native-start-actions button {
+  width: 100%;
+  justify-content: center;
+  min-height: 46px;
+}
+
+.native-capture-button {
+  background: #fff;
+  border-color: #bcd5c8;
+  color: var(--v2-green-dark);
+}
+
 .native-camera-guide {
   position: absolute;
   inset: 0;
@@ -110,6 +128,26 @@
   line-height: 1.5;
 }
 
+.native-camera-file-input {
+  position: fixed;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.native-file-reader {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 320px;
+  height: 320px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 @media (max-width: 760px) {
   .native-scanner-panel { padding: 14px; }
   .native-camera { min-height: min(58vh, 470px); }
@@ -161,4 +199,5 @@
   .native-camera { min-height: 380px; }
   .native-camera-empty { min-height: 380px; }
   .native-camera-actions { grid-template-columns: 1fr; }
+  .native-start-actions { width: 100%; }
 }

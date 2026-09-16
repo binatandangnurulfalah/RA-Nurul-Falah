@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Camera, CameraOff, CheckCircle2, Flashlight, Image, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { PageTitle } from './PortalPages'
 
@@ -15,12 +15,8 @@ type Feedback = { tone: 'info' | 'success' | 'error'; text: string }
 type DetectedBarcode = { rawValue: string }
 type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<DetectedBarcode[]> }
 type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDetectorLike
-
-type CameraAttempt = {
-  label: string
-  constraints: MediaTrackConstraints
-  deviceId?: string
-}
+type CameraAttempt = { label: string; constraints: MediaTrackConstraints; deviceId?: string }
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean }
 
 const JAKARTA = 'Asia/Jakarta'
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
@@ -55,12 +51,16 @@ export function AttendanceScannerNative() {
   const [manual, setManual] = useState('')
   const [active, setActive] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [captureBusy, setCaptureBusy] = useState(false)
   const [cameraLabel, setCameraLabel] = useState('')
   const [cameraCount, setCameraCount] = useState(0)
   const [decoderAvailable, setDecoderAvailable] = useState(true)
+  const [torchSupported, setTorchSupported] = useState(false)
+  const [torchOn, setTorchOn] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'info', text: 'Kamera belum diaktifkan.' })
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const devicesRef = useRef<MediaDeviceInfo[]>([])
   const selectedDeviceRef = useRef<string | null>(null)
@@ -82,7 +82,6 @@ export function AttendanceScannerNative() {
   useEffect(() => {
     void load()
     return () => stopCamera(true)
-    // cleanup hanya saat halaman dilepas
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -148,6 +147,8 @@ export function AttendanceScannerNative() {
     setActive(false)
     setStarting(false)
     setCameraLabel('')
+    setTorchSupported(false)
+    setTorchOn(false)
     selectedDeviceRef.current = null
     if (!quiet) setFeedback({ tone: 'info', text: 'Kamera dihentikan.' })
   }
@@ -188,9 +189,9 @@ export function AttendanceScannerNative() {
   }
 
   const waitForVideo = async (video: HTMLVideoElement) => {
-    const deadline = Date.now() + 5000
+    const deadline = Date.now() + 6000
     while ((video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth === 0) && Date.now() < deadline) {
-      await new Promise((resolve) => window.setTimeout(resolve, 80))
+      await new Promise((resolve) => window.setTimeout(resolve, 100))
     }
     if (video.videoWidth === 0 || video.videoHeight === 0) throw new Error('Preview kamera gagal dimuat. Coba pilih kamera lain.')
   }
@@ -204,29 +205,27 @@ export function AttendanceScannerNative() {
     if (!ctx) return false
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-    let luminanceTotal = 0
-    let darkPixels = 0
+    let total = 0
+    let black = 0
     let samples = 0
     for (let i = 0; i < pixels.length; i += 16) {
       const r = pixels[i]
       const g = pixels[i + 1]
       const b = pixels[i + 2]
-      const luminance = (r * 0.2126) + (g * 0.7152) + (b * 0.0722)
-      luminanceTotal += luminance
-      if (r < 8 && g < 8 && b < 8) darkPixels += 1
+      const lum = (r * 0.2126) + (g * 0.7152) + (b * 0.0722)
+      total += lum
+      if (r < 7 && g < 7 && b < 7) black += 1
       samples += 1
     }
-    const average = luminanceTotal / Math.max(1, samples)
-    const blackRatio = darkPixels / Math.max(1, samples)
-    return average < 4 && blackRatio > 0.97
+    return (total / Math.max(1, samples)) < 2.5 && (black / Math.max(1, samples)) > 0.985
   }
 
   const verifyVisibleFrame = async (video: HTMLVideoElement) => {
-    await new Promise((resolve) => window.setTimeout(resolve, 550))
-    const firstBlack = frameIsBlack(video)
-    if (!firstBlack) return true
-    await new Promise((resolve) => window.setTimeout(resolve, 650))
-    return !frameIsBlack(video)
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 700))
+      if (!frameIsBlack(video)) return true
+    }
+    return false
   }
 
   const attachStream = async (stream: MediaStream) => {
@@ -245,10 +244,26 @@ export function AttendanceScannerNative() {
     return video
   }
 
+  const tryTorchForDarkFrame = async (stream: MediaStream, video: HTMLVideoElement) => {
+    const track = stream.getVideoTracks()[0]
+    const caps = typeof track?.getCapabilities === 'function' ? track.getCapabilities() as TorchCapabilities : null
+    if (!caps?.torch) return false
+    try {
+      await track.applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] })
+      setTorchSupported(true)
+      setTorchOn(true)
+      await new Promise((resolve) => window.setTimeout(resolve, 1200))
+      return !frameIsBlack(video)
+    } catch {
+      return false
+    }
+  }
+
   const openAttempt = async (attempt: CameraAttempt) => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: attempt.constraints })
     const video = await attachStream(stream)
-    const visible = await verifyVisibleFrame(video)
+    let visible = await verifyVisibleFrame(video)
+    if (!visible) visible = await tryTorchForDarkFrame(stream, video)
     if (!visible) {
       releaseStream()
       throw new Error(`Preview ${attempt.label} gelap`)
@@ -269,8 +284,10 @@ export function AttendanceScannerNative() {
     const inputs = await refreshDeviceList()
     const track = stream.getVideoTracks()[0]
     const settings = track.getSettings()
+    const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() as TorchCapabilities : null
     selectedDeviceRef.current = settings.deviceId || null
     setCameraLabel(track.label || inputs.find((item) => item.deviceId === settings.deviceId)?.label || fallbackLabel || 'Kamera perangkat')
+    setTorchSupported(Boolean(caps?.torch))
     setActive(true)
 
     const decoderReady = prepareDetector()
@@ -278,7 +295,7 @@ export function AttendanceScannerNative() {
       setFeedback({ tone: 'info', text: 'Kamera belakang aktif. Arahkan QR murid ke kotak pemindai.' })
       scheduleDecode()
     } else {
-      setFeedback({ tone: 'error', text: 'Kamera aktif, tetapi browser ini belum mendukung pembacaan QR otomatis. Gunakan Chrome terbaru atau masukkan kode QR secara manual.' })
+      setFeedback({ tone: 'error', text: 'Preview kamera aktif, tetapi browser belum mendukung pembacaan QR otomatis. Gunakan Scan dengan Kamera HP.' })
     }
   }
 
@@ -293,11 +310,7 @@ export function AttendanceScannerNative() {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('Browser ini tidak mendukung akses kamera melalui HTTPS.')
 
       if (deviceId) {
-        const stream = await openAttempt({
-          label: 'kamera pilihan',
-          deviceId,
-          constraints: { deviceId: { exact: deviceId } },
-        })
+        const stream = await openAttempt({ label: 'kamera pilihan', deviceId, constraints: { deviceId: { exact: deviceId } } })
         await activateWorkingStream(stream)
         return
       }
@@ -306,42 +319,36 @@ export function AttendanceScannerNative() {
         { label: 'kamera belakang utama', constraints: { facingMode: { exact: 'environment' } } },
         { label: 'kamera belakang kompatibel', constraints: { facingMode: { ideal: 'environment' } } },
       ]
-
       let lastError: unknown = null
       for (const attempt of attempts) {
         try {
           const stream = await openAttempt(attempt)
           await activateWorkingStream(stream, attempt.label)
           return
-        } catch (error) {
-          lastError = error
-        }
+        } catch (error) { lastError = error }
       }
 
       const inputs = await refreshDeviceList()
       const rearCandidates = inputs.filter((item) => !isClearlyFrontCamera(item.label))
       for (const camera of rearCandidates) {
         try {
-          setFeedback({ tone: 'info', text: `Mencoba kamera belakang lain${camera.label ? ` · ${camera.label}` : ''}...` })
-          const stream = await openAttempt({
-            label: camera.label || 'kamera belakang lain',
-            deviceId: camera.deviceId,
-            constraints: { deviceId: { exact: camera.deviceId } },
-          })
+          setFeedback({ tone: 'info', text: `Mencoba sensor belakang lain${camera.label ? ` · ${camera.label}` : ''}...` })
+          const stream = await openAttempt({ label: camera.label || 'kamera belakang lain', deviceId: camera.deviceId, constraints: { deviceId: { exact: camera.deviceId } } })
           await activateWorkingStream(stream, camera.label)
           return
-        } catch (error) {
-          lastError = error
-        }
+        } catch (error) { lastError = error }
       }
 
-      throw lastError instanceof Error ? lastError : new Error('Semua sensor kamera belakang terdeteksi gelap.')
+      throw lastError instanceof Error ? lastError : new Error('Semua sensor kamera belakang menghasilkan frame gelap.')
     } catch (error) {
       stopCamera(true)
-      const message = error instanceof Error && /gelap/i.test(error.message)
-        ? 'Kamera belakang terdeteksi, tetapi semua sensor belakang menghasilkan frame gelap. Coba tombol Ganti Kamera setelah membuka kamera depan, atau tutup aplikasi kamera lain lalu coba kembali.'
-        : friendlyCameraError(error)
-      setFeedback({ tone: 'error', text: message })
+      const dark = error instanceof Error && /gelap/i.test(error.message)
+      setFeedback({
+        tone: 'error',
+        text: dark
+          ? 'Kamera belakang live dari browser tetap gelap di perangkat ini. Gunakan tombol Scan dengan Kamera HP di bawah agar kamera belakang native Android yang dibuka.'
+          : friendlyCameraError(error),
+      })
     } finally {
       setStarting(false)
     }
@@ -352,12 +359,46 @@ export function AttendanceScannerNative() {
     if (devices.length < 2 || starting) return
     const current = selectedDeviceRef.current
     const currentIndex = Math.max(0, devices.findIndex((item) => item.deviceId === current))
-    for (let offset = 1; offset <= devices.length; offset += 1) {
-      const next = devices[(currentIndex + offset) % devices.length]
+    const next = devices[(currentIndex + 1) % devices.length]
+    await startCamera(next.deviceId)
+  }
+
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks()[0]
+    if (!track || !torchSupported) return
+    const next = !torchOn
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] })
+      setTorchOn(next)
+    } catch {
+      setFeedback({ tone: 'error', text: 'Lampu kamera tidak dapat diubah pada perangkat ini.' })
+    }
+  }
+
+  const openNativeCapture = () => {
+    stopCamera(true)
+    fileInputRef.current?.click()
+  }
+
+  const handleNativeCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setCaptureBusy(true)
+    setFeedback({ tone: 'info', text: 'Membaca QR dari kamera HP...' })
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode')
+      const reader = new Html5Qrcode('native-file-reader')
       try {
-        await startCamera(next.deviceId)
-        return
-      } catch { /* startCamera menampilkan error sendiri */ }
+        const decoded = await reader.scanFile(file, false)
+        await record(decoded)
+      } finally {
+        try { reader.clear() } catch { /* aman diabaikan */ }
+      }
+    } catch {
+      setFeedback({ tone: 'error', text: 'QR belum terbaca dari foto. Ambil ulang dengan QR memenuhi sebagian besar layar dan fokus tajam.' })
+    } finally {
+      setCaptureBusy(false)
     }
   }
 
@@ -365,7 +406,7 @@ export function AttendanceScannerNative() {
 
   return (
     <div className="v2-stack native-scanner-page">
-      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Kamera dibuat langsung oleh browser. Sistem otomatis mencari sensor kamera belakang yang benar-benar menghasilkan gambar." />
+      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Gunakan scan live. Jika kamera belakang browser gelap, Scan dengan Kamera HP akan membuka kamera native Android." />
       <div className="v2-two-col scanner">
         <section className="v2-panel native-scanner-panel">
           <div className={`native-camera ${active ? 'active' : ''}`}>
@@ -375,10 +416,15 @@ export function AttendanceScannerNative() {
               <div className="native-camera-empty">
                 <span><Camera size={58} /></span>
                 <h3>Kamera siap digunakan</h3>
-                <p>Tekan tombol di bawah. Sistem akan mencari kamera belakang utama dan melewati sensor yang menghasilkan layar hitam.</p>
-                <button className="v2-primary" disabled={starting} onClick={() => void startCamera()}>
-                  <Camera size={18} /> {starting ? 'Mencari Kamera...' : 'Aktifkan Kamera Belakang'}
-                </button>
+                <p>Coba scan live terlebih dahulu. Bila kamera belakang tetap gelap, gunakan kamera HP native.</p>
+                <div className="native-start-actions">
+                  <button className="v2-primary" disabled={starting || captureBusy} onClick={() => void startCamera()}>
+                    <Camera size={18} /> {starting ? 'Mencari Kamera...' : 'Scan Live'}
+                  </button>
+                  <button className="v2-secondary native-capture-button" disabled={starting || captureBusy} onClick={openNativeCapture}>
+                    <Image size={18} /> {captureBusy ? 'Membaca QR...' : 'Scan dengan Kamera HP'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -387,16 +433,21 @@ export function AttendanceScannerNative() {
             <div className="native-camera-actions">
               <button className="v2-secondary" onClick={() => stopCamera(false)}><CameraOff size={17} /> Hentikan</button>
               {cameraCount > 1 && <button className="v2-secondary" disabled={starting} onClick={() => void switchCamera()}><RefreshCw size={17} /> Ganti Kamera</button>}
+              {torchSupported && <button className="v2-secondary" onClick={() => void toggleTorch()}><Flashlight size={17} /> {torchOn ? 'Matikan Lampu' : 'Nyalakan Lampu'}</button>}
+              <button className="v2-secondary" disabled={captureBusy} onClick={openNativeCapture}><Image size={17} /> Kamera HP</button>
             </div>
           )}
-          {active && cameraLabel && <small className="native-camera-name">Kamera aktif: {cameraLabel}</small>}
+          {active && cameraLabel && <small className="native-camera-name">{cameraLabel}</small>}
 
           <div className={`v2-scan-feedback ${feedback.tone}`}>
             {feedback.tone === 'success' ? <CheckCircle2 /> : feedback.tone === 'error' ? <AlertTriangle /> : <QrCode />}
             <span>{feedback.text}</span>
           </div>
 
-          {!decoderAvailable && active && <p className="native-decoder-note">Preview kamera tetap berfungsi. Pembacaan QR otomatis memerlukan browser Chrome/Android yang mendukung Barcode Detection API.</p>}
+          {!decoderAvailable && active && <p className="native-decoder-note">Pembacaan QR live tidak tersedia di browser ini. Tombol Kamera HP tetap dapat digunakan.</p>}
+
+          <input ref={fileInputRef} className="native-camera-file-input" type="file" accept="image/*" capture="environment" onChange={(event) => void handleNativeCapture(event)} />
+          <div id="native-file-reader" className="native-file-reader" aria-hidden="true" />
 
           <details className="v2-manual">
             <summary>Masukkan kode QR secara manual</summary>
