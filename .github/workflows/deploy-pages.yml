@@ -1,4 +1,5 @@
 name: Deploy GitHub Pages
+# Publishes the compiled Vite application, not the repository source files.
 
 on:
   push:
