@@ -1,6 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import {
-  CalendarDays,
   CheckCircle2,
   Edit3,
   GraduationCap,
@@ -9,7 +8,6 @@ import {
   Save,
   Search,
   Trash2,
-  UserRound,
   UsersRound,
   X,
 } from 'lucide-react'
