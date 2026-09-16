@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
+import AttendanceDataPage from './AttendanceDataPage'
 import './portal.css'
 
 type NavItem = {
@@ -98,6 +99,7 @@ const menus: Record<AppRole, NavItem[]> = {
   teacher: [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'attendance', label: 'Absensi', icon: QrCode },
+    { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'students', label: 'Data Murid', icon: UsersRound },
     { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
     { id: 'announcements', label: 'Pengumuman', icon: Megaphone },
@@ -384,6 +386,7 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
 
 function TeacherView({ page, profile }: { page: string; profile: UserProfile }) {
   if (page === 'attendance') return <AttendancePage />
+  if (page === 'attendance-data') return <AttendanceDataPage />
   if (page === 'students') return <StudentsPage />
   if (page === 'schedule') return <SchedulePage teacher />
   if (page === 'announcements') return <AnnouncementsPage canCreate />
@@ -436,7 +439,7 @@ function TeacherDashboard({ profile }: { profile: UserProfile }) {
         <Card title="Jadwal Hari Ini" action="Lihat mingguan" onAction={() => navigate('/guru/schedule')}>
           {loading ? <LoadingRows /> : <ScheduleTimeline entries={schedule} />}
         </Card>
-        <Card title="Kehadiran Terbaru">
+        <Card title="Kehadiran Terbaru" action="Kelola data" onAction={() => navigate('/guru/attendance-data')}>
           {loading ? <LoadingRows count={3} /> : <RealAttendanceRows records={records.slice(0, 5)} />}
         </Card>
       </div>
@@ -917,4 +920,4 @@ function roleName(role: AppRole) { if (role === 'admin') return 'Administrator';
 function initials(name: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function firstName(name: string | null) { return (name || 'Pengguna').split(' ')[0] }
 function formatDate(value: string) { return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value)) }
-function shortMobileLabel(label: string) { if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Murid') return 'Murid'; if (label === 'Kehadiran Anak') return 'Kehadiran'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; return label.split(' ')[0] }
+function shortMobileLabel(label: string) { if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Absen') return 'Riwayat'; if (label === 'Kehadiran Anak') return 'Kehadiran'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; return label.split(' ')[0] }
