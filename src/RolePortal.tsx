@@ -90,6 +90,7 @@ const menus: Record<AppRole, NavItem[]> = {
   admin: [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'accounts', label: 'Manajemen Akun', icon: UsersRound },
+    { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'students', label: 'Data Murid', icon: GraduationCap },
     { id: 'attendance', label: 'Scan Absensi', icon: QrCode },
     { id: 'classes', label: 'Kelas & Tahun Ajaran', icon: GraduationCap },
@@ -98,7 +99,7 @@ const menus: Record<AppRole, NavItem[]> = {
   ],
   teacher: [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'attendance', label: 'Absensi', icon: QrCode },
+    { id: 'attendance', label: 'Scan Absensi', icon: QrCode },
     { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'students', label: 'Data Murid', icon: UsersRound },
     { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
@@ -108,7 +109,7 @@ const menus: Record<AppRole, NavItem[]> = {
   parent: [
     { id: 'dashboard', label: 'Beranda', icon: Home },
     { id: 'children', label: 'Data Anak', icon: UsersRound },
-    { id: 'attendance', label: 'Kehadiran Anak', icon: ClipboardCheck },
+    { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
     { id: 'announcements', label: 'Pengumuman', icon: Megaphone },
     { id: 'profile', label: 'Profil Keluarga', icon: UserRound },
@@ -232,6 +233,7 @@ export default function RolePortal({ profile }: { profile: UserProfile }) {
 
 function AdminView({ page, profile }: { page: string; profile: UserProfile }) {
   if (page === 'accounts') return <AccountsPage />
+  if (page === 'attendance-data') return <AttendanceDataPage canDelete />
   if (page === 'students') return <StudentsPage />
   if (page === 'attendance') return <AttendancePage />
   if (page === 'classes') return <ClassesPage />
@@ -272,6 +274,7 @@ function AdminDashboard({ profile }: { profile: UserProfile }) {
       <Hero eyebrow="PANEL ADMINISTRATOR" title={`Selamat datang, ${firstName(profile.display_name)}`} text={`${formatDashboardDate()} · Pantau operasional sekolah dari satu tempat.`} />
       <QuickActions items={[
         { label: 'Scan Absensi', text: 'Catat masuk atau pulang murid', icon: QrCode, tone: 'green', onClick: () => navigate('/admin/attendance') },
+        { label: 'Data Absen', text: 'Lihat dan koreksi riwayat kehadiran', icon: ClipboardCheck, tone: 'gold', onClick: () => navigate('/admin/attendance-data') },
         { label: 'Tambah Murid', text: 'Buka data murid dan formulir baru', icon: GraduationCap, tone: 'blue', onClick: () => navigate('/admin/students') },
         { label: 'Tambah Akun', text: 'Kelola akun guru dan wali', icon: UsersRound, tone: 'purple', onClick: () => navigate('/admin/accounts') },
       ]} />
@@ -285,7 +288,7 @@ function AdminDashboard({ profile }: { profile: UserProfile }) {
         <Card title="Akun Terbaru" action="Lihat semua" onAction={() => navigate('/admin/accounts')}>
           {loading ? <LoadingRows /> : <RecentAccounts accounts={accounts.slice(0, 5)} />}
         </Card>
-        <Card title="Kehadiran Hari Ini">
+        <Card title="Kehadiran Hari Ini" action="Data absen" onAction={() => navigate('/admin/attendance-data')}>
           <ProgressSummary value={todayAttendance} total={studentCount} label="Murid sudah tercatat hadir" />
         </Card>
       </div>
@@ -386,7 +389,7 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
 
 function TeacherView({ page, profile }: { page: string; profile: UserProfile }) {
   if (page === 'attendance') return <AttendancePage />
-  if (page === 'attendance-data') return <AttendanceDataPage />
+  if (page === 'attendance-data') return <AttendanceDataPage canDelete />
   if (page === 'students') return <StudentsPage />
   if (page === 'schedule') return <SchedulePage teacher />
   if (page === 'announcements') return <AnnouncementsPage canCreate />
@@ -426,6 +429,7 @@ function TeacherDashboard({ profile }: { profile: UserProfile }) {
       <Hero eyebrow="DASHBOARD GURU" title={`Selamat pagi, ${firstName(profile.display_name)}`} text={`${formatDashboardDate()} · Fokus pada kehadiran dan kegiatan belajar hari ini.`} />
       <QuickActions items={[
         { label: 'Mulai Scan Absensi', text: 'Buka kamera dan pindai QR murid', icon: QrCode, tone: 'green', onClick: () => navigate('/guru/attendance') },
+        { label: 'Data Absen', text: 'Lihat dan koreksi seluruh riwayat absensi', icon: ClipboardCheck, tone: 'purple', onClick: () => navigate('/guru/attendance-data') },
         { label: 'Data Murid', text: 'Cari murid dan tampilkan QR', icon: UsersRound, tone: 'blue', onClick: () => navigate('/guru/students') },
         { label: 'Jadwal Mingguan', text: 'Lihat seluruh agenda belajar', icon: CalendarDays, tone: 'gold', onClick: () => navigate('/guru/schedule') },
       ]} />
@@ -449,6 +453,7 @@ function TeacherDashboard({ profile }: { profile: UserProfile }) {
 
 function ParentView({ page, profile }: { page: string; profile: UserProfile }) {
   if (page === 'children') return <ChildrenPage />
+  if (page === 'attendance-data') return <AttendanceDataPage parentView />
   if (page === 'attendance') return <AttendanceHistory />
   if (page === 'schedule') return <SchedulePage />
   if (page === 'announcements') return <AnnouncementsPage />
@@ -526,7 +531,7 @@ function ParentDashboard({ profile }: { profile: UserProfile }) {
 
       <QuickActions items={[
         { label: 'QR Anak', text: 'Buka data anak dan tampilkan QR', icon: QrCode, tone: 'green', onClick: () => navigate('/orang-tua/children') },
-        { label: 'Riwayat Kehadiran', text: 'Lihat masuk, pulang, dan keterlambatan', icon: ClipboardCheck, tone: 'blue', onClick: () => navigate('/orang-tua/attendance') },
+        { label: 'Data Absen', text: 'Lihat riwayat masuk dan pulang anak', icon: ClipboardCheck, tone: 'blue', onClick: () => navigate('/orang-tua/attendance-data') },
         { label: 'Jadwal Mingguan', text: 'Lihat agenda belajar anak', icon: CalendarDays, tone: 'gold', onClick: () => navigate('/orang-tua/schedule') },
       ]} />
 
@@ -920,4 +925,4 @@ function roleName(role: AppRole) { if (role === 'admin') return 'Administrator';
 function initials(name: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function firstName(name: string | null) { return (name || 'Pengguna').split(' ')[0] }
 function formatDate(value: string) { return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value)) }
-function shortMobileLabel(label: string) { if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Absen') return 'Riwayat'; if (label === 'Kehadiran Anak') return 'Kehadiran'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; return label.split(' ')[0] }
+function shortMobileLabel(label: string) { if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Absen') return 'Absen'; if (label === 'Kehadiran Anak') return 'Kehadiran'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; return label.split(' ')[0] }
