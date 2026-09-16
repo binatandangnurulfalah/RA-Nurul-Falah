@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { KeyRound, LogOut, Mail, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, LogOut, Mail, ShieldCheck, UserPlus, UserRound, UsersRound } from 'lucide-react'
 import { AppRole, supabase, UserProfile } from './lib/supabase'
 
 function App() {
@@ -56,9 +56,9 @@ function App() {
       <Route path="/lupa-password" element={<ForgotPasswordPage />} />
       <Route path="/verifikasi-kode" element={<VerifyOtpPage />} />
       <Route path="/password-baru" element={<NewPasswordPage />} />
-      <Route path="/guru/*" element={<ProtectedRoute profile={profile} role="teacher"><DashboardShell profile={profile!} /></ProtectedRoute>} />
-      <Route path="/orang-tua/*" element={<ProtectedRoute profile={profile} role="parent"><DashboardShell profile={profile!} /></ProtectedRoute>} />
-      <Route path="/admin/*" element={<ProtectedRoute profile={profile} role="admin"><DashboardShell profile={profile!} /></ProtectedRoute>} />
+      <Route path="/guru/*" element={<ProtectedRoute profile={profile} role="teacher"><DashboardShell profile={profile!}><RolePlaceholder role="Guru" /></DashboardShell></ProtectedRoute>} />
+      <Route path="/orang-tua/*" element={<ProtectedRoute profile={profile} role="parent"><DashboardShell profile={profile!}><RolePlaceholder role="Orang Tua" /></DashboardShell></ProtectedRoute>} />
+      <Route path="/admin/*" element={<ProtectedRoute profile={profile} role="admin"><DashboardShell profile={profile!}><AdminDashboard /></DashboardShell></ProtectedRoute>} />
       <Route path="*" element={profile ? <RoleRedirect profile={profile} /> : <Navigate to="/login" replace />} />
     </Routes>
   )
@@ -79,7 +79,7 @@ function RoleRedirect({ profile }: { profile: UserProfile }) {
 
 function LoginPage() {
   const navigate = useNavigate()
-  const [role, setRole] = useState<'teacher' | 'parent'>('teacher')
+  const [role, setRole] = useState<AppRole>('teacher')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -112,12 +112,13 @@ function LoginPage() {
 
     if (userProfile.role !== role) {
       await supabase.auth.signOut()
-      setError(role === 'teacher' ? 'Akun ini bukan akun guru.' : 'Akun ini bukan akun orang tua/wali.')
+      const roleName = role === 'teacher' ? 'guru' : role === 'parent' ? 'orang tua/wali' : 'administrator'
+      setError(`Akun ini bukan akun ${roleName}.`)
       setBusy(false)
       return
     }
 
-    navigate(role === 'teacher' ? '/guru' : '/orang-tua', { replace: true })
+    navigate(role === 'teacher' ? '/guru' : role === 'parent' ? '/orang-tua' : '/admin', { replace: true })
   }
 
   return (
@@ -125,6 +126,7 @@ function LoginPage() {
       <div className="role-switch">
         <button className={role === 'teacher' ? 'active' : ''} onClick={() => setRole('teacher')} type="button">Guru</button>
         <button className={role === 'parent' ? 'active' : ''} onClick={() => setRole('parent')} type="button">Orang Tua</button>
+        <button className={role === 'admin' ? 'active' : ''} onClick={() => setRole('admin')} type="button">Admin</button>
       </div>
       <form onSubmit={submit} className="form-stack">
         <Field icon={<Mail size={18} />} label="Email" type="email" value={email} onChange={setEmail} placeholder="nama@email.com" />
@@ -265,7 +267,7 @@ function NewPasswordPage() {
   )
 }
 
-function DashboardShell({ profile }: { profile: UserProfile }) {
+function DashboardShell({ profile, children }: { profile: UserProfile; children: React.ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const roleLabel = profile.role === 'teacher' ? 'Guru' : profile.role === 'parent' ? 'Orang Tua' : 'Administrator'
@@ -293,13 +295,162 @@ function DashboardShell({ profile }: { profile: UserProfile }) {
             <small>{location.pathname}</small>
           </div>
         </div>
-        <div className="placeholder-card">
-          <h2>Autentikasi berhasil</h2>
-          <p>Akun aktif dan role berhasil diverifikasi dari database. Dashboard fitur sekolah akan dibangun pada tahap berikutnya.</p>
-        </div>
+        {children}
       </main>
     </div>
   )
+}
+
+type AccountRow = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
+
+function AdminDashboard() {
+  const [accounts, setAccounts] = useState<AccountRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+
+  const loadAccounts = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id,role,display_name,is_active,created_at')
+      .order('created_at', { ascending: false })
+
+    if (error) setLoadError('Daftar akun belum dapat dimuat. Silakan coba lagi.')
+    setAccounts((data as AccountRow[] | null) ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    loadAccounts()
+  }, [loadAccounts])
+
+  const teachers = accounts.filter((account) => account.role === 'teacher').length
+  const parents = accounts.filter((account) => account.role === 'parent').length
+
+  return (
+    <>
+      <section className="stats-grid" aria-label="Ringkasan akun">
+        <StatCard icon={<UsersRound size={22} />} label="Semua akun" value={accounts.length} />
+        <StatCard icon={<UserRound size={22} />} label="Guru" value={teachers} />
+        <StatCard icon={<UserRound size={22} />} label="Orang tua" value={parents} />
+      </section>
+
+      <section className="management-card">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Manajemen pengguna</p>
+            <h2>Akun Guru dan Orang Tua</h2>
+            <p>Buat akun baru tanpa membuka pendaftaran publik.</p>
+          </div>
+          <button className="primary-button inline-button" onClick={() => setFormOpen((value) => !value)}>
+            <UserPlus size={18} /> {formOpen ? 'Tutup formulir' : 'Tambah akun'}
+          </button>
+        </div>
+
+        {formOpen && <CreateAccountForm onCreated={() => { setFormOpen(false); loadAccounts() }} />}
+        {loadError && <div className="alert error">{loadError}</div>}
+
+        <div className="account-list">
+          <div className="account-list-header"><span>Nama</span><span>Role</span><span>Status</span></div>
+          {loading && <div className="empty-state">Memuat daftar akun...</div>}
+          {!loading && accounts.length === 0 && <div className="empty-state">Belum ada akun.</div>}
+          {!loading && accounts.map((account) => (
+            <div className="account-row" key={account.id}>
+              <div className="account-identity">
+                <span className="small-avatar">{initials(account.display_name)}</span>
+                <div><strong>{account.display_name || 'Tanpa nama'}</strong><small>Dibuat {formatDate(account.created_at)}</small></div>
+              </div>
+              <span className={`role-badge ${account.role}`}>{roleLabel(account.role)}</span>
+              <span className={`status-badge ${account.is_active ? 'active' : 'inactive'}`}>{account.is_active ? 'Aktif' : 'Nonaktif'}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  )
+}
+
+function CreateAccountForm({ onCreated }: { onCreated: () => void }) {
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<'teacher' | 'parent'>('teacher')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setSuccess('')
+
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      setError('Password minimal 8 karakter dan harus berisi huruf serta angka.')
+      setBusy(false)
+      return
+    }
+
+    const { data, error: invokeError } = await supabase.functions.invoke('admin-create-user', {
+      body: {
+        email: email.trim().toLowerCase(),
+        password,
+        display_name: displayName.trim(),
+        role,
+      },
+    })
+
+    if (invokeError || !data?.ok) {
+      let message = data?.error || 'Akun gagal dibuat. Periksa kembali data atau coba beberapa saat lagi.'
+      const context = (invokeError as { context?: Response } | null)?.context
+      if (context) {
+        try {
+          const responseBody = await context.clone().json()
+          if (responseBody?.error) message = responseBody.error
+        } catch {
+          // Gunakan pesan aman di atas jika respons bukan JSON.
+        }
+      }
+      setError(message)
+      setBusy(false)
+      return
+    }
+
+    setSuccess(`Akun ${role === 'teacher' ? 'guru' : 'orang tua'} berhasil dibuat.`)
+    setBusy(false)
+    setTimeout(onCreated, 900)
+  }
+
+  return (
+    <form className="create-account-form" onSubmit={submit}>
+      <div className="form-title"><UserPlus size={20} /><div><strong>Tambah akun baru</strong><small>Email langsung dikonfirmasi oleh sistem.</small></div></div>
+      <div className="form-grid">
+        <Field icon={<UserRound size={18} />} label="Nama lengkap" type="text" value={displayName} onChange={setDisplayName} placeholder="Nama guru atau orang tua" />
+        <Field icon={<Mail size={18} />} label="Email" type="email" value={email} onChange={setEmail} placeholder="nama@email.com" />
+        <Field icon={<KeyRound size={18} />} label="Password sementara" type="password" value={password} onChange={setPassword} placeholder="Minimal 8 karakter" />
+        <label className="field-wrap">
+          <span className="field-label">Jenis akun</span>
+          <select value={role} onChange={(event) => setRole(event.target.value as 'teacher' | 'parent')}>
+            <option value="teacher">Guru</option>
+            <option value="parent">Orang Tua/Wali</option>
+          </select>
+        </label>
+      </div>
+      {error && <div className="alert error">{error}</div>}
+      {success && <div className="alert success">{success}</div>}
+      <div className="form-actions"><button className="primary-button" disabled={busy || Boolean(success)}>{busy ? 'Membuat akun...' : 'Buat akun'}</button></div>
+    </form>
+  )
+}
+
+function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+  return <div className="stat-card"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>
+}
+
+function RolePlaceholder({ role }: { role: string }) {
+  return <div className="placeholder-card"><h2>Autentikasi berhasil</h2><p>Dashboard {role} akan diisi dengan fitur sekolah pada tahap berikutnya.</p></div>
 }
 
 function AuthLayout({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
@@ -343,4 +494,20 @@ function maskEmail(email: string) {
   return `${name.slice(0, 1)}${'*'.repeat(Math.max(2, name.length - 1))}@${domain}`
 }
 
+function roleLabel(role: AppRole) {
+  if (role === 'teacher') return 'Guru'
+  if (role === 'parent') return 'Orang Tua'
+  return 'Admin'
+}
+
+function initials(name: string | null) {
+  if (!name) return 'A'
+  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
+}
+
 export default App
+
