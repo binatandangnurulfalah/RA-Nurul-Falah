@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   CalendarDays,
@@ -227,7 +227,7 @@ export function SettingsPage() {
   return <div className="v2-stack"><PageTitle eyebrow="KONFIGURASI" title="Pengaturan Sekolah" text="Nilai ini digunakan langsung oleh sistem, termasuk batas terlambat absensi." action={!editing ? <button className="v2-primary" onClick={() => setEditing(true)}><Edit3 size={17} /> Edit Pengaturan</button> : undefined} />{message && <Notice {...message} />}<section className="v2-panel">{editing ? <form className="v2-form v2-form-grid" onSubmit={save}><label>Nama sekolah<input value={settings.school_name} onChange={(e) => setSettings({ ...settings, school_name: e.target.value })} /></label><label>Tahun ajaran<input value={settings.academic_year} onChange={(e) => setSettings({ ...settings, academic_year: e.target.value })} /></label><label>Batas terlambat<input type="time" value={settings.late_cutoff.slice(0, 5)} onChange={(e) => setSettings({ ...settings, late_cutoff: e.target.value })} /></label><label>Zona waktu<input value={settings.timezone} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })} /></label><label>Telepon<input value={settings.phone || ''} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} /></label><label>Email<input type="email" value={settings.email || ''} onChange={(e) => setSettings({ ...settings, email: e.target.value })} /></label><label className="full">Alamat<textarea rows={3} value={settings.address || ''} onChange={(e) => setSettings({ ...settings, address: e.target.value })} /></label><div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={() => { setEditing(false); void load() }}>Batal</button><button className="v2-primary" disabled={busy}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Pengaturan'}</button></div></form> : <div className="v2-settings-grid"><Info label="Nama Sekolah" value={settings.school_name} /><Info label="Tahun Ajaran" value={settings.academic_year} /><Info label="Batas Terlambat" value={`${settings.late_cutoff.slice(0, 5)} WIB`} /><Info label="Zona Waktu" value={settings.timezone} /><Info label="Telepon" value={settings.phone || 'Belum diisi'} /><Info label="Email" value={settings.email || 'Belum diisi'} /><Info label="Alamat" value={settings.address || 'Belum diisi'} /></div>}</section></div>
 }
 
-export function PageTitle({ eyebrow, title, text, action }: { eyebrow: string; title: string; text: string; action?: React.ReactNode }) {
+export function PageTitle({ eyebrow, title, text, action }: { eyebrow: string; title: string; text: string; action?: ReactNode }) {
   return <header className="v2-page-title"><div><small>{eyebrow}</small><h2>{title}</h2><p>{text}</p></div>{action}</header>
 }
 
