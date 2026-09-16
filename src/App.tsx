@@ -2,10 +2,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { KeyRound, LogOut, Mail, ShieldCheck, UserPlus, UserRound, UsersRound } from 'lucide-react'
 import { AppRole, supabase, UserProfile } from './lib/supabase'
+import RolePortal from './RolePortal'
 
 function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const isLocalPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+  const previewRole = isLocalPreview ? new URLSearchParams(window.location.search).get('previewRole') as AppRole | null : null
 
   useEffect(() => {
     let mounted = true
@@ -48,6 +51,10 @@ function App() {
     }
   }, [])
 
+  if (previewRole && ['admin', 'teacher', 'parent'].includes(previewRole)) {
+    return <RolePortal profile={{ id: 'preview', role: previewRole, display_name: previewRole === 'admin' ? 'Administrator RA Nurul Falah' : previewRole === 'teacher' ? 'Siti Aminah, S.Pd.' : 'Bapak Ahmad', is_active: true, created_at: '', updated_at: '' }} />
+  }
+
   if (loading) return <CenteredMessage text="Memuat sistem..." />
 
   return (
@@ -56,9 +63,9 @@ function App() {
       <Route path="/lupa-password" element={<ForgotPasswordPage />} />
       <Route path="/verifikasi-kode" element={<VerifyOtpPage />} />
       <Route path="/password-baru" element={<NewPasswordPage />} />
-      <Route path="/guru/*" element={<ProtectedRoute profile={profile} role="teacher"><DashboardShell profile={profile!}><RolePlaceholder role="Guru" /></DashboardShell></ProtectedRoute>} />
-      <Route path="/orang-tua/*" element={<ProtectedRoute profile={profile} role="parent"><DashboardShell profile={profile!}><RolePlaceholder role="Orang Tua" /></DashboardShell></ProtectedRoute>} />
-      <Route path="/admin/*" element={<ProtectedRoute profile={profile} role="admin"><DashboardShell profile={profile!}><AdminDashboard /></DashboardShell></ProtectedRoute>} />
+      <Route path="/guru/*" element={<ProtectedRoute profile={profile} role="teacher"><RolePortal profile={profile!} /></ProtectedRoute>} />
+      <Route path="/orang-tua/*" element={<ProtectedRoute profile={profile} role="parent"><RolePortal profile={profile!} /></ProtectedRoute>} />
+      <Route path="/admin/*" element={<ProtectedRoute profile={profile} role="admin"><RolePortal profile={profile!} /></ProtectedRoute>} />
       <Route path="*" element={profile ? <RoleRedirect profile={profile} /> : <Navigate to="/login" replace />} />
     </Routes>
   )
@@ -510,4 +517,5 @@ function formatDate(value: string) {
 }
 
 export default App
+
 
