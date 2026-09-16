@@ -1,0 +1,150 @@
+.v2-brand-logo,
+.v2-mobile-logo,
+.auth-brand-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.v2-brand-logo { width: 44px; height: 44px; flex: 0 0 auto; }
+.v2-mobile-logo { display: none; width: 38px; height: 38px; }
+
+.v2-sheet {
+  max-height: min(85dvh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+}
+
+.v5-sheet-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 2px 8px;
+}
+
+.v5-menu-group { margin-top: 16px; }
+.v5-menu-group h4 {
+  margin: 0 0 8px;
+  color: #687970;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v5-menu-group .v2-sheet-grid { margin-top: 0; }
+
+.v5-section,
+.v5-attention {
+  display: grid;
+  gap: 11px;
+}
+.v5-section > header,
+.v5-attention > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+}
+.v5-section header small,
+.v5-attention header small {
+  color: var(--v2-gold);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.v5-section h3,
+.v5-attention h3 { margin: 2px 0 0; font-size: 18px; }
+.v5-section .v2-quick-grid { grid-template-columns: repeat(4, 1fr); }
+
+.v5-attention > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.v5-attention button {
+  min-height: 74px;
+  border: 1px solid #eadfcb;
+  border-radius: 15px;
+  background: #fffaf1;
+  color: var(--v2-ink);
+  padding: 13px;
+  text-align: left;
+}
+.v5-attention button strong { display: block; color: #a67318; font-size: 21px; }
+.v5-attention button span { display: block; margin-top: 3px; color: #6f756f; font-size: 12px; font-weight: 750; }
+
+.v5-child-switcher {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.v5-child-switcher button {
+  min-width: 76px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  background: white;
+  color: #65746d;
+  font-size: 13px;
+  font-weight: 800;
+}
+.v5-child-switcher button.active { border-color: var(--v2-purple); background: var(--v2-purple-soft); color: var(--v2-purple); }
+
+.auth-brand-logo { width: 76px; height: 76px; }
+
+@media (max-width: 1050px) {
+  .v5-section .v2-quick-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .v2-sidebar,
+  .v2-sidebar-backdrop,
+  .v2-mobile-menu { display: none !important; }
+  .v2-topbar {
+    height: calc(56px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 12px 0;
+  }
+  .v2-mobile-logo { display: block; }
+  .v2-top-title h1 { margin: 0; font-size: 16px; }
+  .v2-top-title small { order: 2; margin-top: 1px; font-size: 11px; }
+  .v2-bell,
+  .v2-top-profile,
+  .v2-top-profile > span,
+  .v2-sidebar-profile button,
+  .v2-sheet header button,
+  .v2-inline-actions button,
+  .v2-icon-button,
+  .document-actions button,
+  .document-actions a { min-width: 44px; min-height: 44px; }
+  .v2-content { padding-top: 14px; }
+  .v2-page-title > div > small,
+  .v2-page-title > div > h2 { display: none; }
+  .v2-page-title p { font-size: 12px; line-height: 1.55; }
+  .v2-page-title:has(> .v2-primary) { display: grid; grid-template-columns: 1fr; }
+  .v2-bottom-nav button { min-width: 44px; min-height: 58px; }
+  .v2-bottom-nav button small { font-size: 11px !important; line-height: 1; }
+  .v2-stat small,
+  .v2-quick-grid small,
+  .v2-sheet-grid small,
+  .profile-v3-info-row small,
+  .profile-v3-security-note small { font-size: 11px !important; }
+  .v2-quick-grid strong,
+  .v2-sheet-grid strong,
+  .profile-v3-info-row strong { font-size: 12px !important; }
+  .v2-hero p { font-size: 12px; line-height: 1.45; }
+  .v5-attention > div { grid-template-columns: 1fr; gap: 8px; }
+  .v5-attention button { min-height: 64px; display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 8px; }
+  .v5-attention button strong { font-size: 20px; }
+  .v5-attention button span { margin-top: 0; font-size: 12px; }
+  .v5-section h3, .v5-attention h3 { font-size: 17px; }
+  .v2-sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .v2-sheet-grid > button { min-height: 72px; }
+  .v2-toolbar { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 8; background: white; padding: 8px 0; }
+  .auth-page .brand-panel { min-height: 160px; padding: 26px 22px; }
+  .auth-brand-logo { width: 64px; height: 64px; }
+}
+
+@media (max-width: 430px) {
+  .v2-sheet-grid { grid-template-columns: 1fr 1fr; }
+  .v2-sheet-grid > button { padding: 10px; }
+  .v2-top-actions { gap: 6px; }
+  .v2-bell { width: 44px; height: 44px; }
+}

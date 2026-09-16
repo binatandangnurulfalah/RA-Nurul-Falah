@@ -10,12 +10,6 @@ const ROLE_PATHS: Record<AppRole, string> = {
   parent: '/orang-tua',
 }
 
-const ROLE_LABELS: Record<AppRole, string> = {
-  admin: 'administrator',
-  teacher: 'guru',
-  parent: 'orang tua/wali',
-}
-
 const PREVIEW_NAMES: Record<AppRole, string> = {
   admin: 'Administrator RA Nurul Falah',
   teacher: 'Siti Aminah, S.Pd.',
@@ -151,7 +145,6 @@ function RoleRedirect({ profile }: { profile: UserProfile }) {
 
 function LoginPage() {
   const navigate = useNavigate()
-  const [role, setRole] = useState<AppRole>('teacher')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -181,29 +174,11 @@ function LoginPage() {
       return
     }
 
-    if (userProfile.role !== role) {
-      await supabase.auth.signOut()
-      setError(`Akun ini bukan akun ${ROLE_LABELS[role]}.`)
-      setBusy(false)
-      return
-    }
-
-    navigate(rolePath(role), { replace: true })
+    navigate(rolePath(userProfile.role), { replace: true })
   }
 
   return (
     <AuthLayout title="Masuk ke RA Nurul Falah" subtitle="Sistem informasi Raudhatul Athfal Nurul Falah">
-      <div className="role-switch">
-        <button className={role === 'teacher' ? 'active' : ''} onClick={() => setRole('teacher')} type="button">
-          Guru
-        </button>
-        <button className={role === 'parent' ? 'active' : ''} onClick={() => setRole('parent')} type="button">
-          Orang Tua
-        </button>
-        <button className={role === 'admin' ? 'active' : ''} onClick={() => setRole('admin')} type="button">
-          Admin
-        </button>
-      </div>
       <form onSubmit={submit} className="form-stack">
         <Field icon={<Mail size={18} />} label="Email" type="email" value={email} onChange={setEmail} placeholder="nama@email.com" />
         <Field icon={<KeyRound size={18} />} label="Password" type="password" value={password} onChange={setPassword} placeholder="Masukkan password" />
@@ -374,7 +349,7 @@ function AuthLayout({ title, subtitle, children }: { title: string; subtitle: st
   return (
     <div className="auth-page">
       <section className="brand-panel">
-        <div className="brand-mark">RA</div>
+        <img className="auth-brand-logo" src={`${import.meta.env.BASE_URL}logo-ra-nurul-falah.png`} alt="Logo RA Nurul Falah" />
         <div>
           <p className="eyebrow">Raudhatul Athfal</p>
           <h1>Nurul Falah</h1>

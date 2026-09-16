@@ -295,7 +295,7 @@ export function AttendanceScannerNative() {
       setFeedback({ tone: 'info', text: 'Kamera belakang aktif. Arahkan QR murid ke kotak pemindai.' })
       scheduleDecode()
     } else {
-      setFeedback({ tone: 'error', text: 'Preview kamera aktif, tetapi browser belum mendukung pembacaan QR otomatis. Gunakan Scan dengan Kamera HP.' })
+      setFeedback({ tone: 'error', text: 'QR belum dapat dibaca otomatis. Coba tombol Kamera HP.' })
     }
   }
 
@@ -346,7 +346,7 @@ export function AttendanceScannerNative() {
       setFeedback({
         tone: 'error',
         text: dark
-          ? 'Kamera belakang live dari browser tetap gelap di perangkat ini. Gunakan tombol Scan dengan Kamera HP di bawah agar kamera belakang native Android yang dibuka.'
+          ? 'Kamera belakang tidak tersedia. Gunakan Kamera HP atau pilih kamera depan.'
           : friendlyCameraError(error),
       })
     } finally {
@@ -406,7 +406,7 @@ export function AttendanceScannerNative() {
 
   return (
     <div className="v2-stack native-scanner-page">
-      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Gunakan scan live. Jika kamera belakang browser gelap, Scan dengan Kamera HP akan membuka kamera native Android." />
+      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Pindai QR murid untuk mencatat waktu masuk atau pulang." />
       <div className="v2-two-col scanner">
         <section className="v2-panel native-scanner-panel">
           <div className={`native-camera ${active ? 'active' : ''}`}>
@@ -444,7 +444,7 @@ export function AttendanceScannerNative() {
             <span>{feedback.text}</span>
           </div>
 
-          {!decoderAvailable && active && <p className="native-decoder-note">Pembacaan QR live tidak tersedia di browser ini. Tombol Kamera HP tetap dapat digunakan.</p>}
+          {!decoderAvailable && active && <p className="native-decoder-note">QR belum dapat dibaca otomatis. Gunakan tombol Kamera HP.</p>}
 
           <input ref={fileInputRef} className="native-camera-file-input" type="file" accept="image/*" capture="environment" onChange={(event) => void handleNativeCapture(event)} />
           <div id="native-file-reader" className="native-file-reader" aria-hidden="true" />
