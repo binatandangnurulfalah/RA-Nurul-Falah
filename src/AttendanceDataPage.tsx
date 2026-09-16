@@ -27,10 +27,15 @@ type AttendanceRecord = {
   } | null
 }
 
+type AttendanceDataPageProps = {
+  canDelete?: boolean
+  parentView?: boolean
+}
+
 const JAKARTA_TIME_ZONE = 'Asia/Jakarta'
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA_TIME_ZONE }).format(new Date())
 
-export default function AttendanceDataPage() {
+export default function AttendanceDataPage({ canDelete = false, parentView = false }: AttendanceDataPageProps) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -80,7 +85,7 @@ export default function AttendanceDataPage() {
   const todayOut = todayRecords.filter((record) => record.check_out).length
 
   const removeRecord = async () => {
-    if (!pendingDelete || deleting) return
+    if (!canDelete || !pendingDelete || deleting) return
     setDeleting(true)
     setMessage(null)
 
@@ -104,9 +109,15 @@ export default function AttendanceDataPage() {
     <div className="attendance-data-page">
       <header className="attendance-data-heading">
         <div>
-          <p>REKAP KEHADIRAN</p>
+          <p>{parentView ? 'KEHADIRAN ANAK' : 'REKAP KEHADIRAN'}</p>
           <h2>Data Absen</h2>
-          <span>Lihat, cari, filter, dan hapus catatan absensi yang keliru.</span>
+          <span>
+            {parentView
+              ? 'Lihat riwayat masuk, pulang, dan status kehadiran anak yang terhubung ke akun Anda.'
+              : canDelete
+                ? 'Lihat, cari, filter, dan hapus catatan absensi yang keliru.'
+                : 'Lihat, cari, dan filter catatan absensi.'}
+          </span>
         </div>
         <button className="attendance-refresh" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={18} />
@@ -117,7 +128,7 @@ export default function AttendanceDataPage() {
       <div className="attendance-data-stats">
         <article>
           <span className="green"><UsersRound size={21} /></span>
-          <div><small>Absen Hari Ini</small><strong>{todayRecords.length}</strong><p>Catatan masuk</p></div>
+          <div><small>{parentView ? 'Kehadiran Hari Ini' : 'Absen Hari Ini'}</small><strong>{todayRecords.length}</strong><p>{parentView ? 'Anak tercatat' : 'Catatan masuk'}</p></div>
         </article>
         <article>
           <span className="blue"><Clock3 size={21} /></span>
@@ -140,7 +151,7 @@ export default function AttendanceDataPage() {
       <section className="attendance-data-card">
         <div className="attendance-data-card-head">
           <div>
-            <h3>Riwayat Absensi</h3>
+            <h3>{parentView ? 'Riwayat Kehadiran Anak' : 'Riwayat Absensi'}</h3>
             <p>{filtered.length} data ditampilkan</p>
           </div>
         </div>
@@ -148,7 +159,7 @@ export default function AttendanceDataPage() {
         <div className="attendance-data-toolbar">
           <label className="attendance-search">
             <Search size={18} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama, NIS, atau kelompok..." />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={parentView ? 'Cari nama anak atau kelompok...' : 'Cari nama, NIS, atau kelompok...'} />
           </label>
           <label className="attendance-filter-field">
             <CalendarDays size={17} />
@@ -173,11 +184,11 @@ export default function AttendanceDataPage() {
           <div className="attendance-data-loading">{Array.from({ length: 5 }, (_, index) => <i key={index} />)}</div>
         ) : filtered.length ? (
           <div className="attendance-record-list">
-            <div className="attendance-record-head">
-              <span>Murid</span><span>Tanggal</span><span>Masuk / Pulang</span><span>Status</span><span>Aksi</span>
+            <div className={`attendance-record-head ${canDelete ? '' : 'read-only'}`}>
+              <span>Murid</span><span>Tanggal</span><span>Masuk / Pulang</span><span>Status</span>{canDelete && <span>Aksi</span>}
             </div>
             {filtered.map((record) => (
-              <div className="attendance-record-row" key={record.id}>
+              <div className={`attendance-record-row ${canDelete ? '' : 'read-only'}`} key={record.id}>
                 <div className="attendance-student">
                   <span>{initials(record.students?.full_name)}</span>
                   <p>
@@ -194,10 +205,12 @@ export default function AttendanceDataPage() {
                   <span><small>Pulang</small><strong>{record.check_out ? formatTime(record.check_out) : '—'}</strong></span>
                 </div>
                 <span className={`attendance-status ${statusTone(record.status)}`}>{statusLabel(record.status)}</span>
-                <button className="attendance-delete" onClick={() => setPendingDelete(record)} aria-label={`Hapus absensi ${record.students?.full_name || 'murid'}`}>
-                  <Trash2 size={17} />
-                  <span>Hapus</span>
-                </button>
+                {canDelete && (
+                  <button className="attendance-delete" onClick={() => setPendingDelete(record)} aria-label={`Hapus absensi ${record.students?.full_name || 'murid'}`}>
+                    <Trash2 size={17} />
+                    <span>Hapus</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -205,12 +218,12 @@ export default function AttendanceDataPage() {
           <div className="attendance-data-empty">
             <Search size={28} />
             <strong>Data tidak ditemukan</strong>
-            <p>Ubah pencarian atau filter untuk melihat catatan lainnya.</p>
+            <p>{parentView ? 'Belum ada data absensi anak untuk filter yang dipilih.' : 'Ubah pencarian atau filter untuk melihat catatan lainnya.'}</p>
           </div>
         )}
       </section>
 
-      {pendingDelete && (
+      {canDelete && pendingDelete && (
         <div className="attendance-delete-layer" role="presentation">
           <button className="attendance-delete-backdrop" aria-label="Batal menghapus" onClick={() => !deleting && setPendingDelete(null)} />
           <section className="attendance-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-attendance-title">
