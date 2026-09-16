@@ -1,0 +1,130 @@
+.attendance-success-popup {
+  position: fixed;
+  left: 50%;
+  top: 92px;
+  z-index: 120;
+  width: min(430px, calc(100vw - 28px));
+  transform: translate(-50%, -18px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px 18px;
+  overflow: hidden;
+  border: 1px solid #b9dfcf;
+  border-radius: 18px;
+  background: rgba(250, 255, 252, 0.98);
+  color: #173d31;
+  box-shadow: 0 16px 44px rgba(17, 74, 56, 0.2);
+  backdrop-filter: blur(14px);
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.attendance-success-popup.show {
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+}
+
+.attendance-success-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: #176b4f;
+  color: white;
+  box-shadow: 0 8px 18px rgba(23, 107, 79, 0.18);
+}
+
+.attendance-success-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.attendance-success-kicker {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.13em;
+  font-weight: 900;
+  color: #2f7a61;
+}
+
+.attendance-success-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.attendance-success-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.attendance-success-action {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #e5f5ed;
+  color: #176b4f;
+}
+
+.attendance-success-time {
+  color: #65786f;
+}
+
+.attendance-success-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 4px;
+  background: #e7f3ed;
+}
+
+.attendance-success-progress i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: #1b7757;
+  animation: attendance-popup-progress 2s linear forwards;
+}
+
+@keyframes attendance-popup-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (max-width: 800px) {
+  .attendance-success-popup {
+    top: 78px;
+    padding: 14px 15px 16px;
+    border-radius: 16px;
+  }
+
+  .attendance-success-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .attendance-success-name {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attendance-success-popup {
+    transition: none;
+  }
+
+  .attendance-success-progress i {
+    animation: none;
+  }
+}
