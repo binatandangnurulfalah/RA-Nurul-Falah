@@ -24,20 +24,23 @@ Deno.serve(async (req: Request) => {
   const { data: student } = await adminClient.from("students").select("id,full_name,class_name,is_active").eq("qr_token", token).maybeSingle();
   if (!student?.is_active) return json({ ok: false, error: "Data murid tidak ditemukan atau tidak aktif." }, 404);
   const now = new Date();
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
-  const status = time > "07:15" ? "late" : "present";
+  const { data: settings } = await adminClient.from("school_settings").select("timezone,late_cutoff").eq("id", 1).maybeSingle();
+  const timezone = settings?.timezone || "Asia/Jakarta";
+  const lateCutoff = String(settings?.late_cutoff || "07:15:00").slice(0, 5);
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+  const status = time > lateCutoff ? "late" : "present";
   const { data: existing } = await adminClient.from("attendance_records").select("id,check_in,check_out,status").eq("student_id", student.id).eq("attendance_date", date).maybeSingle();
   if (!existing) {
     const { error } = await adminClient.from("attendance_records").insert({ student_id: student.id, attendance_date: date, check_in: now.toISOString(), status, recorded_by: authData.user.id });
     if (error) return json({ ok: false, error: "Absensi gagal disimpan. Silakan pindai ulang." }, 409);
-    return json({ ok: true, action: "check_in", student, time, status });
+    return json({ ok: true, action: "check_in", student, time, status, late_cutoff: lateCutoff });
   }
   if (!existing.check_out) {
     if (now.getTime() - new Date(existing.check_in).getTime() < 120000) return json({ ok: false, error: "Murid baru saja absen masuk. Tunggu 2 menit untuk absen pulang." }, 409);
-    const { error } = await adminClient.from("attendance_records").update({ check_out: now.toISOString(), recorded_by: authData.user.id, updated_at: now.toISOString() }).eq("id", existing.id).is("check_out", null);
+    const { error } = await adminClient.from("attendance_records").update({ check_out: now.toISOString(), recorded_by: authData.user.id }).eq("id", existing.id).is("check_out", null);
     if (error) return json({ ok: false, error: "Jam pulang gagal disimpan." }, 409);
-    return json({ ok: true, action: "check_out", student, time, status: existing.status });
+    return json({ ok: true, action: "check_out", student, time, status: existing.status, late_cutoff: lateCutoff });
   }
   return json({ ok: false, error: "Absensi masuk dan pulang hari ini sudah lengkap." }, 409);
 });
