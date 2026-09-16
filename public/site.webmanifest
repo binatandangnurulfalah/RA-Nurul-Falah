@@ -9,10 +9,10 @@
   "theme_color": "#174b3b",
   "icons": [
     {
-      "src": "logo-ra-nurul-falah.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
+      "src": "logo-ra-nurul-falah.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }

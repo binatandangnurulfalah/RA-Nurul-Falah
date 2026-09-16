@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   CalendarDays,
+  BookOpenCheck,
   CheckCircle2,
   ClipboardCheck,
   Edit3,
@@ -48,7 +49,10 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
   const [lateCount, setLateCount] = useState(0)
   const [accountCount, setAccountCount] = useState(0)
   const [children, setChildren] = useState<Student[]>([])
+  const [selectedChildId, setSelectedChildId] = useState('')
   const [todayRecord, setTodayRecord] = useState<{ check_in: string | null; check_out: string | null; status: string } | null>(null)
+  const [draftReports, setDraftReports] = useState(0)
+  const [openPayments, setOpenPayments] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -59,25 +63,21 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
         if (!mounted) return
         const list = (childData as Student[] | null) ?? []
         setChildren(list)
-        if (list[0]) {
-          const { data: attendance } = await supabase
-            .from('attendance_records')
-            .select('check_in,check_out,status')
-            .eq('student_id', list[0].id)
-            .eq('attendance_date', today())
-            .maybeSingle()
-          if (mounted) setTodayRecord(attendance as typeof todayRecord)
-        }
+        if (list[0]) setSelectedChildId((current) => current || list[0].id)
         if (mounted) setLoading(false)
         return
       }
 
-      const [studentsResult, attendanceResult, lateResult, accountsResult] = await Promise.all([
+      const [studentsResult, attendanceResult, lateResult, accountsResult, reportsResult, paymentsResult] = await Promise.all([
         supabase.from('students').select('id', { count: 'exact', head: true }).eq('is_active', true),
         supabase.from('attendance_records').select('id', { count: 'exact', head: true }).eq('attendance_date', today()),
         supabase.from('attendance_records').select('id', { count: 'exact', head: true }).eq('attendance_date', today()).eq('status', 'late'),
         role === 'admin'
           ? supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('is_active', true)
+          : Promise.resolve({ count: 0 }),
+        supabase.from('report_cards').select('id', { count: 'exact', head: true }).eq('is_published', false),
+        role === 'admin'
+          ? supabase.from('student_payments').select('id', { count: 'exact', head: true }).in('status', ['unpaid', 'partial'])
           : Promise.resolve({ count: 0 }),
       ])
       if (!mounted) return
@@ -85,34 +85,47 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
       setAttendanceCount(attendanceResult.count ?? 0)
       setLateCount(lateResult.count ?? 0)
       setAccountCount(accountsResult.count ?? 0)
+      setDraftReports(reportsResult.count ?? 0)
+      setOpenPayments(paymentsResult.count ?? 0)
       setLoading(false)
     }
     void load()
     return () => { mounted = false }
   }, [role])
 
+  useEffect(() => {
+    if (role !== 'parent' || !selectedChildId) return
+    let mounted = true
+    setTodayRecord(null)
+    void supabase.from('attendance_records').select('check_in,check_out,status').eq('student_id', selectedChildId).eq('attendance_date', today()).maybeSingle().then(({ data }) => {
+      if (mounted) setTodayRecord(data as typeof todayRecord)
+    })
+    return () => { mounted = false }
+  }, [role, selectedChildId])
+
   const greeting = new Intl.DateTimeFormat('id-ID', { timeZone: JAKARTA, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   const firstName = (profile.display_name || 'Pengguna').split(' ')[0]
 
   if (role === 'parent') {
-    const child = children[0]
+    const child = children.find((item) => item.id === selectedChildId) ?? children[0]
     return (
       <div className="v2-stack">
         <section className="v2-hero parent"><div><small>BERANDA WALI</small><h2>Assalamu'alaikum, {firstName}</h2><p>{greeting} · Pantau aktivitas anak dengan ringkas.</p></div><UserRound size={54} /></section>
         {loading ? <SkeletonCards /> : child ? (
           <>
+            {children.length > 1 && <div className="v5-child-switcher" role="tablist" aria-label="Pilih anak">{children.map((item) => <button role="tab" aria-selected={item.id === child.id} className={item.id === child.id ? 'active' : ''} key={item.id} onClick={() => setSelectedChildId(item.id)}>{item.full_name.split(' ')[0]}</button>)}</div>}
             <section className="v2-child-focus"><span>{initials(child.full_name)}</span><div><small>Anak terhubung</small><h3>{child.full_name}</h3><p>{child.class_name || 'Belum ada kelompok'} · {child.academic_year || 'Tahun ajaran belum diisi'}</p></div><button onClick={() => go('children')}><QrCode size={18} /> QR Anak</button></section>
             <div className="v2-stat-grid three">
               <StatCard icon={ClipboardCheck} label="Status Hari Ini" value={todayRecord?.check_in ? 'Sudah Absen' : 'Belum Absen'} meta={todayRecord?.status === 'late' ? 'Terlambat' : todayRecord?.check_in ? 'Tepat waktu' : 'Belum tercatat'} tone="green" />
               <StatCard icon={CheckCircle2} label="Jam Masuk" value={todayRecord?.check_in ? timeText(todayRecord.check_in) : '—'} meta="WIB" tone="blue" />
               <StatCard icon={CalendarDays} label="Jam Pulang" value={todayRecord?.check_out ? timeText(todayRecord.check_out) : '—'} meta="WIB" tone="gold" />
             </div>
-            <QuickGrid items={[
-              ['Data Absen', 'Riwayat kehadiran anak', ClipboardCheck, () => go('attendance-data')],
-              ['Jadwal', 'Agenda kegiatan belajar', CalendarDays, () => go('schedule')],
-              ['Data Anak', 'Profil dan QR anak', UsersRound, () => go('children')],
-              ['Profil Keluarga', 'Ubah data akun Anda', UserRound, () => go('profile')],
-            ]} />
+            <section className="v5-section"><header><div><small>AKSES CEPAT</small><h3>Kebutuhan utama</h3></div></header><QuickGrid items={[
+              ['Rapor Anak', 'Lihat perkembangan terbaru', BookOpenCheck, () => go('reports')],
+              ['Pembayaran', 'Pantau tagihan anak', ClipboardCheck, () => go('payments')],
+              ['Data Absen', 'Riwayat kehadiran', CheckCircle2, () => go('attendance-data')],
+              ['Pengumuman', 'Informasi dari sekolah', CalendarDays, () => go('announcements')],
+            ]} /></section>
           </>
         ) : <EmptyCard text="Belum ada anak yang terhubung ke akun ini." />}
       </div>
@@ -128,19 +141,22 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
         <StatCard icon={CalendarDays} label="Terlambat" value={String(lateCount)} meta="Hari ini" tone="gold" />
         <StatCard icon={role === 'admin' ? UsersRound : Settings} label={role === 'admin' ? 'Akun Aktif' : 'Belum Absen'} value={role === 'admin' ? String(accountCount) : String(Math.max(0, studentCount - attendanceCount))} meta={role === 'admin' ? 'Pengguna' : 'Perlu diperiksa'} tone="purple" />
       </div>}
-      <QuickGrid items={role === 'admin' ? [
-        ['Scan Absensi', 'Pindai QR murid', QrCode, () => go('attendance')],
-        ['Data Absen', 'Koreksi kehadiran', ClipboardCheck, () => go('attendance-data')],
-        ['Data Murid', 'Tambah dan kelola murid', GraduationCap, () => go('students')],
-        ['Manajemen Akun', 'Kelola Guru dan Wali', UsersRound, () => go('accounts')],
-        ['Kelas', 'Kelola rombongan belajar', GraduationCap, () => go('classes')],
-        ['Jadwal', 'Kelola jadwal belajar', CalendarDays, () => go('schedule')],
+      <section className="v5-attention"><header><div><small>PERLU PERHATIAN</small><h3>Prioritas hari ini</h3></div></header><div>
+        <button onClick={() => go('attendance-data')}><strong>{Math.max(0, studentCount - attendanceCount)}</strong><span>Murid belum absen</span></button>
+        {role === 'admin' && <button onClick={() => go('payments')}><strong>{openPayments}</strong><span>Tagihan belum selesai</span></button>}
+        <button onClick={() => go('reports')}><strong>{draftReports}</strong><span>Rapor masih draft</span></button>
+      </div></section>
+      <section className="v5-section"><header><div><small>AKSI CEPAT</small><h3>Mulai pekerjaan</h3></div></header><QuickGrid items={role === 'admin' ? [
+        ['Scan QR', 'Catat masuk atau pulang', QrCode, () => go('attendance')],
+        ['Tambah Murid', 'Kelola data murid', GraduationCap, () => go('students')],
+        ['Isi Rapor', 'Catat perkembangan', BookOpenCheck, () => go('reports')],
+        ['Pengumuman', 'Bagikan informasi', CalendarDays, () => go('announcements')],
       ] : [
-        ['Scan Absensi', 'Pindai QR murid', QrCode, () => go('attendance')],
-        ['Data Absen', 'Koreksi kehadiran', ClipboardCheck, () => go('attendance-data')],
-        ['Data Murid', 'Tambah dan edit murid', UsersRound, () => go('students')],
-        ['Jadwal', 'Kelola jadwal belajar', CalendarDays, () => go('schedule')],
-      ]} />
+        ['Scan QR', 'Catat masuk atau pulang', QrCode, () => go('attendance')],
+        ['Data Absen', 'Periksa kehadiran', ClipboardCheck, () => go('attendance-data')],
+        ['Isi Rapor', 'Catat perkembangan', BookOpenCheck, () => go('reports')],
+        ['Jadwal Hari Ini', 'Lihat agenda kelas', CalendarDays, () => go('schedule')],
+      ]} /></section>
     </div>
   )
 }

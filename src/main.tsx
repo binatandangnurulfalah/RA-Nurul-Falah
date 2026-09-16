@@ -6,11 +6,18 @@ import { installAttendanceSuccessFeedback } from './attendance-success-feedback'
 import './styles.css'
 import './brand.css'
 import './attendance-data-role.css'
+import './mobile-v5.css'
 
 const brandLogoUrl = new URL('logo-ra-nurul-falah.png', document.baseURI).toString()
 document.documentElement.style.setProperty('--brand-logo-url', `url("${brandLogoUrl}")`)
 
 installAttendanceSuccessFeedback()
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL })
+  })
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
