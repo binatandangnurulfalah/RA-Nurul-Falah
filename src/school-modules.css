@@ -1,0 +1,120 @@
+.school-launchpad {
+  margin-top: 18px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbf9 100%);
+  border: 1px solid var(--v2-line);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 8px 24px rgba(31,66,53,.035);
+}
+.school-launchpad > header { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.school-launchpad header div { display: grid; }
+.school-launchpad header small { color: var(--v2-gold); font-size: 9px; font-weight: 900; letter-spacing: .13em; }
+.school-launchpad h3 { margin: 2px 0 0; font-size: 18px; }
+.school-launchpad header p { margin: 0; color: var(--v2-muted); font-size: 10px; }
+.school-launchpad > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.school-launchpad button { border: 1px solid var(--v2-line); border-radius: 15px; background: white; min-height: 76px; padding: 12px; display: flex; align-items: center; gap: 10px; color: inherit; text-align: left; transition: .18s ease; }
+.school-launchpad button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(31,72,55,.07); }
+.school-launchpad button > span { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; display: grid; place-items: center; }
+.school-launchpad button.mint > span { background: #e9f6ef; color: var(--v2-green); }
+.school-launchpad button.blue > span { background: var(--v2-blue-soft); color: var(--v2-blue); }
+.school-launchpad button.gold > span { background: var(--v2-gold-soft); color: var(--v2-gold); }
+.school-launchpad button.purple > span { background: var(--v2-purple-soft); color: var(--v2-purple); }
+.school-launchpad button div { min-width: 0; display: grid; gap: 2px; }
+.school-launchpad strong { font-size: 11px; }
+.school-launchpad button small { color: var(--v2-muted); font-size: 9px; line-height: 1.35; }
+
+.school-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.school-person,
+.school-report-card {
+  min-width: 0;
+  border: 1px solid var(--v2-line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  transition: .18s ease;
+}
+.school-person:hover,
+.school-report-card:hover { border-color: #d2e3da; box-shadow: 0 10px 25px rgba(31,72,55,.06); transform: translateY(-1px); }
+.school-person .grow,
+.school-report-card .grow { min-width: 0; }
+.school-person h3,
+.school-report-card h3 { margin: 5px 0 2px; font-size: 13px; }
+.school-person p,
+.school-report-card p { margin: 0; color: #5f6f67; font-size: 10px; }
+.school-person small,
+.school-report-card small { display: block; margin-top: 4px; color: var(--v2-muted); font-size: 9px; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.school-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: var(--v2-muted); font-size: 8px; }
+.school-report-icon,
+.payment-icon,
+.document-icon { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 13px; display: grid; place-items: center; }
+.school-report-icon { background: var(--v2-blue-soft); color: var(--v2-blue); }
+.payment-icon { background: var(--v2-gold-soft); color: var(--v2-gold); }
+.document-icon { background: var(--v2-purple-soft); color: var(--v2-purple); }
+
+.report-view-head { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: var(--v2-muted); font-size: 10px; margin-bottom: 13px; }
+.report-view-sections { display: grid; gap: 9px; }
+.report-view-sections section { border: 1px solid var(--v2-line); border-radius: 14px; padding: 13px; background: #fbfdfc; }
+.report-view-sections small { color: var(--v2-green); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.report-view-sections p { margin: 6px 0 0; color: #44564d; font-size: 11px; line-height: 1.65; white-space: pre-wrap; }
+
+.payment-list { display: grid; gap: 8px; }
+.payment-list article { border: 1px solid var(--v2-line); border-radius: 15px; padding: 13px; display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 10px; background: #fff; }
+.payment-list h3 { margin: 4px 0 2px; font-size: 12px; }
+.payment-list p { margin: 0; color: #5f6f67; font-size: 10px; }
+.payment-list small { display: block; margin-top: 4px; color: var(--v2-muted); font-size: 9px; }
+.payment-balance { color: var(--v2-ink); font-size: 12px; white-space: nowrap; }
+.money-value { font-size: 16px !important; }
+
+.document-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.document-grid article { border: 1px solid var(--v2-line); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 11px; background: #fff; min-width: 0; }
+.document-grid h3 { margin: 5px 0 2px; font-size: 13px; }
+.document-grid p { margin: 0; color: #5f6f67; font-size: 10px; }
+.document-grid small { display: block; margin-top: 4px; color: var(--v2-muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.document-actions { display: flex; gap: 5px; }
+.document-actions a,
+.document-actions button { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--v2-line); background: #fff; color: #5c6c64; display: grid; place-items: center; text-decoration: none; }
+.document-actions a:hover,
+.document-actions button:hover { background: #f0f7f3; color: var(--v2-green); }
+.document-actions button.danger:hover { background: var(--v2-red-soft); color: var(--v2-red); }
+
+@media (max-width: 1050px) {
+  .school-launchpad > div { grid-template-columns: 1fr 1fr; }
+  .school-card-grid,
+  .document-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .school-launchpad { margin-top: 14px; padding: 14px; border-radius: 17px; }
+  .school-launchpad > header { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .school-launchpad > div { grid-template-columns: 1fr 1fr; gap: 7px; }
+  .school-launchpad button { min-height: 72px; padding: 10px; border-radius: 13px; }
+  .school-launchpad button > span { width: 36px; height: 36px; border-radius: 11px; }
+  .school-launchpad strong { font-size: 10px; }
+  .school-launchpad button small { font-size: 8px; }
+  .school-person,
+  .school-report-card { padding: 12px; border-radius: 14px; }
+  .school-person .v2-inline-actions,
+  .school-report-card .v2-inline-actions { flex-direction: column; }
+  .payment-list article { grid-template-columns: auto 1fr auto; padding: 11px; }
+  .payment-list .payment-balance { grid-column: 2 / -1; justify-self: start; color: var(--v2-green-dark); }
+  .payment-list .v2-inline-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
+  .document-grid article { padding: 12px; }
+  .document-actions { flex-direction: column; }
+  .money-value { font-size: 13px !important; }
+}
+
+@media (max-width: 430px) {
+  .school-launchpad > div { grid-template-columns: 1fr; }
+  .school-launchpad button { min-height: 64px; }
+  .school-person,
+  .school-report-card { align-items: flex-start; }
+  .school-report-icon,
+  .payment-icon,
+  .document-icon { width: 38px; height: 38px; border-radius: 11px; }
+  .payment-list article { grid-template-columns: auto 1fr; }
+  .payment-list .v2-inline-actions { grid-column: 1 / -1; grid-row: auto; justify-self: end; flex-direction: row; }
+  .payment-list .payment-balance { grid-column: 2; }
+}
