@@ -21,7 +21,10 @@ type Message = { tone: 'success' | 'error'; text: string }
 type StudentLite = { id: string; full_name: string; class_name: string | null; academic_year: string | null; is_active?: boolean }
 type TeacherAccount = Pick<UserProfile, 'id' | 'display_name' | 'phone' | 'is_active'>
 type TeacherProfile = {
-  teacher_user_id: string
+  id: string
+  teacher_user_id: string | null
+  full_name: string
+  nik: string | null
   employee_no: string | null
   nuptk: string | null
   position: string | null
@@ -33,7 +36,7 @@ type TeacherProfile = {
   joined_date: string | null
   notes: string | null
 }
-type TeacherRow = TeacherAccount & { detail: TeacherProfile | null }
+type TeacherRow = TeacherProfile & { account: TeacherAccount | null }
 type ReportCard = {
   id: string
   student_id: string
@@ -99,6 +102,7 @@ export function ModuleLaunchpad({ role, go }: { role: AppRole; go: (page: string
 
 export function TeachersPage() {
   const [rows, setRows] = useState<TeacherRow[]>([])
+  const [teacherAccounts, setTeacherAccounts] = useState<TeacherAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<TeacherRow | 'new' | null>(null)
@@ -114,47 +118,48 @@ export function TeachersPage() {
     if (accountsResult.error || detailsResult.error) setMessage({ tone: 'error', text: accountsResult.error?.message || detailsResult.error?.message || 'Data Guru gagal dimuat.' })
     const accounts = (accountsResult.data as TeacherAccount[] | null) ?? []
     const details = (detailsResult.data as TeacherProfile[] | null) ?? []
-    const byId = new Map(details.map((item) => [item.teacher_user_id, item]))
-    setRows(accounts.map((account) => ({ ...account, detail: byId.get(account.id) ?? null })))
+    const accountsById = new Map(accounts.map((item) => [item.id, item]))
+    setRows(details.map((detail) => ({ ...detail, account: detail.teacher_user_id ? accountsById.get(detail.teacher_user_id) ?? null : null })))
+    setTeacherAccounts(accounts)
     setLoading(false)
   }
   useEffect(() => { void load() }, [])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return rows.filter((row) => !q || `${row.display_name || ''} ${row.detail?.employee_no || ''} ${row.detail?.nuptk || ''} ${row.detail?.position || ''}`.toLowerCase().includes(q))
+    return rows.filter((row) => !q || `${row.full_name} ${row.nik || ''} ${row.employee_no || ''} ${row.nuptk || ''} ${row.position || ''}`.toLowerCase().includes(q))
   }, [rows, search])
 
   const remove = async () => {
-    if (!deleting?.detail) return
-    const { error } = await supabase.from('teacher_profiles').delete().eq('teacher_user_id', deleting.id)
+    if (!deleting) return
+    const { error } = await supabase.from('teacher_profiles').delete().eq('id', deleting.id)
     if (error) { setMessage({ tone: 'error', text: error.message }); return }
-    setDeleting(null); setMessage({ tone: 'success', text: 'Detail Guru dihapus. Akun login Guru tetap aktif.' }); await load()
+    setDeleting(null); setMessage({ tone: 'success', text: 'Data Guru berhasil dihapus. Akun login, jika ada, tetap aktif.' }); await load()
   }
 
-  const available = rows.filter((row) => !row.detail)
-  return <div className="v2-stack"><PageTitle eyebrow="TENAGA PENDIDIK" title="Data Guru" text="Kelola identitas profesional Guru tanpa mencampur data login akun." action={<button className="v2-primary" onClick={() => setEditing('new')} disabled={!available.length}><Plus size={17} /> Lengkapi Data Guru</button>} />{message && <Notice {...message} />}
-    <div className="v2-stat-grid three"><MiniStat icon={<ContactRound size={20} />} label="Total Guru" value={rows.length} tone="green" /><MiniStat icon={<CheckCircle2 size={20} />} label="Data Lengkap" value={rows.filter((row) => row.detail).length} tone="blue" /><MiniStat icon={<UserRound size={20} />} label="Belum Lengkap" value={available.length} tone="gold" /></div>
-    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, NUPTK, nomor pegawai..." /></label></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="school-card-grid">{filtered.map((row) => <article className="school-person" key={row.id}><span className="v2-avatar">{initials(row.display_name)}</span><div className="grow"><div className="school-meta"><span className={`v2-badge ${row.is_active ? 'green' : 'gray'}`}>{row.is_active ? 'Aktif' : 'Nonaktif'}</span>{row.detail ? <span className="v2-badge blue">Data lengkap</span> : <span className="v2-badge gold">Belum lengkap</span>}</div><h3>{row.display_name || 'Guru'}</h3><p>{row.detail?.position || 'Jabatan belum diisi'} · {row.detail?.employment_status || 'Status kepegawaian belum diisi'}</p><small>{row.detail?.nuptk ? `NUPTK ${row.detail.nuptk}` : row.detail?.employee_no ? `No. Pegawai ${row.detail.employee_no}` : row.phone || 'Identitas profesional belum dilengkapi'}</small></div><div className="v2-inline-actions"><button title="Edit data Guru" onClick={() => setEditing(row)}><Edit3 size={17} /></button>{row.detail && <button className="danger" title="Hapus detail Guru" onClick={() => setDeleting(row)}><Trash2 size={17} /></button>}</div></article>)}</div> : <EmptyCard text="Belum ada akun Guru. Buat akun Guru dari menu Manajemen Akun terlebih dahulu." />}</section>
-    {editing && <TeacherModal row={editing === 'new' ? null : editing} available={available} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Data Guru berhasil disimpan.' }); await load() }} />}
-    {deleting && <Confirm title="Hapus detail Guru?" text={`Detail profesional ${deleting.display_name || 'Guru'} akan dihapus, tetapi akun loginnya tetap ada.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+  const linkedAccountIds = new Set(rows.map((row) => row.teacher_user_id).filter(Boolean))
+  const available = teacherAccounts
+  return <div className="v2-stack"><PageTitle eyebrow="TENAGA PENDIDIK" title="Data Guru" text="Kelola data Guru. Akun login dapat dihubungkan nanti setelah email tersedia." action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Guru</button>} />{message && <Notice {...message} />}
+    <div className="v2-stat-grid three"><MiniStat icon={<ContactRound size={20} />} label="Total Guru" value={rows.length} tone="green" /><MiniStat icon={<CheckCircle2 size={20} />} label="Terhubung Akun" value={rows.filter((row) => row.account).length} tone="blue" /><MiniStat icon={<UserRound size={20} />} label="Tanpa Akun" value={rows.filter((row) => !row.account).length} tone="gold" /></div>
+    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, NIK, NUPTK, nomor pegawai..." /></label></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="school-card-grid">{filtered.map((row) => <article className="school-person" key={row.id}><span className="v2-avatar">{initials(row.full_name)}</span><div className="grow"><div className="school-meta"><span className="v2-badge green">Aktif</span>{row.account ? <span className="v2-badge blue">Punya akun</span> : <span className="v2-badge gold">Belum punya akun</span>}</div><h3>{row.full_name}</h3><p>{row.position || 'Guru'} · {row.employment_status || 'Status kepegawaian belum diisi'}</p><small>{row.nuptk ? `NUPTK ${row.nuptk}` : row.employee_no ? `No. Pegawai ${row.employee_no}` : row.nik ? `NIK ${row.nik}` : 'Identitas profesional belum dilengkapi'}</small></div><div className="v2-inline-actions"><button title="Edit data Guru" onClick={() => setEditing(row)}><Edit3 size={17} /></button><button className="danger" title="Hapus data Guru" onClick={() => setDeleting(row)}><Trash2 size={17} /></button></div></article>)}</div> : <EmptyCard text="Belum ada data Guru." />}</section>
+    {editing && <TeacherModal row={editing === 'new' ? null : editing} available={available.filter((account) => !linkedAccountIds.has(account.id))} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Data Guru berhasil disimpan.' }); await load() }} />}
+    {deleting && <Confirm title="Hapus data Guru?" text={`Data profesional ${deleting.full_name} akan dihapus, tetapi akun login yang terhubung tidak dihapus.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
   </div>
 }
 
-function TeacherModal({ row, available, onClose, onDone }: { row: TeacherRow | null; available: TeacherRow[]; onClose: () => void; onDone: () => void }) {
-  const detail = row?.detail
-  const [form, setForm] = useState({ teacher_user_id: row?.id || available[0]?.id || '', employee_no: detail?.employee_no || '', nuptk: detail?.nuptk || '', position: detail?.position || '', employment_status: detail?.employment_status || '', education: detail?.education || '', gender: detail?.gender || '', birth_place: detail?.birth_place || '', birth_date: detail?.birth_date || '', joined_date: detail?.joined_date || '', notes: detail?.notes || '' })
+function TeacherModal({ row, available, onClose, onDone }: { row: TeacherRow | null; available: TeacherAccount[]; onClose: () => void; onDone: () => void }) {
+  const [form, setForm] = useState({ full_name: row?.full_name || '', nik: row?.nik || '', teacher_user_id: row?.teacher_user_id || '', employee_no: row?.employee_no || '', nuptk: row?.nuptk || '', position: row?.position || 'Guru', employment_status: row?.employment_status || '', education: row?.education || '', gender: row?.gender || '', birth_place: row?.birth_place || '', birth_date: row?.birth_date || '', joined_date: row?.joined_date || '', notes: row?.notes || '' })
   const [busy, setBusy] = useState(false)
   const [errorText, setErrorText] = useState('')
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setErrorText('')
-    const payload = { teacher_user_id: form.teacher_user_id, employee_no: form.employee_no.trim() || null, nuptk: form.nuptk.trim() || null, position: form.position.trim() || null, employment_status: form.employment_status.trim() || null, education: form.education.trim() || null, gender: form.gender || null, birth_place: form.birth_place.trim() || null, birth_date: form.birth_date || null, joined_date: form.joined_date || null, notes: form.notes.trim() || null }
-    const result = detail ? await supabase.from('teacher_profiles').update(payload).eq('teacher_user_id', row!.id) : await supabase.from('teacher_profiles').insert(payload)
+    const payload = { full_name: form.full_name.trim(), nik: form.nik.trim() || null, teacher_user_id: form.teacher_user_id || null, employee_no: form.employee_no.trim() || null, nuptk: form.nuptk.trim() || null, position: form.position.trim() || null, employment_status: form.employment_status.trim() || null, education: form.education.trim() || null, gender: form.gender || null, birth_place: form.birth_place.trim() || null, birth_date: form.birth_date || null, joined_date: form.joined_date || null, notes: form.notes.trim() || null }
+    const result = row ? await supabase.from('teacher_profiles').update(payload).eq('id', row.id) : await supabase.from('teacher_profiles').insert(payload)
     setBusy(false)
     if (result.error) { setErrorText(result.error.code === '23505' ? 'Nomor pegawai atau NUPTK sudah digunakan.' : result.error.message); return }
     onDone()
   }
-  return <Modal title={detail ? 'Edit Data Guru' : 'Lengkapi Data Guru'} onClose={onClose} wide><form className="v2-form v2-form-grid" onSubmit={submit}>{!row && <label className="full">Akun Guru<select required value={form.teacher_user_id} onChange={(e) => setForm({ ...form, teacher_user_id: e.target.value })}>{available.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.display_name || 'Guru'}</option>)}</select></label>}<label>No. pegawai<input value={form.employee_no} onChange={(e) => setForm({ ...form, employee_no: e.target.value })} /></label><label>NUPTK<input value={form.nuptk} onChange={(e) => setForm({ ...form, nuptk: e.target.value })} /></label><label>Jabatan<input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Guru Kelas / Kepala RA" /></label><label>Status kepegawaian<input value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })} placeholder="Tetap / Honorer" /></label><label>Pendidikan terakhir<input value={form.education} onChange={(e) => setForm({ ...form, education: e.target.value })} placeholder="S1 PGRA" /></label><label>Jenis kelamin<select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="">Belum diisi</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></label><label>Tempat lahir<input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} /></label><label>Tanggal lahir<input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} /></label><label>Tanggal mulai mengajar<input type="date" value={form.joined_date} onChange={(e) => setForm({ ...form, joined_date: e.target.value })} /></label><label className="full">Catatan<textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>{errorText && <p className="v2-field-error full">{errorText}</p>}<div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Data Guru'}</button></div></form></Modal>
+  return <Modal title={row ? 'Edit Data Guru' : 'Tambah Data Guru'} onClose={onClose} wide><form className="v2-form v2-form-grid" onSubmit={submit}><label>Nama lengkap<input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></label><label>NIK<input inputMode="numeric" maxLength={16} value={form.nik} onChange={(e) => setForm({ ...form, nik: e.target.value.replace(/\D/g, '').slice(0, 16) })} /></label><label className="full">Akun login (opsional)<select value={form.teacher_user_id} onChange={(e) => setForm({ ...form, teacher_user_id: e.target.value })}><option value="">Belum dihubungkan</option>{available.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.display_name || 'Guru'}</option>)}</select></label><label>No. pegawai<input value={form.employee_no} onChange={(e) => setForm({ ...form, employee_no: e.target.value })} /></label><label>NUPTK<input value={form.nuptk} onChange={(e) => setForm({ ...form, nuptk: e.target.value })} /></label><label>Jabatan<input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Guru Kelas / Kepala RA" /></label><label>Status kepegawaian<input value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })} placeholder="Tetap / Honorer" /></label><label>Pendidikan terakhir<input value={form.education} onChange={(e) => setForm({ ...form, education: e.target.value })} placeholder="S1 PGRA" /></label><label>Jenis kelamin<select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="">Belum diisi</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></label><label>Tempat lahir<input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} /></label><label>Tanggal lahir<input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} /></label><label>Tanggal mulai mengajar<input type="date" value={form.joined_date} onChange={(e) => setForm({ ...form, joined_date: e.target.value })} /></label><label className="full">Catatan<textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>{errorText && <p className="v2-field-error full">{errorText}</p>}<div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Data Guru'}</button></div></form></Modal>
 }
 
 export function ReportsPage({ role }: { role: AppRole }) {
