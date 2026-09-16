@@ -5,6 +5,7 @@ import App from './App'
 import { installAttendanceSuccessFeedback } from './attendance-success-feedback'
 import './styles.css'
 import './brand.css'
+import './attendance-data-role.css'
 
 const brandLogoUrl = new URL('logo-ra-nurul-falah.png', document.baseURI).toString()
 document.documentElement.style.setProperty('--brand-logo-url', `url("${brandLogoUrl}")`)
