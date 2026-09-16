@@ -78,28 +78,6 @@ type SchoolDocument = {
   created_at: string
 }
 
-export function ModuleLaunchpad({ role, go }: { role: AppRole; go: (page: string) => void }) {
-  const items = role === 'admin'
-    ? [
-        ['Data Guru', 'Data profesional tenaga pendidik', ContactRound, 'teachers', 'mint'],
-        ['Penilaian & Rapor', 'Catatan perkembangan murid', BookOpenCheck, 'reports', 'blue'],
-        ['Pembayaran', 'Tagihan dan pembayaran murid', BadgeDollarSign, 'payments', 'gold'],
-        ['Dokumen & Surat', 'Arsip dan dokumen sekolah', FileText, 'documents', 'purple'],
-      ] as const
-    : role === 'teacher'
-      ? [
-          ['Penilaian & Rapor', 'Isi perkembangan murid', BookOpenCheck, 'reports', 'blue'],
-          ['Dokumen & Surat', 'Dokumen resmi untuk Guru', FileText, 'documents', 'purple'],
-        ] as const
-      : [
-          ['Rapor Anak', 'Lihat rapor yang telah diterbitkan', BookOpenCheck, 'reports', 'blue'],
-          ['Pembayaran', 'Pantau tagihan dan pembayaran', BadgeDollarSign, 'payments', 'gold'],
-          ['Dokumen & Surat', 'Dokumen resmi untuk Wali', FileText, 'documents', 'purple'],
-        ] as const
-
-  return <section className="school-launchpad"><header><div><small>MODUL SEKOLAH</small><h3>Layanan utama</h3></div><p>Akses cepat sesuai hak akun Anda.</p></header><div>{items.map(([title, text, Icon, page, tone]) => <button key={page} className={tone} onClick={() => go(page)}><span><Icon size={21} /></span><div><strong>{title}</strong><small>{text}</small></div></button>)}</div></section>
-}
-
 export function TeachersPage() {
   const [rows, setRows] = useState<TeacherRow[]>([])
   const [teacherAccounts, setTeacherAccounts] = useState<TeacherAccount[]>([])

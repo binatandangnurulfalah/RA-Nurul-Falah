@@ -1,8 +1,9 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
-import RolePortal from './RolePortal'
+
+const RolePortal = lazy(() => import('./RolePortal'))
 
 const ROLE_PATHS: Record<AppRole, string> = {
   admin: '/admin',
@@ -83,23 +84,26 @@ function App() {
 
   if (previewRole) {
     return (
-      <RolePortal
-        profile={{
-          id: 'preview',
-          role: previewRole,
-          display_name: PREVIEW_NAMES[previewRole],
-          is_active: true,
-          created_at: '',
-          updated_at: '',
-        }}
-      />
+      <Suspense fallback={<CenteredMessage text="Memuat portal..." />}>
+        <RolePortal
+          profile={{
+            id: 'preview',
+            role: previewRole,
+            display_name: PREVIEW_NAMES[previewRole],
+            is_active: true,
+            created_at: '',
+            updated_at: '',
+          }}
+        />
+      </Suspense>
     )
   }
 
   if (loading) return <CenteredMessage text="Memuat sistem..." />
 
   return (
-    <Routes>
+    <Suspense fallback={<CenteredMessage text="Memuat portal..." />}>
+      <Routes>
       <Route path="/login" element={profile ? <RoleRedirect profile={profile} /> : <LoginPage />} />
       <Route path="/lupa-password" element={<ForgotPasswordPage />} />
       <Route path="/verifikasi-kode" element={<VerifyOtpPage />} />
@@ -129,7 +133,8 @@ function App() {
         }
       />
       <Route path="*" element={profile ? <RoleRedirect profile={profile} /> : <Navigate to="/login" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
 
