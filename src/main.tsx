@@ -5,7 +5,7 @@ import App from './App'
 import './styles.css'
 import './brand.css'
 
-const brandLogoUrl = `${import.meta.env.BASE_URL}logo-ra-nurul-falah.svg`
+const brandLogoUrl = new URL('logo-ra-nurul-falah.svg', document.baseURI).toString()
 document.documentElement.style.setProperty('--brand-logo-url', `url("${brandLogoUrl}")`)
 
 createRoot(document.getElementById('root')!).render(
