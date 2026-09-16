@@ -22,13 +22,15 @@ import {
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { AccountsPage, AnnouncementsPage, ClassesPage, SchedulePage, StudentsPage } from './portal-v2/CrudPages'
-import { AttendanceDataManager, AttendanceScannerPage } from './portal-v2/AttendancePages'
+import { AttendanceDataManager } from './portal-v2/AttendancePages'
+import { AttendanceScannerFixed } from './portal-v2/AttendanceScannerFixed'
 import { ChildrenPage, DashboardPage, SettingsPage } from './portal-v2/PortalPages'
 import { ProfilePageV3 } from './portal-v2/ProfilePageV3'
 import { DocumentsPage, ModuleLaunchpad, PaymentsPage, ReportsPage, TeachersPage } from './portal-v2/SchoolModules'
 import './portal-v2.css'
 import './portal-v2-polish.css'
 import './school-modules.css'
+import './scanner-mobile-fix.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
 
@@ -85,8 +87,22 @@ export default function RolePortalV4({ profile }: { profile: UserProfile }) {
   const menu = menus[currentProfile.role]
   const page = location.pathname.split('/')[2] || 'dashboard'
   const active = menu.find((item) => item.id === page) ?? menu[0]
-  const mobilePrimary = useMemo(() => menu.slice(0, 4), [menu])
-  const mobileSecondary = useMemo(() => menu.slice(4), [menu])
+
+  const mobilePrimary = useMemo(() => {
+    const preferred = currentProfile.role === 'teacher'
+      ? ['dashboard', 'attendance-data', 'attendance', 'students']
+      : currentProfile.role === 'admin'
+        ? ['dashboard', 'students', 'attendance', 'attendance-data']
+        : ['dashboard', 'children', 'attendance-data', 'schedule']
+    return preferred
+      .map((id) => menu.find((item) => item.id === id))
+      .filter((item): item is NavItem => Boolean(item))
+  }, [currentProfile.role, menu])
+
+  const mobileSecondary = useMemo(
+    () => menu.filter((item) => !mobilePrimary.some((primary) => primary.id === item.id)),
+    [menu, mobilePrimary],
+  )
   const moreIsActive = mobileSecondary.some((item) => item.id === active.id)
 
   useEffect(() => {
@@ -132,7 +148,16 @@ export default function RolePortalV4({ profile }: { profile: UserProfile }) {
       </div>
 
       <nav className="v2-bottom-nav" aria-label="Navigasi utama mobile">
-        {mobilePrimary.map((item) => <button key={item.id} className={`${active.id === item.id ? 'active' : ''} ${item.id === 'attendance-data' ? 'center-item' : ''}`} onClick={() => go(item.id)}><span><item.icon size={item.id === 'attendance-data' ? 24 : 21} /></span><small>{mobileLabel(item.label)}</small></button>)}
+        {mobilePrimary.map((item) => (
+          <button
+            key={item.id}
+            className={`${active.id === item.id ? 'active' : ''} ${item.id === 'attendance' ? 'scan-center-item' : ''}`}
+            onClick={() => go(item.id)}
+          >
+            <span><item.icon size={item.id === 'attendance' ? 25 : 21} /></span>
+            <small>{mobileLabel(item.label)}</small>
+          </button>
+        ))}
         <button className={moreIsActive || moreOpen ? 'active' : ''} onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
       </nav>
 
@@ -144,7 +169,7 @@ export default function RolePortalV4({ profile }: { profile: UserProfile }) {
 function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; page: string; profile: UserProfile; setProfile: (profile: UserProfile) => void; go: (page: string) => void }) {
   if (page === 'dashboard') return <><DashboardPage role={role} profile={profile} go={go} /><ModuleLaunchpad role={role} go={go} /></>
   if (page === 'attendance-data') return <AttendanceDataManager canManage={role !== 'parent'} parentView={role === 'parent'} />
-  if (page === 'attendance' && role !== 'parent') return <AttendanceScannerPage />
+  if (page === 'attendance' && role !== 'parent') return <AttendanceScannerFixed />
   if (page === 'accounts' && role === 'admin') return <AccountsPage />
   if (page === 'students' && role !== 'parent') return <StudentsPage role={role} />
   if (page === 'teachers' && role === 'admin') return <TeachersPage />
