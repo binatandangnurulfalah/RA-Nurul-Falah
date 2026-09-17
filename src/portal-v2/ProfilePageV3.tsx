@@ -89,9 +89,9 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     setBusy(true)
     const { data, error } = await supabase.rpc('update_my_profile', {
       p_display_name: name,
-      p_phone: form.phone.trim() || null,
-      p_address: form.address.trim() || null,
-      p_bio: form.bio.trim() || null,
+      p_phone: form.phone.trim() || undefined,
+      p_address: form.address.trim() || undefined,
+      p_bio: form.bio.trim() || undefined,
     })
     setBusy(false)
 

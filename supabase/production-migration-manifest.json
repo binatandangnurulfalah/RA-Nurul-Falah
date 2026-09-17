@@ -33,7 +33,10 @@
     "20260917075517_stage8_harden_audit_permissions.sql",
     "20260917081637_stage9_cleanup_updated_at_triggers.sql",
     "20260917085747_stage9_remove_duplicate_updated_at_trigger.sql",
-    "20260917095625_stage11_attendance_hardening.sql"
+    "20260917095625_stage11_attendance_hardening.sql",
+    "20260917125645_stage11_dashboard_summary.sql",
+    "20260917130537_normalize_optional_rpc_ids.sql",
+    "20260917131531_refine_dashboard_attendance_semantics.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",

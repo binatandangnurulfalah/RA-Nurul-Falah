@@ -67,7 +67,7 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
   }
 
   const loadSummary = async () => {
-    const { data, error } = await supabase.rpc('payment_summary', { p_student_id: selectedChildId || null })
+    const { data, error } = await supabase.rpc('payment_summary', { p_student_id: selectedChildId || undefined })
     if (error) {
       setMessage({ tone: 'error', text: error.message })
       setSummary(EMPTY_SUMMARY)

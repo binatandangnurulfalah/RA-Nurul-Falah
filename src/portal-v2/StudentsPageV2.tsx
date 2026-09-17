@@ -182,16 +182,16 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
     setErrorText('')
 
     const { error } = await supabase.rpc('save_student_with_guardians', {
-      p_student_id: student?.id ?? null,
+      p_student_id: student?.id,
       p_full_name: form.full_name.trim(),
-      p_nik: form.nik.trim() || null,
-      p_nis: form.nis.trim() || null,
-      p_nisn: form.nisn.trim() || null,
-      p_gender: form.gender || null,
-      p_birth_place: form.birth_place.trim() || null,
-      p_birth_date: form.birth_date || null,
-      p_class_name: form.class_name || null,
-      p_academic_year: form.academic_year.trim() || null,
+      p_nik: form.nik.trim() || undefined,
+      p_nis: form.nis.trim() || undefined,
+      p_nisn: form.nisn.trim() || undefined,
+      p_gender: form.gender || undefined,
+      p_birth_place: form.birth_place.trim() || undefined,
+      p_birth_date: form.birth_date || undefined,
+      p_class_name: form.class_name || undefined,
+      p_academic_year: form.academic_year.trim() || undefined,
       p_is_active: form.active,
       p_guardian_user_ids: form.guardians,
     })
