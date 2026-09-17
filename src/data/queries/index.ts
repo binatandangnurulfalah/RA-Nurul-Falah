@@ -14,3 +14,5 @@ export { dashboardSummaryOptions, parentTodayAttendanceOptions } from './dashboa
 export type { DashboardAnnouncementItem, DashboardAttendanceItem, DashboardScheduleItem, DashboardSummary, ParentTodayAttendance } from './dashboard'
 export { announcementsOptions } from './announcements'
 export type { AnnouncementRow } from './announcements'
+export { auditPageOptions } from './audit'
+export type { AuditAction, AuditEventRow, AuditPageParams, AuditTable } from './audit'
