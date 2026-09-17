@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom'
 import App from './App'
 import './styles.css'
 import './brand.css'
+import './design-system.css'
 import './mobile-v5.css'
 
 const brandLogoUrl = new URL('logo-ra-nurul-falah.png', document.baseURI).toString()

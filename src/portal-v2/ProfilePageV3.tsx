@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { supabase, type UserProfile } from '../lib/supabase'
+import { validatePassword } from '../lib/auth-utils.js'
 import { Notice, PageTitle } from './PortalPages'
 
 type ProfileForm = {
@@ -115,8 +116,9 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     event.preventDefault()
     setMessage(null)
 
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      setMessage({ tone: 'error', text: 'Password minimal 8 karakter dan harus berisi huruf serta angka.' })
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      setMessage({ tone: 'error', text: passwordError })
       return
     }
     if (password !== confirmPassword) {
@@ -211,13 +213,13 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
             </div>
             <KeyRound size={22} />
           </div>
-          <div className="profile-v3-security-note"><ShieldCheck size={18} /><div><strong>Akun terlindungi</strong><small>Password baru minimal 8 karakter, berisi huruf dan angka.</small></div></div>
+          <div className="profile-v3-security-note"><ShieldCheck size={18} /><div><strong>Akun terlindungi</strong><small>Password minimal 10 karakter, berisi huruf besar, huruf kecil, dan angka.</small></div></div>
           <form className="v2-form" onSubmit={savePassword}>
             <label>Password baru
-              <input type="password" minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 8 karakter" />
+              <input type="password" minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 10 karakter" />
             </label>
             <label>Ulangi password
-              <input type="password" minLength={8} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <input type="password" minLength={10} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             </label>
             <button className="v2-primary" disabled={passwordBusy || !password}><KeyRound size={17} /> {passwordBusy ? 'Memperbarui...' : 'Ubah Password'}</button>
           </form>
