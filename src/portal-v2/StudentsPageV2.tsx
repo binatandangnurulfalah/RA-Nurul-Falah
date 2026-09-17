@@ -1,95 +1,70 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Edit3, Plus, QrCode, Save, Trash2, UsersRound } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { DataListSkeleton, DataTable, type DataTableColumn, MobileDataCard, SearchFilterBar, StatusBadge } from '../components/data'
-import { ConfirmDialog } from '../components/forms'
+import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatusBadge } from '../components/data'
+import { ConfirmDialog, FormField, FormSection } from '../components/forms'
 import { Button, EmptyState, PageHeader } from '../components/ui'
-import { supabase, type UserProfile } from '../lib/supabase'
-import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
+import { queryKeys } from '../data/queryKeys'
+import { studentLookupsOptions, studentPageOptions, type StudentAccount, type StudentClass, type StudentRow } from '../data/queries/students'
+import { useDataFilters } from '../data/useDataFilters'
+import { userErrorMessage } from '../lib/error-utils'
+import { supabase } from '../lib/supabase'
 import { ActionMenu, Dialog } from './AppExperience'
-import { cachedQuery, invalidateQueryCache, PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
+import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 import { Notice } from './PortalPages'
 
-type Account = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
-type Student = {
-  id: string
-  full_name: string
-  nis: string | null
-  nisn: string | null
-  nik: string | null
-  gender: 'L' | 'P' | null
-  birth_place: string | null
-  birth_date: string | null
-  class_name: string | null
-  academic_year: string | null
-  is_active: boolean
-  qr_token: string
-}
-type SchoolClass = { id: string; name: string; academic_year: string; is_active: boolean }
+type Account = StudentAccount
+type Student = StudentRow
+type SchoolClass = StudentClass
 type Message = { tone: 'success' | 'error'; text: string }
 
 export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) {
-  const [students, setStudents] = useState<Student[]>([])
-  const [parents, setParents] = useState<Account[]>([])
-  const [classes, setClasses] = useState<SchoolClass[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [classFilter, setClassFilter] = useState('all')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
+  const queryClient = useQueryClient()
+  const filters = useDataFilters({ q: '', class: 'all' })
+  const search = filters.value('q')
+  const classFilter = filters.value('class') || 'all'
+  const page = filters.page
+  const debouncedSearch = useDebouncedValue(search)
+  const pageQuery = useQuery(studentPageOptions({ page, pageSize: PAGE_SIZE, search: debouncedSearch, classFilter }))
+  const lookupQuery = useQuery(studentLookupsOptions())
+  const students = pageQuery.data?.rows ?? []
+  const total = pageQuery.data?.total ?? 0
+  const parents = lookupQuery.data?.parents ?? []
+  const classes = lookupQuery.data?.classes ?? []
+  const loading = pageQuery.isPending
   const [editing, setEditing] = useState<Student | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
   const [removing, setRemoving] = useState(false)
+  const removingRef = useRef(false)
   const [qrStudent, setQrStudent] = useState<Student | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
-  const debouncedSearch = useDebouncedValue(search)
 
-  const load = async () => {
-    setLoading(true)
-    const range = getPageRange(page, PAGE_SIZE)
-    let studentQuery = supabase.from('students').select('*', { count: 'exact' }).order('full_name').range(range.from, range.to)
-    if (classFilter !== 'all') studentQuery = studentQuery.eq('class_name', classFilter)
-    if (debouncedSearch.trim()) {
-      const query = sanitizeSearch(debouncedSearch)
-      studentQuery = studentQuery.or(`full_name.ilike.%${query}%,nik.ilike.%${query}%,nis.ilike.%${query}%,nisn.ilike.%${query}%`)
-    }
+  const setSearch = (value: string) => filters.update({ q: value }, { resetPage: true })
+  const setClassFilter = (value: string) => filters.update({ class: value }, { resetPage: true })
+  const resetFilters = () => filters.reset('q', 'class')
 
-    const [studentResult, parentResult, classResult] = await Promise.all([
-      studentQuery,
-      cachedQuery('students:parents', async () => supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name')),
-      cachedQuery('students:classes', async () => supabase.from('school_classes').select('id,name,academic_year,is_active').eq('is_active', true).order('name')),
-    ])
-
-    if (studentResult.error) setMessage({ tone: 'error', text: studentResult.error.message })
-    setStudents((studentResult.data as Student[] | null) ?? [])
-    setParents((parentResult.data as Account[] | null) ?? [])
-    setClasses((classResult.data as SchoolClass[] | null) ?? [])
-    setTotal(studentResult.count ?? 0)
-    setLoading(false)
-  }
-
-  useEffect(() => { void load() }, [page, debouncedSearch, classFilter])
-  useEffect(() => { setPage(1) }, [debouncedSearch, classFilter])
-
-  const resetFilters = () => {
-    setSearch('')
-    setClassFilter('all')
+  const closeDelete = () => {
+    if (removingRef.current) return
+    setDeleting(null)
   }
 
   const remove = async () => {
-    if (!deleting || role !== 'admin' || removing) return
+    if (!deleting || role !== 'admin' || removingRef.current) return
+    removingRef.current = true
     setRemoving(true)
     const { error } = await supabase.from('students').delete().eq('id', deleting.id)
+    removingRef.current = false
+    setRemoving(false)
     if (error) {
-      setRemoving(false)
       setMessage({ tone: 'error', text: error.message })
       return
     }
-    invalidateQueryCache('students:')
-    setRemoving(false)
+    const shouldGoBack = students.length === 1 && page > 1
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Data murid berhasil dihapus.' })
-    await load()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.students.all })
+    if (shouldGoBack) filters.setPage(page - 1)
   }
 
   const actionItems = (student: Student) => [
@@ -130,6 +105,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       actions={<Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button>}
     />
     {message && <Notice {...message} />}
+    {lookupQuery.isError && <Notice tone="error" text={userErrorMessage(lookupQuery.error, 'Data pendukung murid gagal dimuat.')} />}
     <section className="v2-panel">
       <SearchFilterBar
         searchValue={search}
@@ -145,26 +121,28 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
         </select>
       </SearchFilterBar>
 
-      <div className="desktop-data-view">
-        <DataTable rows={students} columns={columns} getRowKey={(student) => student.id} loading={loading} empty={emptyState} caption="Daftar murid" />
-      </div>
-      <div className="mobile-data-view">
-        {loading ? <DataListSkeleton /> : students.length ? <div className="mobile-data-list">{students.map((student) => (
-          <MobileDataCard
-            key={student.id}
-            leading={initials(student.full_name)}
-            title={student.full_name}
-            subtitle={student.class_name || 'Belum ada kelompok'}
-            badges={<StatusBadge tone={student.is_active ? 'success' : 'neutral'}>{student.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge>}
-            fields={[
-              { label: student.nisn ? 'NISN' : student.nis ? 'NIS' : 'NIK', value: student.nisn || student.nis || student.nik || 'Belum diisi' },
-              { label: 'Tahun ajaran', value: student.academic_year || '—' },
-            ]}
-            actions={<ActionMenu label={`Aksi untuk ${student.full_name}`} items={actionItems(student)} />}
-          />
-        ))}</div> : emptyState}
-      </div>
-      {!loading && students.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+      {pageQuery.isError ? <ErrorState description={userErrorMessage(pageQuery.error, 'Data murid gagal dimuat.')} onRetry={() => void pageQuery.refetch()} /> : <>
+        <div className="desktop-data-view">
+          <DataTable rows={students} columns={columns} getRowKey={(student) => student.id} loading={loading} empty={emptyState} caption="Daftar murid" />
+        </div>
+        <div className="mobile-data-view">
+          {loading ? <DataListSkeleton /> : students.length ? <div className="mobile-data-list">{students.map((student) => (
+            <MobileDataCard
+              key={student.id}
+              leading={initials(student.full_name)}
+              title={student.full_name}
+              subtitle={student.class_name || 'Belum ada kelompok'}
+              badges={<StatusBadge tone={student.is_active ? 'success' : 'neutral'}>{student.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge>}
+              fields={[
+                { label: student.nisn ? 'NISN' : student.nis ? 'NIS' : 'NIK', value: student.nisn || student.nis || student.nik || 'Belum diisi' },
+                { label: 'Tahun ajaran', value: student.academic_year || '—' },
+              ]}
+              actions={<ActionMenu label={`Aksi untuk ${student.full_name}`} items={actionItems(student)} />}
+            />
+          ))}</div> : emptyState}
+        </div>
+        {!loading && students.length ? <PaginationControls page={page} total={total} onPage={filters.setPage} /> : null}
+      </>}
     </section>
 
     {editing && <StudentModal
@@ -174,10 +152,9 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       onClose={() => setEditing(null)}
       onDone={async () => {
         const wasNew = editing === 'new'
-        invalidateQueryCache('students:')
         setEditing(null)
         setMessage({ tone: 'success', text: wasNew ? 'Murid berhasil ditambahkan.' : 'Data murid dan wali berhasil diperbarui.' })
-        await load()
+        await queryClient.invalidateQueries({ queryKey: queryKeys.students.all })
       }}
     />}
     <ConfirmDialog
@@ -187,7 +164,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       confirmLabel="Ya, Hapus"
       danger
       busy={removing}
-      onClose={() => setDeleting(null)}
+      onClose={closeDelete}
       onConfirm={() => void remove()}
     />
     {qrStudent && <StudentQrModal student={qrStudent} onClose={() => setQrStudent(null)} />}
@@ -210,6 +187,7 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
   })
   const [guardianLoading, setGuardianLoading] = useState(Boolean(student))
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
   useEffect(() => {
@@ -240,7 +218,8 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (guardianLoading) return
+    if (guardianLoading || busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setErrorText('')
 
@@ -259,6 +238,7 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
       p_guardian_user_ids: form.guardians,
     })
 
+    busyRef.current = false
     setBusy(false)
     if (error) {
       if (error.code === '23505') setErrorText('NIK, NIS, atau NISN sudah digunakan oleh murid lain.')
@@ -268,18 +248,23 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
     onDone()
   }
 
-  return <Dialog title={student ? 'Edit Murid' : 'Tambah Murid'} eyebrow="DATA MURID" onClose={onClose} wide>
+  return <Dialog title={student ? 'Edit Murid' : 'Tambah Murid'} eyebrow="DATA MURID" onClose={() => { if (!busyRef.current) onClose() }} wide>
     <form className="v2-form v2-form-grid" onSubmit={submit}>
-      <label>Nama lengkap<input required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></label>
-      <label>NIK<input inputMode="numeric" maxLength={16} value={form.nik} onChange={(event) => setForm({ ...form, nik: event.target.value.replace(/\D/g, '').slice(0, 16) })} /></label>
-      <label>NIS<input value={form.nis} onChange={(event) => setForm({ ...form, nis: event.target.value })} /></label>
-      <label>NISN<input value={form.nisn} onChange={(event) => setForm({ ...form, nisn: event.target.value })} /></label>
-      <label>Jenis kelamin<select value={form.gender} onChange={(event) => setForm({ ...form, gender: event.target.value as '' | 'L' | 'P' })}><option value="">Pilih</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></label>
-      <label>Tempat lahir<input value={form.birth_place} onChange={(event) => setForm({ ...form, birth_place: event.target.value })} /></label>
-      <label>Tanggal lahir<input type="date" value={form.birth_date} onChange={(event) => setForm({ ...form, birth_date: event.target.value })} /></label>
-      <label>Kelompok<select value={form.class_name} onChange={(event) => setForm({ ...form, class_name: event.target.value })}><option value="">Belum ditentukan</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.name}>{schoolClass.name}</option>)}</select></label>
-      <label>Tahun ajaran<input value={form.academic_year} onChange={(event) => setForm({ ...form, academic_year: event.target.value })} /></label>
-      <label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Murid aktif</span></label>
+      <FormSection title="Identitas murid" description="Lengkapi identitas utama. NIK, NIS, dan NISN harus unik bila diisi.">
+        <FormField label="Nama lengkap" required><input required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></FormField>
+        <FormField label="NIK" helper="Maksimal 16 digit"><input inputMode="numeric" maxLength={16} value={form.nik} onChange={(event) => setForm({ ...form, nik: event.target.value.replace(/\D/g, '').slice(0, 16) })} /></FormField>
+        <FormField label="NIS"><input value={form.nis} onChange={(event) => setForm({ ...form, nis: event.target.value })} /></FormField>
+        <FormField label="NISN"><input value={form.nisn} onChange={(event) => setForm({ ...form, nisn: event.target.value })} /></FormField>
+        <FormField label="Jenis kelamin"><select value={form.gender} onChange={(event) => setForm({ ...form, gender: event.target.value as '' | 'L' | 'P' })}><option value="">Pilih</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></FormField>
+        <FormField label="Tempat lahir"><input value={form.birth_place} onChange={(event) => setForm({ ...form, birth_place: event.target.value })} /></FormField>
+        <FormField label="Tanggal lahir"><input type="date" value={form.birth_date} onChange={(event) => setForm({ ...form, birth_date: event.target.value })} /></FormField>
+      </FormSection>
+
+      <FormSection title="Akademik" description="Kelompok dan tahun ajaran tetap mengikuti data resmi sekolah.">
+        <FormField label="Kelompok"><select value={form.class_name} onChange={(event) => setForm({ ...form, class_name: event.target.value })}><option value="">Belum ditentukan</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.name}>{schoolClass.name}</option>)}</select></FormField>
+        <FormField label="Tahun ajaran"><input value={form.academic_year} onChange={(event) => setForm({ ...form, academic_year: event.target.value })} /></FormField>
+        <label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Murid aktif</span></label>
+      </FormSection>
 
       <fieldset className="full v5-teacher-picker">
         <legend>Wali murid terhubung</legend>
@@ -292,7 +277,7 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
 
       {errorText && <p className="v2-field-error full">{errorText}</p>}
       <div className="v2-form-actions full">
-        <button type="button" className="v2-secondary" onClick={onClose}>Batal</button>
+        <button type="button" className="v2-secondary" disabled={busy} onClick={onClose}>Batal</button>
         <button className="v2-primary" disabled={busy || guardianLoading}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Murid'}</button>
       </div>
     </form>
