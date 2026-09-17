@@ -199,7 +199,7 @@ function LoginPage() {
             Lupa password?
           </button>
         </div>
-        {error && <div className="alert error">{error}</div>}
+        {error && <div className="alert error" role="alert">{error}</div>}
         <button className="primary-button" disabled={busy}>
           {busy ? 'Memeriksa...' : 'Masuk'}
         </button>
@@ -234,7 +234,7 @@ function ForgotPasswordPage() {
     <AuthLayout title="Lupa password" subtitle="Masukkan email akun Anda untuk menerima kode verifikasi.">
       <form onSubmit={submit} className="form-stack">
         <Field icon={<Mail size={18} />} label="Email" type="email" value={email} onChange={setEmail} placeholder="nama@email.com" />
-        {message && <div className="alert success">{message}</div>}
+        {message && <div className="alert success" role="status">{message}</div>}
         <button className="primary-button" disabled={busy}>
           {busy ? 'Mengirim...' : 'Kirim kode verifikasi'}
         </button>
@@ -282,7 +282,7 @@ function VerifyOtpPage() {
           onChange={(event) => setToken(event.target.value.replace(/\D/g, '').slice(0, 6))}
           placeholder="000000"
         />
-        {error && <div className="alert error">{error}</div>}
+        {error && <div className="alert error" role="alert">{error}</div>}
         <button className="primary-button" disabled={busy || token.length !== 6}>
           {busy ? 'Memverifikasi...' : 'Verifikasi'}
         </button>
@@ -301,9 +301,9 @@ function NewPasswordPage() {
 
   const strength = useMemo(() => {
     let score = 0
-    if (password.length >= 6) score++
-    if (password.length >= 8) score++
     if (password.length >= 10) score++
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++
+    if (/\d/.test(password) && /[^A-Za-z0-9]/.test(password)) score++
     return score
   }, [password])
 
@@ -339,17 +339,17 @@ function NewPasswordPage() {
   }
 
   return (
-    <AuthLayout title="Buat password baru" subtitle="Gunakan password baru yang aman dan mudah Anda ingat.">
+    <AuthLayout title="Buat password baru" subtitle="Gunakan minimal 10 karakter dengan huruf besar, huruf kecil, angka, dan simbol.">
       <form onSubmit={submit} className="form-stack">
-        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 6 karakter" />
-        <div className="strength">
+        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 10 karakter" />
+        <div className="strength" aria-label={`Kekuatan password ${strength} dari 3`}>
           <span className={strength >= 1 ? 'filled' : ''} />
           <span className={strength >= 2 ? 'filled' : ''} />
           <span className={strength >= 3 ? 'filled' : ''} />
         </div>
         <Field icon={<ShieldCheck size={18} />} label="Ulangi password baru" type="password" value={confirm} onChange={setConfirm} placeholder="Ketik ulang password" />
-        {error && <div className="alert error">{error}</div>}
-        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error" role="alert">{error}</div>}
+        {message && <div className="alert success" role="status">{message}</div>}
         <button className="primary-button" disabled={busy || Boolean(message)}>
           {busy ? 'Menyimpan...' : 'Konfirmasi password'}
         </button>
