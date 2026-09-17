@@ -23,7 +23,7 @@ jobs:
           version: 2.117.0
       - run: npm ci
       - name: Materialize historical bootstrap migrations
-        run: ./scripts/prepare-supabase-integration.sh
+        run: bash scripts/prepare-supabase-integration.sh
       - name: Start isolated Supabase stack
         run: supabase start
       - name: Serve Edge Functions
