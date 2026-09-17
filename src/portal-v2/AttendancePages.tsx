@@ -8,10 +8,10 @@ import {
   RefreshCw,
   Search,
   Trash2,
-  X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { Dialog, useChildSelection } from './AppExperience'
 type AttendanceRecord = {
   id: string
   student_id: string
@@ -29,6 +29,7 @@ const JAKARTA = 'Asia/Jakarta'
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
 
 export function AttendanceDataManager({ canManage, parentView }: { canManage: boolean; parentView: boolean }) {
+  const childSelection = useChildSelection()
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,10 +56,11 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return records.filter((r) => {
+      if (parentView && childSelection.selectedChildId && r.student_id !== childSelection.selectedChildId) return false
       const text = `${r.students?.full_name || ''} ${r.students?.nis || ''} ${r.students?.class_name || ''}`.toLowerCase()
       return (!q || text.includes(q)) && (!dateFilter || r.attendance_date === dateFilter) && (statusFilter === 'all' || r.status === statusFilter)
     })
-  }, [dateFilter, records, search, statusFilter])
+  }, [dateFilter, records, search, statusFilter, parentView, childSelection.selectedChildId])
 
   const todayRows = records.filter((r) => r.attendance_date === TODAY)
   const remove = async () => {
@@ -82,10 +84,10 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
     if (error || !data?.ok) { setErrorText(data?.error || 'Data absensi gagal disimpan.'); return }
     onDone()
   }
-  return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className="v2-modal wide"><header><div><small>KOREKSI ABSENSI</small><h2>{value ? 'Edit Data Absen' : 'Tambah Absen Manual'}</h2></div><button className="v2-close" onClick={onClose}><X size={19} /></button></header><form className="v2-form v2-form-grid" onSubmit={submit}><label className="full">Murid<select required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })}>{students.map((s) => <option value={s.id} key={s.id}>{s.full_name} {s.class_name ? `· ${s.class_name}` : ''}</option>)}</select></label><label>Tanggal<input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select></label><label>Jam masuk<input type="time" value={form.check_in} onChange={(e) => setForm({ ...form, check_in: e.target.value })} /></label><label>Jam pulang<input type="time" value={form.check_out} onChange={(e) => setForm({ ...form, check_out: e.target.value })} /></label>{errorText && <p className="v2-field-error full">{errorText}</p>}<div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}><CheckCircle2 size={17} /> {busy ? 'Menyimpan...' : 'Simpan Absensi'}</button></div></form></section></div>
+  return <Dialog title={value ? 'Edit Data Absen' : 'Tambah Absen Manual'} eyebrow="KOREKSI ABSENSI" onClose={onClose} wide><form className="v2-form v2-form-grid" onSubmit={submit}><label className="full">Murid<select required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })}>{students.map((s) => <option value={s.id} key={s.id}>{s.full_name} {s.class_name ? `· ${s.class_name}` : ''}</option>)}</select></label><label>Tanggal<input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select></label><label>Jam masuk<input type="time" value={form.check_in} onChange={(e) => setForm({ ...form, check_in: e.target.value })} /></label><label>Jam pulang<input type="time" value={form.check_out} onChange={(e) => setForm({ ...form, check_out: e.target.value })} /></label>{errorText && <p className="v2-field-error full">{errorText}</p>}<div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}><CheckCircle2 size={17} /> {busy ? 'Menyimpan...' : 'Simpan Absensi'}</button></div></form></Dialog>
 }
 
-function ConfirmModal({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) { return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className="v2-modal confirm"><span className="v2-modal-icon danger"><Trash2 /></span><h2>{title}</h2><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></section></div> }
+function ConfirmModal({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) { return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog> }
 function SmallStat({ label, value }: { label: string; value: number }) { return <article className="v2-stat mini green"><span><Clock3 size={20} /></span><div><small>{label}</small><strong>{value}</strong><p>Catatan</p></div></article> }
 function initials(name?: string | null) { return (name || 'Murid').split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() }
 function dateText(value: string) { return new Date(`${value}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) }

@@ -26,6 +26,7 @@ import { AttendanceScannerNative } from './portal-v2/AttendanceScannerNative'
 import { ChildrenPage, DashboardPage, SettingsPage } from './portal-v2/PortalPages'
 import { ProfilePageV3 } from './portal-v2/ProfilePageV3'
 import { DocumentsPage, PaymentsPage, ReportsPage, TeachersPage } from './portal-v2/SchoolModules'
+import { ChildSelectionProvider, GlobalChildSwitcher, OfflineBanner } from './portal-v2/AppExperience'
 import './portal-v2.css'
 import './portal-v2-polish.css'
 import './school-modules.css'
@@ -75,6 +76,10 @@ const menus: Record<AppRole, NavItem[]> = {
 }
 
 export default function RolePortalV4({ profile }: { profile: UserProfile }) {
+  return <ChildSelectionProvider enabled={profile.role === 'parent'}><RolePortalShell profile={profile} /></ChildSelectionProvider>
+}
+
+function RolePortalShell({ profile }: { profile: UserProfile }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [currentProfile, setCurrentProfile] = useState(profile)
@@ -168,6 +173,8 @@ export default function RolePortalV4({ profile }: { profile: UserProfile }) {
         </header>
 
         <main className="v2-content">
+          <OfflineBanner />
+          {currentProfile.role === 'parent' && <GlobalChildSwitcher />}
           <PageRouter role={currentProfile.role} page={active.id} profile={currentProfile} setProfile={setCurrentProfile} go={go} />
         </main>
       </div>

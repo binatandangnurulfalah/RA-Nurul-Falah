@@ -51,9 +51,23 @@ Deno.serve(async (req: Request) => {
     const action = String(body.action ?? '')
     const allowedStatus = ['present', 'late', 'excused', 'sick', 'absent']
 
+    const teacherCanAccessStudent = async (studentId: string) => {
+      if (profile.role === 'admin') return true
+      const { data: student } = await admin.from('students').select('class_name').eq('id', studentId).maybeSingle()
+      if (!student?.class_name) return false
+      const { data: teacher } = await admin.from('teacher_profiles').select('id').eq('teacher_user_id', authData.user.id).maybeSingle()
+      if (!teacher) return false
+      const { data: schoolClass } = await admin.from('school_classes').select('id').eq('name', student.class_name).eq('is_active', true).maybeSingle()
+      if (!schoolClass) return false
+      const { data: assignment } = await admin.from('teacher_class_assignments').select('class_id').eq('class_id', schoolClass.id).eq('teacher_profile_id', teacher.id).maybeSingle()
+      return Boolean(assignment)
+    }
+
     if (action === 'delete') {
       const recordId = String(body.record_id ?? '')
       if (!recordId) return json({ ok: false, error: 'Data absensi tidak valid.' }, 400)
+      const { data: existing } = await admin.from('attendance_records').select('student_id').eq('id', recordId).maybeSingle()
+      if (!existing || !(await teacherCanAccessStudent(existing.student_id))) return json({ ok: false, error: 'Anda tidak memiliki akses ke kelas murid ini.' }, 403)
       const { error } = await admin.from('attendance_records').delete().eq('id', recordId)
       if (error) return json({ ok: false, error: error.message }, 400)
       return json({ ok: true })
@@ -73,6 +87,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: student } = await admin.from('students').select('id,full_name').eq('id', studentId).eq('is_active', true).maybeSingle()
     if (!student) return json({ ok: false, error: 'Murid tidak ditemukan atau tidak aktif.' }, 404)
+    if (!(await teacherCanAccessStudent(studentId))) return json({ ok: false, error: 'Anda hanya dapat mengelola absensi kelas yang ditugaskan.' }, 403)
 
     const checkIn = toIso(attendanceDate, checkInText)
     const checkOut = toIso(attendanceDate, checkOutText)
