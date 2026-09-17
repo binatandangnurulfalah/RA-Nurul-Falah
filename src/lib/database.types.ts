@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -87,10 +85,16 @@ export type Database = {
         Row: {
           attendance_date: string
           check_in: string | null
+          check_in_by: string | null
           check_out: string | null
+          check_out_by: string | null
+          correction_reason: string | null
           created_at: string
           id: string
+          last_corrected_at: string | null
+          last_corrected_by: string | null
           recorded_by: string | null
+          source: string
           status: string
           student_id: string
           updated_at: string
@@ -98,10 +102,16 @@ export type Database = {
         Insert: {
           attendance_date?: string
           check_in?: string | null
+          check_in_by?: string | null
           check_out?: string | null
+          check_out_by?: string | null
+          correction_reason?: string | null
           created_at?: string
           id?: string
+          last_corrected_at?: string | null
+          last_corrected_by?: string | null
           recorded_by?: string | null
+          source?: string
           status?: string
           student_id: string
           updated_at?: string
@@ -109,10 +119,16 @@ export type Database = {
         Update: {
           attendance_date?: string
           check_in?: string | null
+          check_in_by?: string | null
           check_out?: string | null
+          check_out_by?: string | null
+          correction_reason?: string | null
           created_at?: string
           id?: string
+          last_corrected_at?: string | null
+          last_corrected_by?: string | null
           recorded_by?: string | null
+          source?: string
           status?: string
           student_id?: string
           updated_at?: string
@@ -821,15 +837,16 @@ export type Database = {
     }
     Functions: {
       attendance_summary_for_date: {
-        Args: { p_date: string; p_student_id?: string | null }
+        Args: { p_date: string; p_student_id?: string }
         Returns: {
           checked_out_records: number
           late_records: number
           total_records: number
         }[]
       }
+      dashboard_summary: { Args: never; Returns: Json }
       payment_summary: {
-        Args: { p_student_id?: string | null }
+        Args: { p_student_id?: string }
         Returns: {
           total_billed: number
           total_outstanding: number
@@ -839,7 +856,7 @@ export type Database = {
       save_class_with_assignments: {
         Args: {
           p_academic_year: string
-          p_class_id: string | null
+          p_class_id: string
           p_is_active: boolean
           p_name: string
           p_teacher_profile_ids: string[]
@@ -848,18 +865,18 @@ export type Database = {
       }
       save_student_with_guardians: {
         Args: {
-          p_academic_year?: string | null
-          p_birth_date?: string | null
-          p_birth_place?: string | null
-          p_class_name?: string | null
+          p_academic_year?: string
+          p_birth_date?: string
+          p_birth_place?: string
+          p_class_name?: string
           p_full_name: string
-          p_gender?: string | null
+          p_gender?: string
           p_guardian_user_ids?: string[]
           p_is_active?: boolean
-          p_nik?: string | null
-          p_nis?: string | null
-          p_nisn?: string | null
-          p_student_id: string | null
+          p_nik?: string
+          p_nis?: string
+          p_nisn?: string
+          p_student_id: string
         }
         Returns: {
           academic_year: string | null
@@ -887,10 +904,10 @@ export type Database = {
       }
       update_my_profile: {
         Args: {
-          p_address?: string | null
-          p_bio?: string | null
+          p_address?: string
+          p_bio?: string
           p_display_name: string
-          p_phone?: string | null
+          p_phone?: string
         }
         Returns: {
           address: string | null
