@@ -22,6 +22,8 @@ jobs:
         with:
           version: 2.117.0
       - run: npm ci
+      - name: Test and build application
+        run: npm run check
       - name: Materialize historical bootstrap migrations
         run: bash scripts/prepare-supabase-integration.sh
       - name: Start isolated Supabase stack
