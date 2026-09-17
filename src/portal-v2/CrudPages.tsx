@@ -13,6 +13,7 @@ import {
   UsersRound,
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
+import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog } from './AppExperience'
 import { cachedQuery, invalidateQueryCache, PAGE_SIZE, PaginationControls, useDebouncedValue, usePaginatedItems } from './DataExperience'
@@ -127,10 +128,11 @@ export function StudentsPage({ role }: { role: 'admin' | 'teacher' }) {
 
   const load = async () => {
     setLoading(true)
-    let studentQuery = supabase.from('students').select('*', { count: 'exact' }).order('full_name').range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    const range = getPageRange(page, PAGE_SIZE)
+    let studentQuery = supabase.from('students').select('*', { count: 'exact' }).order('full_name').range(range.from, range.to)
     if (classFilter !== 'all') studentQuery = studentQuery.eq('class_name', classFilter)
     if (debouncedSearch.trim()) {
-      const query = debouncedSearch.trim().replace(/[%_,()]/g, ' ')
+      const query = sanitizeSearch(debouncedSearch)
       studentQuery = studentQuery.or(`full_name.ilike.%${query}%,nik.ilike.%${query}%,nis.ilike.%${query}%,nisn.ilike.%${query}%`)
     }
     const [studentResult, parentResult, classResult] = await Promise.all([
