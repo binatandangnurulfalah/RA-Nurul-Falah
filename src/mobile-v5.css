@@ -130,6 +130,16 @@
 .v5-action-popover button:hover, .v5-action-popover a:hover { background: #f1f7f4; }
 .v5-action-popover .danger { color: #b42318; }
 .v5-action-popover .danger:hover { background: #fff1f0; }
+.v5-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--v2-border); }
+.v5-pagination button { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--v2-border); border-radius: 9px; background: #fff; color: var(--v2-text); font-weight: 700; }
+.v5-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.v5-pagination span { color: var(--v2-muted); font-size: 12px; text-align: center; }
+.v5-page-loading { min-height: 220px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--v2-muted); }
+.v5-page-loading > span { width: 9px; height: 9px; border-radius: 50%; background: var(--v2-green); animation: v5-loading 1s infinite ease-in-out; }
+.v5-page-loading > span:nth-child(2) { animation-delay: .12s; }
+.v5-page-loading > span:nth-child(3) { animation-delay: .24s; }
+.v5-page-loading p { margin-left: 6px; font-size: 13px; font-weight: 700; }
+@keyframes v5-loading { 0%, 100% { opacity: .35; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }
 
 @media (max-width: 1050px) {
   .v5-section .v2-quick-grid { grid-template-columns: repeat(2, 1fr); }
@@ -184,6 +194,9 @@
   .v2-toolbar > select, .v2-toolbar > .date { min-width: 0; width: 100%; }
   .v5-action-trigger { width: 44px; height: 44px; }
   .v5-action-popover { position: fixed; left: 12px; right: 12px; top: auto; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; }
+  .v5-pagination { display: grid; grid-template-columns: 1fr 1fr; }
+  .v5-pagination span { grid-column: 1 / -1; grid-row: 1; }
+  .v5-pagination button { justify-content: center; min-height: 44px; }
   .auth-page .brand-panel { min-height: 160px; padding: 26px 22px; }
   .auth-brand-logo { width: 64px; height: 64px; }
   .v5-global-child { position: sticky; top: calc(64px + env(safe-area-inset-top)); z-index: 7; box-shadow: 0 5px 18px rgba(31,66,53,.06); }
