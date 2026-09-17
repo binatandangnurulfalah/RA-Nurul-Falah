@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { validatePassword } from '../_shared/password-policy.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,8 +73,9 @@ Deno.serve(async (req: Request) => {
       if (userId === authData.user.id && (!isActive || role !== 'admin')) {
         return json({ ok: false, error: 'Admin tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.' }, 400)
       }
-      if (newPassword && newPassword.length < 6) {
-        return json({ ok: false, error: 'Password baru minimal 6 karakter.' }, 400)
+      if (newPassword) {
+        const passwordError = validatePassword(newPassword)
+        if (passwordError) return json({ ok: false, error: passwordError }, 400)
       }
 
       const authPatch: { user_metadata: { display_name: string }; password?: string } = {

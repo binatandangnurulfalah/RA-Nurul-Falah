@@ -28,7 +28,7 @@ import './scanner-native.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
 
-const AccountsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.AccountsPage })))
+const AccountsPage = lazy(() => import('./portal-v2/AccountsPage').then((module) => ({ default: module.AccountsPage })))
 const AnnouncementsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.AnnouncementsPage })))
 const ClassesPage = lazy(() => import('./portal-v2/ClassesPage').then((module) => ({ default: module.ClassesPage })))
 const SchedulePage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.SchedulePage })))
