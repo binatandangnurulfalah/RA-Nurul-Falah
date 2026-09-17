@@ -164,7 +164,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
     <form className="v2-form" onSubmit={submit}>
       <label>Nama lengkap<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
       <label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-      <label>Password sementara<input required type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><small>Minimal 10 karakter, huruf besar, huruf kecil, dan angka.</small></label>
+      <label>Password sementara<input required type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><small>Minimal 6 karakter.</small></label>
       <label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as 'teacher' | 'parent' })}><option value="teacher">Guru</option><option value="parent">Orang Tua/Wali</option></select></label>
       {errorText && <p className="v2-field-error">{errorText}</p>}
       <button className="v2-primary" disabled={busy}><Plus size={17} /> {busy ? 'Membuat...' : 'Buat Akun'}</button>
@@ -212,7 +212,7 @@ function EditAccountModal({ account, onClose, onDone }: { account: Account; onCl
       <label>Nama lengkap<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
       <label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as AppRole })}><option value="admin">Admin</option><option value="teacher">Guru</option><option value="parent">Wali</option></select></label>
       <label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Akun aktif</span></label>
-      <label>Password baru <small>Opsional</small><input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Kosongkan jika tidak diubah" /><small>Jika diisi: minimal 10 karakter, huruf besar, huruf kecil, dan angka.</small></label>
+      <label>Password baru <small>Opsional</small><input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Kosongkan jika tidak diubah" /><small>Jika diisi: minimal 6 karakter.</small></label>
       {errorText && <p className="v2-field-error">{errorText}</p>}
       <button className="v2-primary" disabled={busy}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
     </form>
