@@ -38,9 +38,13 @@ test('FormDialog mendukung danger action dan validation disable secara backward-
   assert.match(formDialog, /disabled=\{busy \|\| submitDisabled\}/)
 })
 
-test('destructive attendance and account actions memiliki busy guard', () => {
-  assert.match(attendance, /if \(!deleting \|\| !canManage \|\| removing\) return/)
-  assert.match(accounts, /if \(!deleting \|\| removing\) return/)
+test('destructive attendance and account actions memiliki synchronous busy guard', () => {
+  assert.match(attendance, /const removingRef = useRef\(false\)/)
+  assert.match(accounts, /const removingRef = useRef\(false\)/)
+  assert.match(attendance, /if \(!deleting \|\| !canManage \|\| removingRef\.current/)
+  assert.match(accounts, /if \(!deleting \|\| removingRef\.current\) return/)
+  assert.match(attendance, /removingRef\.current = true/)
+  assert.match(accounts, /removingRef\.current = true/)
   assert.match(attendance, /busy=\{removing\}/)
   assert.match(accounts, /busy=\{removing\}/)
 })
