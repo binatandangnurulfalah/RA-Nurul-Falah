@@ -1,1 +1,1 @@
-export { default } from './RolePortalV4'
+export { default } from './RolePortalV5'
