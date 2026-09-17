@@ -28,6 +28,10 @@
 
 .native-camera:not(.active) video { visibility: hidden; }
 
+/* Preview kamera depan dibuat seperti cermin agar gerakan pengguna natural.
+   Transform hanya visual; frame asli tetap dipakai BarcodeDetector. */
+.native-camera.front-camera video { transform: scaleX(-1); }
+
 .native-camera-empty {
   min-height: 330px;
   display: grid;
@@ -63,11 +67,6 @@
   min-height: 46px;
 }
 
-.native-capture-button {
-  background: #fff;
-  border-color: #bcd5c8;
-  color: var(--v2-green-dark);
-}
 
 .native-camera-guide {
   position: absolute;
@@ -128,25 +127,6 @@
   line-height: 1.5;
 }
 
-.native-camera-file-input {
-  position: fixed;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.native-file-reader {
-  position: fixed;
-  left: -9999px;
-  top: 0;
-  width: 320px;
-  height: 320px;
-  opacity: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
 
 @media (max-width: 760px) {
   .native-scanner-panel { padding: 14px; }
