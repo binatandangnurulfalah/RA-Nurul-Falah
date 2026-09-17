@@ -20,6 +20,10 @@ function toIso(date: string, time: string | null) {
   return Number.isNaN(value.getTime()) ? null : value.toISOString()
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
@@ -64,30 +68,57 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'delete') {
-      const recordId = String(body.record_id ?? '')
-      if (!recordId) return json({ ok: false, error: 'Data absensi tidak valid.' }, 400)
+      const recordId = String(body.record_id ?? '').trim()
+      if (!isUuid(recordId)) return json({ ok: false, error: 'Data absensi tidak valid.' }, 400)
+
       const { data: existing } = await admin.from('attendance_records').select('student_id').eq('id', recordId).maybeSingle()
-      if (!existing || !(await teacherCanAccessStudent(existing.student_id))) return json({ ok: false, error: 'Anda tidak memiliki akses ke kelas murid ini.' }, 403)
-      const { error } = await admin.from('attendance_records').delete().eq('id', recordId)
+      if (!existing) return json({ ok: false, error: 'Data absensi tidak ditemukan.' }, 404)
+      if (!(await teacherCanAccessStudent(existing.student_id))) {
+        return json({ ok: false, error: 'Anda tidak memiliki akses ke kelas murid ini.' }, 403)
+      }
+
+      const { error } = await admin.from('attendance_records').delete().eq('id', recordId).eq('student_id', existing.student_id)
       if (error) return json({ ok: false, error: error.message }, 400)
       return json({ ok: true })
     }
 
     if (!['create', 'update'].includes(action)) return json({ ok: false, error: 'Aksi tidak dikenali.' }, 400)
 
-    const studentId = String(body.student_id ?? '')
+    const studentId = String(body.student_id ?? '').trim()
     const attendanceDate = String(body.attendance_date ?? '')
     const checkInText = body.check_in ? String(body.check_in) : null
     const checkOutText = body.check_out ? String(body.check_out) : null
     const status = String(body.status ?? 'present')
 
-    if (!studentId) return json({ ok: false, error: 'Murid wajib dipilih.' }, 400)
+    if (!isUuid(studentId)) return json({ ok: false, error: 'Murid wajib dipilih.' }, 400)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)) return json({ ok: false, error: 'Tanggal absensi tidak valid.' }, 400)
     if (!allowedStatus.includes(status)) return json({ ok: false, error: 'Status absensi tidak valid.' }, 400)
 
+    let existingRecord: { student_id: string } | null = null
+    let recordId = ''
+    if (action === 'update') {
+      recordId = String(body.record_id ?? '').trim()
+      if (!isUuid(recordId)) return json({ ok: false, error: 'Data absensi tidak valid.' }, 400)
+
+      const { data: existing, error: existingError } = await admin
+        .from('attendance_records')
+        .select('student_id')
+        .eq('id', recordId)
+        .maybeSingle()
+
+      if (existingError) return json({ ok: false, error: 'Data absensi gagal diperiksa.' }, 400)
+      if (!existing) return json({ ok: false, error: 'Data absensi tidak ditemukan.' }, 404)
+      if (!(await teacherCanAccessStudent(existing.student_id))) {
+        return json({ ok: false, error: 'Anda tidak memiliki akses untuk mengubah data absensi ini.' }, 403)
+      }
+      existingRecord = existing
+    }
+
     const { data: student } = await admin.from('students').select('id,full_name').eq('id', studentId).eq('is_active', true).maybeSingle()
     if (!student) return json({ ok: false, error: 'Murid tidak ditemukan atau tidak aktif.' }, 404)
-    if (!(await teacherCanAccessStudent(studentId))) return json({ ok: false, error: 'Anda hanya dapat mengelola absensi kelas yang ditugaskan.' }, 403)
+    if (!(await teacherCanAccessStudent(studentId))) {
+      return json({ ok: false, error: 'Anda hanya dapat mengelola absensi kelas yang ditugaskan.' }, 403)
+    }
 
     const checkIn = toIso(attendanceDate, checkInText)
     const checkOut = toIso(attendanceDate, checkOutText)
@@ -113,11 +144,17 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, record_id: data.id, student_name: student.full_name })
     }
 
-    const recordId = String(body.record_id ?? '')
-    if (!recordId) return json({ ok: false, error: 'Data absensi tidak valid.' }, 400)
-    const { error } = await admin.from('attendance_records').update(payload).eq('id', recordId)
+    const { data: updated, error } = await admin
+      .from('attendance_records')
+      .update(payload)
+      .eq('id', recordId)
+      .eq('student_id', existingRecord!.student_id)
+      .select('id')
+      .maybeSingle()
+
     if (error) return json({ ok: false, error: error.code === '23505' ? 'Murid sudah memiliki data absensi pada tanggal tersebut.' : error.message }, 400)
-    return json({ ok: true, record_id: recordId, student_name: student.full_name })
+    if (!updated) return json({ ok: false, error: 'Data absensi berubah saat diproses. Muat ulang lalu coba lagi.' }, 409)
+    return json({ ok: true, record_id: updated.id, student_name: student.full_name })
   } catch (error) {
     return json({ ok: false, error: error instanceof Error ? error.message : 'Terjadi kesalahan server.' }, 500)
   }
