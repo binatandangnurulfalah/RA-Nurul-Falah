@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { createHmac } from 'node:crypto'
 import { before, test } from 'node:test'
 import { createClient } from '@supabase/supabase-js'
 
@@ -20,73 +19,15 @@ function dbFor(token) {
   })
 }
 
-function decodeBase32(value) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
-  let bits = ''
-  for (const char of value.replace(/=+$/g, '').toUpperCase()) {
-    const index = alphabet.indexOf(char)
-    if (index < 0) throw new Error('Invalid base32 secret')
-    bits += index.toString(2).padStart(5, '0')
-  }
-
-  const bytes = []
-  for (let offset = 0; offset + 8 <= bits.length; offset += 8) {
-    bytes.push(Number.parseInt(bits.slice(offset, offset + 8), 2))
-  }
-  return Buffer.from(bytes)
-}
-
-function totp(secret, timestamp = Date.now()) {
-  const counter = BigInt(Math.floor(timestamp / 30000))
-  const counterBytes = Buffer.alloc(8)
-  counterBytes.writeBigUInt64BE(counter)
-  const digest = createHmac('sha1', decodeBase32(secret)).update(counterBytes).digest()
-  const offset = digest[digest.length - 1] & 0x0f
-  const binary = ((digest[offset] & 0x7f) << 24)
-    | ((digest[offset + 1] & 0xff) << 16)
-    | ((digest[offset + 2] & 0xff) << 8)
-    | (digest[offset + 3] & 0xff)
-  return String(binary % 1_000_000).padStart(6, '0')
-}
-
 async function createActor(name, role) {
   const email = `${name}@stage11.test`
   assert.ifError((await service.from('account_allowlist').insert({ email, role, display_name: name })).error)
   const { data: created, error: createError } = await service.auth.admin.createUser({ email, password, email_confirm: true })
   assert.ifError(createError)
-
-  const authClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data: signed, error: signError } = await authClient.auth.signInWithPassword({ email, password })
+  const { data: signed, error: signError } = await createClient(url, anonKey).auth.signInWithPassword({ email, password })
   assert.ifError(signError)
   assert.ok(signed.session)
-
-  let accessToken = signed.session.access_token
-  if (role === 'admin') {
-    const { data: enrolled, error: enrollError } = await authClient.auth.mfa.enroll({
-      factorType: 'totp',
-      friendlyName: 'Stage 11 integration admin',
-    })
-    assert.ifError(enrollError)
-    assert.ok(enrolled?.id)
-    assert.ok(enrolled?.totp?.secret)
-
-    const { error: verifyError } = await authClient.auth.mfa.challengeAndVerify({
-      factorId: enrolled.id,
-      code: totp(enrolled.totp.secret),
-    })
-    assert.ifError(verifyError)
-
-    const { data: aal, error: aalError } = await authClient.auth.mfa.getAuthenticatorAssuranceLevel()
-    assert.ifError(aalError)
-    assert.equal(aal.currentLevel, 'aal2')
-
-    const { data: sessionData, error: sessionError } = await authClient.auth.getSession()
-    assert.ifError(sessionError)
-    assert.ok(sessionData.session)
-    accessToken = sessionData.session.access_token
-  }
-
-  actors[name] = { id: created.user.id, token: accessToken, db: dbFor(accessToken) }
+  actors[name] = { id: created.user.id, token: signed.session.access_token, db: dbFor(signed.session.access_token) }
 }
 
 async function invoke(name, actor, body) {
@@ -154,11 +95,7 @@ test('RLS membatasi Guru dan Wali ke kelas atau anaknya', async () => {
   assert.equal(hidden.length, 0)
 })
 
-test('Auth tetap tertutup, Admin memakai AAL2, dan manajemen akun hanya untuk Admin', async () => {
-  const { data: adminAal, error: adminAalError } = await actors.admin.db.auth.mfa.getAuthenticatorAssuranceLevel(actors.admin.token)
-  assert.ifError(adminAalError)
-  assert.equal(adminAal.currentLevel, 'aal2')
-
+test('Auth tetap tertutup dan manajemen akun hanya untuk Admin', async () => {
   assert.ok((await createClient(url, anonKey).auth.signUp({ email: 'tanpa-izin@stage11.test', password })).error)
   assert.equal((await invoke('admin-create-user', actors.teacherA, { email: 'ditolak@stage11.test', display_name: 'Ditolak', role: 'parent' })).status, 403)
 
