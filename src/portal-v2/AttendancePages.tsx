@@ -94,9 +94,11 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
   useEffect(() => { void load() }, [canManage, page, dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
   useEffect(() => { setPage(1) }, [dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
 
-  const remove = async () => {
+  const remove = async (reason: string) => {
     if (!deleting || !canManage) return
-    const { data, error } = await supabase.functions.invoke('manage-attendance-record', { body: { action: 'delete', record_id: deleting.id } })
+    const { data, error } = await supabase.functions.invoke('manage-attendance-record', {
+      body: { action: 'delete', record_id: deleting.id, correction_reason: reason.trim() },
+    })
     if (error || !data?.ok) {
       setMessage({ tone: 'error', text: data?.error || 'Absensi gagal dihapus.' })
       return
@@ -154,7 +156,12 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
       setMessage({ tone: 'success', text: 'Data absensi berhasil disimpan.' })
       await load()
     }} />}
-    {deleting && <ConfirmModal title="Hapus data absensi?" text={`${deleting.student_full_name || 'Murid'} · ${dateText(deleting.attendance_date)}`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    {deleting && <ConfirmDeleteModal
+      title="Hapus data absensi?"
+      text={`${deleting.student_full_name || 'Murid'} · ${dateText(deleting.attendance_date)}`}
+      onClose={() => setDeleting(null)}
+      onConfirm={(reason) => void remove(reason)}
+    />}
   </div>
 }
 
@@ -165,14 +172,20 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
     check_in: value?.check_in ? timeTextRaw(value.check_in) : '',
     check_out: value?.check_out ? timeTextRaw(value.check_out) : '',
     status: value?.status || 'present',
+    correction_reason: '',
   })
   const [busy, setBusy] = useState(false)
   const [errorText, setErrorText] = useState('')
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    setBusy(true)
     setErrorText('')
+    if (value && form.correction_reason.trim().length < 3) {
+      setErrorText('Alasan koreksi wajib diisi minimal 3 karakter.')
+      return
+    }
+
+    setBusy(true)
     const { data, error } = await supabase.functions.invoke('manage-attendance-record', {
       body: {
         action: value ? 'update' : 'create',
@@ -182,6 +195,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
         check_in: form.check_in || null,
         check_out: form.check_out || null,
         status: form.status,
+        correction_reason: value ? form.correction_reason.trim() : undefined,
       },
     })
     setBusy(false)
@@ -199,14 +213,30 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
       <label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select></label>
       <label>Jam masuk<input type="time" value={form.check_in} onChange={(e) => setForm({ ...form, check_in: e.target.value })} /></label>
       <label>Jam pulang<input type="time" value={form.check_out} onChange={(e) => setForm({ ...form, check_out: e.target.value })} /></label>
-      {errorText && <p className="v2-field-error full">{errorText}</p>}
+      {value && <label className="full">Alasan koreksi<textarea required minLength={3} maxLength={500} rows={3} value={form.correction_reason} onChange={(e) => setForm({ ...form, correction_reason: e.target.value })} placeholder="Contoh: Koreksi jam pulang berdasarkan konfirmasi guru piket." /><small>Alasan tersimpan di audit trail dan wajib untuk perubahan data absensi.</small></label>}
+      {errorText && <p className="v2-field-error full" role="alert">{errorText}</p>}
       <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}><CheckCircle2 size={17} /> {busy ? 'Menyimpan...' : 'Simpan Absensi'}</button></div>
     </form>
   </Dialog>
 }
 
-function ConfirmModal({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog>
+function ConfirmDeleteModal({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: (reason: string) => void }) {
+  const [reason, setReason] = useState('')
+  const [errorText, setErrorText] = useState('')
+  const confirm = () => {
+    if (reason.trim().length < 3) {
+      setErrorText('Alasan penghapusan wajib diisi minimal 3 karakter.')
+      return
+    }
+    onConfirm(reason.trim())
+  }
+  return <Dialog title={title} onClose={onClose} confirm>
+    <span className="v2-modal-icon danger"><Trash2 /></span>
+    <p>{text}</p>
+    <label className="v2-dialog-field">Alasan penghapusan<textarea required minLength={3} maxLength={500} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Tuliskan alasan penghapusan data absensi." /></label>
+    {errorText && <p className="v2-field-error" role="alert">{errorText}</p>}
+    <div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={confirm}>Ya, Hapus</button></div>
+  </Dialog>
 }
 function SmallStat({ label, value }: { label: string; value: number }) { return <article className="v2-stat mini green"><span><Clock3 size={20} /></span><div><small>{label}</small><strong>{value}</strong><p>Catatan</p></div></article> }
 function initials(name?: string | null) { return (name || 'Murid').split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() }
