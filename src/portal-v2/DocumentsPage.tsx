@@ -1,28 +1,20 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Edit3, ExternalLink, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatusBadge } from '../components/data'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { Button, EmptyState, PageHeader } from '../components/ui'
+import { queryKeys } from '../data/queryKeys'
+import { documentPageOptions, type SchoolDocumentRow } from '../data/queries/documents'
+import { useDataFilters } from '../data/useDataFilters'
+import { userErrorMessage } from '../lib/error-utils'
 import { type AppRole, supabase } from '../lib/supabase'
-import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { ActionMenu } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 import { Notice } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
-type SchoolDocument = {
-  id: string
-  title: string
-  category: string
-  document_number: string | null
-  document_date: string | null
-  recipient: string | null
-  description: string | null
-  file_url: string | null
-  audience: 'all' | 'admin' | 'teacher' | 'parent'
-  is_published: boolean
-  created_at: string
-}
+type SchoolDocument = SchoolDocumentRow
 type StorageCleanupRow = { id: string; object_path: string; attempts: number }
 type CleanupSummary = { processed: number; failed: number; error: string | null }
 
@@ -116,50 +108,22 @@ function cleanupMessage(summary: CleanupSummary, successText: string) {
 }
 
 export function DocumentsPage({ role }: { role: AppRole }) {
+  const queryClient = useQueryClient()
   const canManage = role === 'admin'
-  const [rows, setRows] = useState<SchoolDocument[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
+  const filters = useDataFilters({ q: '' })
+  const search = filters.value('q')
+  const page = filters.page
+  const debouncedSearch = useDebouncedValue(search)
+  const pageQuery = useQuery(documentPageOptions({ page, pageSize: PAGE_SIZE, search: debouncedSearch }))
+  const rows = pageQuery.data?.rows ?? []
+  const total = pageQuery.data?.total ?? 0
+  const loading = pageQuery.isPending
   const [editing, setEditing] = useState<SchoolDocument | 'new' | null>(null)
   const [deleting, setDeleting] = useState<SchoolDocument | null>(null)
   const [removing, setRemoving] = useState(false)
   const removingRef = useRef(false)
   const [message, setMessage] = useState<Message | null>(null)
-  const debouncedSearch = useDebouncedValue(search)
 
-  const load = async () => {
-    setLoading(true)
-    setLoadError('')
-    const range = getPageRange(page, PAGE_SIZE)
-    let query = supabase
-      .from('school_documents')
-      .select('*', { count: 'exact' })
-      .order('document_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .range(range.from, range.to)
-
-    const normalizedSearch = sanitizeSearch(debouncedSearch)
-    if (normalizedSearch) {
-      query = query.or(`title.ilike.%${normalizedSearch}%,category.ilike.%${normalizedSearch}%,document_number.ilike.%${normalizedSearch}%,recipient.ilike.%${normalizedSearch}%`)
-    }
-
-    const { data, error, count } = await query
-    if (error) {
-      setLoadError(error.message || 'Data dokumen gagal dimuat.')
-      setRows([])
-      setTotal(0)
-    } else {
-      setRows((data as SchoolDocument[] | null) ?? [])
-      setTotal(count ?? 0)
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => { void load() }, [page, debouncedSearch])
-  useEffect(() => { setPage(1) }, [debouncedSearch])
   useEffect(() => {
     if (!canManage) return
     void flushDocumentStorageCleanup().then((summary) => {
@@ -169,7 +133,9 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     })
   }, [canManage])
 
-  const resetFilters = () => setSearch('')
+  const setSearch = (value: string) => filters.update({ q: value }, { resetPage: true })
+  const resetFilters = () => filters.reset('q')
+  const refreshDocuments = async () => queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
 
   const closeDelete = () => {
     if (removingRef.current) return
@@ -192,8 +158,8 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     setDeleting(null)
     const cleanup = await flushDocumentStorageCleanup()
     setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil dihapus.') })
-    if (shouldGoBack) setPage((current) => Math.max(1, current - 1))
-    else await load()
+    await refreshDocuments()
+    if (shouldGoBack) filters.setPage(page - 1)
   }
 
   const openDocument = async (row: SchoolDocument) => {
@@ -261,7 +227,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
         onReset={resetFilters}
       />
 
-      {loadError ? <ErrorState description={loadError} onRetry={() => void load()} /> : <>
+      {pageQuery.isError ? <ErrorState description={userErrorMessage(pageQuery.error, 'Data dokumen gagal dimuat.')} onRetry={() => void pageQuery.refetch()} /> : <>
         <div className="desktop-data-view">
           <DataTable rows={rows} columns={columns} getRowKey={(row) => row.id} loading={loading} empty={emptyState} caption="Daftar dokumen dan surat" />
         </div>
@@ -282,7 +248,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
             />
           ))}</div> : emptyState}
         </div>
-        {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+        {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={filters.setPage} /> : null}
       </>}
     </section>
 
@@ -290,7 +256,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
       setEditing(null)
       const cleanup = await flushDocumentStorageCleanup()
       setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil disimpan.') })
-      await load()
+      await refreshDocuments()
     }} />}
     <ConfirmDialog
       open={Boolean(deleting)}
@@ -414,7 +380,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
     busy={busy}
     error={errorText}
     onSubmit={submit}
-    onClose={onClose}
+    onClose={() => { if (!busyRef.current) onClose() }}
   >
     <div className="v2-form v2-form-grid">
       <label className="full">Judul dokumen<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
