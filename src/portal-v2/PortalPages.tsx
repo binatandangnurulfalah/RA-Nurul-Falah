@@ -72,8 +72,10 @@ type DashboardSummary = {
   attendance_date: string
   active_students: number
   attendance_today: number
+  recorded_today: number
   late_today: number
   absent_today: number
+  unrecorded_today: number
   active_accounts: number
   draft_reports: number
   open_payments: number
@@ -164,7 +166,7 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
   const studentCount = summary?.active_students ?? 0
   const attendanceCount = summary?.attendance_today ?? 0
   const lateCount = summary?.late_today ?? 0
-  const absentCount = summary?.absent_today ?? 0
+  const unrecordedCount = summary?.unrecorded_today ?? 0
   const accountCount = summary?.active_accounts ?? 0
   const draftReports = summary?.draft_reports ?? 0
   const openPayments = summary?.open_payments ?? 0
@@ -177,10 +179,10 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
         <StatCard icon={UsersRound} label={role === 'teacher' ? 'Murid Dalam Scope' : 'Murid Aktif'} value={String(studentCount)} meta={role === 'teacher' ? 'Kelas yang ditugaskan' : 'Terdaftar'} tone="green" />
         <StatCard icon={ClipboardCheck} label="Hadir Hari Ini" value={String(attendanceCount)} meta={studentCount ? `${Math.round((attendanceCount / studentCount) * 100)}%` : '0%'} tone="blue" />
         <StatCard icon={CalendarDays} label="Terlambat" value={String(lateCount)} meta="Hari ini" tone="gold" />
-        <StatCard icon={role === 'admin' ? UsersRound : AlertTriangle} label={role === 'admin' ? 'Akun Aktif' : 'Belum Absen'} value={role === 'admin' ? String(accountCount) : String(absentCount)} meta={role === 'admin' ? 'Pengguna' : 'Perlu diperiksa'} tone="purple" />
+        <StatCard icon={role === 'admin' ? UsersRound : AlertTriangle} label={role === 'admin' ? 'Akun Aktif' : 'Belum Absen'} value={role === 'admin' ? String(accountCount) : String(unrecordedCount)} meta={role === 'admin' ? 'Pengguna' : 'Belum tercatat'} tone="purple" />
       </div>}
       {!loading && <section className="v5-attention"><header><div><small>PERLU PERHATIAN</small><h3>Prioritas hari ini</h3></div><button className="v11-refresh" onClick={reload} aria-label="Muat ulang ringkasan"><RefreshCw size={16} /> Perbarui</button></header><div>
-        <button onClick={() => go('attendance-data')}><strong>{absentCount}</strong><span>Murid belum absen</span></button>
+        <button onClick={() => go('attendance-data')}><strong>{unrecordedCount}</strong><span>Murid belum tercatat</span></button>
         {role === 'admin' && <button onClick={() => go('payments')}><strong>{openPayments}</strong><span>Tagihan belum selesai</span></button>}
         <button onClick={() => go('reports')}><strong>{draftReports}</strong><span>Rapor masih draft</span></button>
       </div></section>}
