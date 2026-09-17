@@ -33,9 +33,8 @@ test('authorization teacher terpusat dan akun nonaktif ditolak', () => {
   assert.match(auth, /if \(!profile\.is_active\)/)
 })
 
-test('administrator wajib AAL2 sebelum Edge Function operasional dijalankan', () => {
-  assert.match(auth, /profile\.role === 'admin'/)
-  assert.match(auth, /getAuthenticatorAssuranceLevel\(jwt\)/)
-  assert.match(auth, /assurance\.currentLevel !== 'aal2'/)
-  assert.match(auth, /MFA_REQUIRED/)
+test('login dan authorization tidak mewajibkan MFA atau AAL2', () => {
+  assert.doesNotMatch(auth, /getAuthenticatorAssuranceLevel/)
+  assert.doesNotMatch(auth, /MFA_REQUIRED/)
+  assert.doesNotMatch(auth, /aal2/)
 })
