@@ -27,7 +27,7 @@ begin
     raise exception 'Pengguna belum login.';
   end if;
 
-  if private.current_user_role() not in ('admin'::public.app_role, 'teacher'::public.app_role) then
+  if coalesce(private.current_user_role()::text, '') not in ('admin', 'teacher') then
     raise exception 'Hanya Admin atau Guru yang dapat menyimpan data murid.';
   end if;
 
@@ -125,7 +125,7 @@ begin
 end;
 $$;
 
-revoke all on function public.save_student_with_guardians(uuid,text,text,text,text,text,text,date,text,text,boolean,uuid[]) from public;
+revoke all on function public.save_student_with_guardians(uuid,text,text,text,text,text,text,date,text,text,boolean,uuid[]) from public, anon;
 grant execute on function public.save_student_with_guardians(uuid,text,text,text,text,text,text,date,text,text,boolean,uuid[]) to authenticated;
 
 comment on function public.save_student_with_guardians(uuid,text,text,text,text,text,text,date,text,text,boolean,uuid[]) is
