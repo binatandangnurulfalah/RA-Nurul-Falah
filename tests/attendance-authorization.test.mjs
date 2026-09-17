@@ -1,17 +1,36 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const manage = await readFile(new URL('../supabase/functions/manage-attendance-record/index.ts', import.meta.url), 'utf8')
-const legacyDelete = await readFile(new URL('../supabase/functions/delete-attendance-record/index.ts', import.meta.url), 'utf8')
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+const manage = read('supabase/functions/manage-attendance-record/index.ts')
+const scanner = read('supabase/functions/record-attendance/index.ts')
+const authorization = read('supabase/functions/_shared/authorization.ts')
 
-test('update absensi memverifikasi akses ke record lama sebelum memindahkan data', () => {
-  assert.match(manage, /teacherCanAccessStudent\(existing\.student_id\)/)
-  assert.match(manage, /\.eq\('student_id', existingRecord!\.student_id\)/)
+test('Edge Function absensi memakai authorization helper yang sama', () => {
+  assert.match(manage, /_shared\/authorization\.ts/)
+  assert.match(scanner, /_shared\/authorization\.ts/)
+  assert.match(manage, /teacherCanAccessStudent\(context, existing\.student_id\)/)
+  assert.match(scanner, /teacherCanAccessStudent\(context, student\.id\)/)
+  assert.match(authorization, /teacherCanAccessClass/)
+  assert.match(authorization, /teacherCanAccessStudent/)
 })
 
-test('hapus absensi memverifikasi kelas Guru pada endpoint utama dan legacy', () => {
-  assert.match(manage, /teacherCanAccessStudent\(existing\.student_id\)/)
-  assert.match(legacyDelete, /teacherCanAccessStudent\(record\.student_id\)/)
-  assert.match(legacyDelete, /\.eq\("student_id", record\.student_id\)/)
+test('checkout memakai conditional update yang memverifikasi row berubah', () => {
+  assert.match(scanner, /\.is\('check_out', null\)/)
+  assert.match(scanner, /\.select\('id'\)/)
+  assert.match(scanner, /\.maybeSingle\(\)/)
+  assert.match(scanner, /Absensi baru saja diperbarui dari perangkat lain\. Muat ulang status\./)
+})
+
+test('koreksi manual menyimpan actor dan alasan', () => {
+  assert.match(manage, /correction_reason/)
+  assert.match(manage, /last_corrected_by/)
+  assert.match(manage, /last_corrected_at/)
+  assert.match(manage, /source: 'manual'/)
+})
+
+test('legacy delete attendance sudah tidak menjadi source aktif', () => {
+  const legacyUrl = new URL('../supabase/functions/delete-attendance-record/index.ts', import.meta.url)
+  assert.equal(existsSync(legacyUrl), false)
 })
