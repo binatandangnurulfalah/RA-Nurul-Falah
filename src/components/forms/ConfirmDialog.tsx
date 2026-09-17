@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
@@ -10,11 +11,13 @@ type ConfirmDialogProps = {
   cancelLabel?: string
   busy?: boolean
   danger?: boolean
+  confirmDisabled?: boolean
+  children?: ReactNode
   onConfirm: () => void
   onClose: () => void
 }
 
-export function ConfirmDialog({ open, title, description, confirmLabel = 'Konfirmasi', cancelLabel = 'Batal', busy = false, danger = false, onConfirm, onClose }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, description, confirmLabel = 'Konfirmasi', cancelLabel = 'Batal', busy = false, danger = false, confirmDisabled = false, children, onConfirm, onClose }: ConfirmDialogProps) {
   return (
     <Dialog
       open={open}
@@ -24,7 +27,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Konfir
       actions={(
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>{cancelLabel}</Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy}>{busy ? 'Memproses...' : confirmLabel}</Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy || confirmDisabled}>{busy ? 'Memproses...' : confirmLabel}</Button>
         </>
       )}
     >
@@ -32,6 +35,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Konfir
         <span aria-hidden="true"><AlertTriangle size={24} /></span>
         <p>Pastikan data dan tindakan yang dipilih sudah benar sebelum melanjutkan.</p>
       </div>
+      {children ? <div className="confirm-dialog__details">{children}</div> : null}
     </Dialog>
   )
 }

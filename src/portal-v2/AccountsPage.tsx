@@ -1,6 +1,6 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { Copy, Edit3, GraduationCap, KeyRound, Plus, Trash2, UserRound, UsersRound } from 'lucide-react'
-import { DataListSkeleton, DataTable, type DataTableColumn, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { Copy, Edit3, KeyRound, Plus, Save, Trash2, UserRound, UsersRound } from 'lucide-react'
+import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { Button, Dialog, EmptyState, PageHeader } from '../components/ui'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
@@ -21,6 +21,7 @@ function authRedirectUrl() {
 export function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | AppRole>('all')
   const [page, setPage] = useState(1)
@@ -30,12 +31,16 @@ export function AccountsPage() {
   const [editing, setEditing] = useState<Account | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
   const [removing, setRemoving] = useState(false)
+  const removingRef = useRef(false)
+  const [resettingId, setResettingId] = useState<string | null>(null)
+  const resetRef = useRef(false)
   const [oneTimeLink, setOneTimeLink] = useState<string | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const debouncedSearch = useDebouncedValue(search)
 
   const load = async () => {
     setLoading(true)
+    setLoadError('')
     const range = getPageRange(page, PAGE_SIZE)
     let accountQuery = supabase
       .from('user_profiles')
@@ -54,10 +59,17 @@ export function AccountsPage() {
       supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'parent'),
     ])
 
-    const firstError = accountResult.error || allCount.error || teacherCount.error || parentCount.error
-    if (firstError) setMessage({ tone: 'error', text: firstError.message })
-    setAccounts((accountResult.data as Account[] | null) ?? [])
-    setTotal(accountResult.count ?? 0)
+    if (accountResult.error) {
+      setLoadError(accountResult.error.message || 'Data akun gagal dimuat.')
+      setAccounts([])
+      setTotal(0)
+    } else {
+      setAccounts((accountResult.data as Account[] | null) ?? [])
+      setTotal(accountResult.count ?? 0)
+    }
+
+    const statsError = allCount.error || teacherCount.error || parentCount.error
+    if (statsError) setMessage({ tone: 'error', text: statsError.message })
     setStats({ total: allCount.count ?? 0, teachers: teacherCount.count ?? 0, parents: parentCount.count ?? 0 })
     setLoading(false)
   }
@@ -70,24 +82,33 @@ export function AccountsPage() {
     setRoleFilter('all')
   }
 
+  const closeDelete = () => {
+    if (removingRef.current) return
+    setDeleting(null)
+  }
+
   const remove = async () => {
-    if (!deleting || removing) return
+    if (!deleting || removingRef.current) return
+    removingRef.current = true
     setRemoving(true)
     const { data, error } = await supabase.functions.invoke('admin-manage-user', {
       body: { action: 'delete', user_id: deleting.id },
     })
+    removingRef.current = false
+    setRemoving(false)
     if (error || !data?.ok) {
-      setRemoving(false)
       setMessage({ tone: 'error', text: data?.error || 'Akun gagal dihapus.' })
       return
     }
-    setRemoving(false)
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Akun berhasil dihapus.' })
     await load()
   }
 
   const sendPasswordReset = async (account: Account) => {
+    if (resetRef.current) return
+    resetRef.current = true
+    setResettingId(account.id)
     const { data, error } = await supabase.functions.invoke('admin-manage-user', {
       body: {
         action: 'send_password_reset',
@@ -95,6 +116,8 @@ export function AccountsPage() {
         redirect_to: authRedirectUrl(),
       },
     })
+    resetRef.current = false
+    setResettingId(null)
     if (error || !data?.ok) {
       setMessage({ tone: 'error', text: data?.error || 'Reset password gagal dikirim.' })
       return
@@ -110,7 +133,7 @@ export function AccountsPage() {
 
   const actionItems = (account: Account) => [
     { label: 'Edit akun', icon: Edit3, onSelect: () => setEditing(account) },
-    { label: 'Kirim reset password', icon: KeyRound, onSelect: () => void sendPasswordReset(account) },
+    { label: resettingId === account.id ? 'Mengirim reset...' : 'Kirim reset password', icon: KeyRound, onSelect: () => void sendPasswordReset(account) },
     { label: 'Hapus akun', icon: Trash2, danger: true, onSelect: () => setDeleting(account) },
   ]
 
@@ -122,6 +145,7 @@ export function AccountsPage() {
     },
     { key: 'role', header: 'Role', render: (account) => <StatusBadge tone={roleTone(account.role)}>{roleLabel(account.role)}</StatusBadge> },
     { key: 'status', header: 'Status', render: (account) => <StatusBadge tone={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge> },
+    { key: 'created', header: 'Terdaftar', render: (account) => dateText(account.created_at) },
     { key: 'actions', header: 'Aksi', align: 'right', render: (account) => <ActionMenu label={`Aksi untuk ${account.display_name || 'akun'}`} items={actionItems(account)} /> },
   ]
 
@@ -130,7 +154,7 @@ export function AccountsPage() {
     <EmptyState
       icon={<UsersRound size={24} />}
       title={hasFilters ? 'Tidak ada akun yang cocok' : 'Belum ada akun pengguna'}
-      description={hasFilters ? 'Ubah kata pencarian atau reset filter role untuk melihat akun lainnya.' : 'Akun Guru atau Wali akan muncul setelah dibuat oleh Administrator.'}
+      description={hasFilters ? 'Ubah pencarian atau reset filter untuk melihat akun lainnya.' : 'Akun guru dan wali akan tampil setelah dibuat oleh administrator.'}
       action={hasFilters
         ? <Button variant="secondary" onClick={resetFilters}>Reset Filter</Button>
         : <Button onClick={() => setCreateOpen(true)}><Plus size={17} /> Tambah Akun</Button>}
@@ -146,20 +170,20 @@ export function AccountsPage() {
     />
     {message && <Notice {...message} />}
     <div className="data-stat-grid">
-      <StatCard label="Semua Akun" value={stats.total} icon={<UsersRound size={20} />} supportingText="Pengguna terdaftar" tone="success" />
-      <StatCard label="Guru" value={stats.teachers} icon={<GraduationCap size={20} />} supportingText="Akun tenaga pendidik" tone="info" />
-      <StatCard label="Wali Murid" value={stats.parents} icon={<UserRound size={20} />} supportingText="Akun keluarga" tone="purple" />
+      <StatCard icon={<UsersRound size={20} />} label="Semua Akun" value={stats.total} supportingText="Pengguna terdaftar" tone="success" />
+      <StatCard icon={<UserRound size={20} />} label="Guru" value={stats.teachers} supportingText="Akun tenaga pendidik" tone="info" />
+      <StatCard icon={<UsersRound size={20} />} label="Wali Murid" value={stats.parents} supportingText="Akun orang tua/wali" tone="purple" />
     </div>
     <section className="v2-panel">
       <SearchFilterBar
         searchValue={search}
         onSearchChange={setSearch}
-        placeholder="Cari nama pengguna"
+        placeholder="Cari nama pengguna..."
         searchLabel="Cari akun pengguna"
         activeFilterCount={roleFilter === 'all' ? 0 : 1}
         onReset={resetFilters}
       >
-        <select aria-label="Filter role pengguna" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as 'all' | AppRole)}>
+        <select aria-label="Filter role akun" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as 'all' | AppRole)}>
           <option value="all">Semua role</option>
           <option value="admin">Admin</option>
           <option value="teacher">Guru</option>
@@ -167,23 +191,28 @@ export function AccountsPage() {
         </select>
       </SearchFilterBar>
 
-      <div className="desktop-data-view">
-        <DataTable rows={accounts} columns={columns} getRowKey={(account) => account.id} loading={loading} empty={emptyState} caption="Daftar akun pengguna" />
-      </div>
-      <div className="mobile-data-view">
-        {loading ? <DataListSkeleton /> : accounts.length ? <div className="mobile-data-list">{accounts.map((account) => (
-          <MobileDataCard
-            key={account.id}
-            leading={initials(account.display_name)}
-            title={account.display_name || 'Tanpa nama'}
-            subtitle={roleLabel(account.role)}
-            badges={<StatusBadge tone={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge>}
-            fields={[{ label: 'Dibuat', value: dateText(account.created_at) }]}
-            actions={<ActionMenu label={`Aksi untuk ${account.display_name || 'akun'}`} items={actionItems(account)} />}
-          />
-        ))}</div> : emptyState}
-      </div>
-      {!loading && accounts.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+      {loadError ? <ErrorState description={loadError} onRetry={() => void load()} /> : <>
+        <div className="desktop-data-view">
+          <DataTable rows={accounts} columns={columns} getRowKey={(account) => account.id} loading={loading} empty={emptyState} caption="Daftar akun pengguna" />
+        </div>
+        <div className="mobile-data-view">
+          {loading ? <DataListSkeleton /> : accounts.length ? <div className="mobile-data-list">{accounts.map((account) => (
+            <MobileDataCard
+              key={account.id}
+              leading={initials(account.display_name)}
+              title={account.display_name || 'Tanpa nama'}
+              subtitle={roleLabel(account.role)}
+              badges={<StatusBadge tone={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge>}
+              fields={[
+                { label: 'Role', value: roleLabel(account.role) },
+                { label: 'Terdaftar', value: dateText(account.created_at) },
+              ]}
+              actions={<ActionMenu label={`Aksi untuk ${account.display_name || 'akun'}`} items={actionItems(account)} />}
+            />
+          ))}</div> : emptyState}
+        </div>
+        {!loading && accounts.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+      </>}
     </section>
 
     {createOpen && <CreateAccountModal
@@ -213,11 +242,11 @@ export function AccountsPage() {
     <ConfirmDialog
       open={Boolean(deleting)}
       title="Hapus akun?"
-      description={`Akun ${deleting?.display_name || 'pengguna'} akan dihapus permanen beserta akses loginnya.`}
+      description={deleting ? `Akun ${deleting.display_name || 'pengguna'} akan dihapus permanen beserta akses loginnya.` : ''}
       confirmLabel="Ya, Hapus"
       danger
       busy={removing}
-      onClose={() => setDeleting(null)}
+      onClose={closeDelete}
       onConfirm={() => void remove()}
     />
 
@@ -228,10 +257,13 @@ export function AccountsPage() {
 function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: (result: CreateResult) => void }) {
   const [form, setForm] = useState({ name: '', email: '', role: 'teacher' as 'teacher' | 'parent' })
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busyRef.current) return
+    busyRef.current = true
     setErrorText('')
     setBusy(true)
 
@@ -243,6 +275,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
         redirect_to: authRedirectUrl(),
       },
     })
+    busyRef.current = false
     setBusy(false)
     if (error || !data?.ok) {
       setErrorText(data?.error || 'Akun gagal dibuat.')
@@ -254,7 +287,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
   return <FormDialog
     open
     title="Tambah Akun"
-    description="Buat akun internal baru. Pengguna menentukan password sendiri melalui alur undangan/recovery."
+    description="Pengguna menentukan password sendiri melalui email atau link sekali pakai. Administrator tidak melihat atau menyimpan password."
     submitLabel="Buat & Kirim Undangan"
     busy={busy}
     error={errorText}
@@ -265,7 +298,6 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
       <label>Nama lengkap<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
       <label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
       <label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as 'teacher' | 'parent' })}><option value="teacher">Guru</option><option value="parent">Orang Tua/Wali</option></select></label>
-      <p className="v2-helper">Administrator tidak melihat atau menyimpan password pengguna.</p>
     </div>
   </FormDialog>
 }
@@ -273,10 +305,13 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
 function EditAccountModal({ account, onClose, onDone }: { account: Account; onClose: () => void; onDone: () => void }) {
   const [form, setForm] = useState({ name: account.display_name || '', role: account.role, active: account.is_active })
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busyRef.current) return
+    busyRef.current = true
     setErrorText('')
     setBusy(true)
 
@@ -289,6 +324,7 @@ function EditAccountModal({ account, onClose, onDone }: { account: Account; onCl
         is_active: form.active,
       },
     })
+    busyRef.current = false
     setBusy(false)
     if (error || !data?.ok) {
       setErrorText(data?.error || 'Akun gagal diperbarui.')
@@ -300,7 +336,7 @@ function EditAccountModal({ account, onClose, onDone }: { account: Account; onCl
   return <FormDialog
     open
     title="Edit Akun"
-    description="Perbarui nama, role, atau status akses pengguna tanpa mengubah password."
+    description="Perbarui nama, role, atau status akses pengguna."
     submitLabel="Simpan Perubahan"
     busy={busy}
     error={errorText}
@@ -330,7 +366,7 @@ function OneTimeLinkDialog({ link, onClose }: { link: string; onClose: () => voi
     onClose={onClose}
     actions={<><Button variant="secondary" onClick={onClose}>Tutup & Buang Link</Button><Button onClick={() => void copy()}><Copy size={17} /> {copied ? 'Tersalin' : 'Salin Link'}</Button></>}
   >
-    <label className="v2-form">Link sekali pakai<input readOnly value={link} onFocus={(event) => event.currentTarget.select()} /></label>
+    <div className="v2-form"><label>Link sekali pakai<input readOnly value={link} onFocus={(event) => event.currentTarget.select()} /></label></div>
   </Dialog>
 }
 
@@ -342,8 +378,8 @@ function roleLabel(role: AppRole) {
   return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Wali Murid'
 }
 
-function roleTone(role: AppRole): 'neutral' | 'info' | 'purple' {
-  return role === 'admin' ? 'purple' : role === 'teacher' ? 'info' : 'neutral'
+function roleTone(role: AppRole): 'purple' | 'info' | 'success' {
+  return role === 'admin' ? 'purple' : role === 'teacher' ? 'info' : 'success'
 }
 
 function dateText(value: string) {
