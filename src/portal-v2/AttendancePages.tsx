@@ -12,6 +12,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog, useChildSelection } from './AppExperience'
+import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 type AttendanceRecord = {
   id: string
   student_id: string
@@ -36,31 +37,39 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [editing, setEditing] = useState<AttendanceRecord | 'new' | null>(null)
   const [deleting, setDeleting] = useState<AttendanceRecord | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
+  const debouncedSearch = useDebouncedValue(search)
 
   const load = async () => {
     setLoading(true)
+    let recordQuery = supabase.from('attendance_records').select('id,student_id,attendance_date,check_in,check_out,status,created_at,students(full_name,class_name,nis)', { count: 'exact' }).order('attendance_date', { ascending: false }).order('created_at', { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    if (parentView && childSelection.selectedChildId) recordQuery = recordQuery.eq('student_id', childSelection.selectedChildId)
+    if (dateFilter) recordQuery = recordQuery.eq('attendance_date', dateFilter)
+    if (statusFilter !== 'all') recordQuery = recordQuery.eq('status', statusFilter)
     const [recordResult, studentResult] = await Promise.all([
-      supabase.from('attendance_records').select('id,student_id,attendance_date,check_in,check_out,status,created_at,students(full_name,class_name,nis)').order('attendance_date', { ascending: false }).order('created_at', { ascending: false }).limit(400),
+      recordQuery,
       canManage ? supabase.from('students').select('id,full_name,nis,class_name').eq('is_active', true).order('full_name') : Promise.resolve({ data: [] }),
     ])
     if (recordResult.error) setMessage({ tone: 'error', text: recordResult.error.message })
     setRecords((recordResult.data as unknown as AttendanceRecord[] | null) ?? [])
+    setTotal(recordResult.count ?? 0)
     setStudents((studentResult.data as Student[] | null) ?? [])
     setLoading(false)
   }
-  useEffect(() => { void load() }, [canManage])
+  useEffect(() => { void load() }, [canManage, page, dateFilter, statusFilter, parentView, childSelection.selectedChildId])
+  useEffect(() => { setPage(1) }, [dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = debouncedSearch.trim().toLowerCase()
     return records.filter((r) => {
-      if (parentView && childSelection.selectedChildId && r.student_id !== childSelection.selectedChildId) return false
       const text = `${r.students?.full_name || ''} ${r.students?.nis || ''} ${r.students?.class_name || ''}`.toLowerCase()
-      return (!q || text.includes(q)) && (!dateFilter || r.attendance_date === dateFilter) && (statusFilter === 'all' || r.status === statusFilter)
+      return !q || text.includes(q)
     })
-  }, [dateFilter, records, search, statusFilter, parentView, childSelection.selectedChildId])
+  }, [records, debouncedSearch])
 
   const todayRows = records.filter((r) => r.attendance_date === TODAY)
   const remove = async () => {
@@ -70,7 +79,7 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
     setDeleting(null); setMessage({ tone: 'success', text: 'Data absensi berhasil dihapus.' }); await load()
   }
 
-  return <div className="v2-stack"><PageTitle eyebrow={parentView ? 'KEHADIRAN ANAK' : 'REKAP KEHADIRAN'} title="Data Absen" text={parentView ? 'Riwayat masuk, pulang, dan status kehadiran anak yang terhubung.' : 'Cari, filter, tambah, edit, dan koreksi data kehadiran.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Manual</button> : undefined} />{message && <Notice {...message} />}<div className="v2-stat-grid three"><SmallStat label="Absen Hari Ini" value={todayRows.length} /><SmallStat label="Sudah Pulang" value={todayRows.filter((r) => r.check_out).length} /><SmallStat label="Terlambat" value={todayRows.filter((r) => r.status === 'late').length} /></div><section className="v2-panel"><div className="v2-toolbar wrap"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={parentView ? 'Cari nama anak...' : 'Cari nama, NIS, kelompok...'} /></label><label className="date"><CalendarDays size={17} /><input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} /></label><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Semua status</option><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select><button className="v2-icon-button" title="Muat ulang" aria-label="Muat ulang data absensi" onClick={() => void load()}><RefreshCw size={17} /></button></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="v2-attendance-list">{filtered.map((record) => <article key={record.id}><span className="v2-avatar">{initials(record.students?.full_name)}</span><div className="grow"><strong>{record.students?.full_name || 'Murid'}</strong><small>{dateText(record.attendance_date)} · {record.students?.class_name || 'Belum ada kelompok'}</small></div><div className="v2-time-pair"><span><small>Masuk</small><strong>{record.check_in ? timeText(record.check_in) : '—'}</strong></span><span><small>Pulang</small><strong>{record.check_out ? timeText(record.check_out) : '—'}</strong></span></div><span className={`v2-badge ${statusTone(record.status)}`}>{statusLabel(record.status)}</span>{canManage && <ActionMenu label={`Aksi absensi ${record.students?.full_name || 'murid'}`} items={[{ label: 'Edit absensi', icon: Edit3, onSelect: () => setEditing(record) }, { label: 'Hapus absensi', icon: Trash2, danger: true, onSelect: () => setDeleting(record) }]} />}</article>)}</div> : <EmptyCard text="Tidak ada data absensi yang sesuai filter." />}</section>{editing && canManage && <AttendanceModal value={editing === 'new' ? null : editing} students={students} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Data absensi berhasil disimpan.' }); await load() }} />}{deleting && <ConfirmModal title="Hapus data absensi?" text={`${deleting.students?.full_name || 'Murid'} · ${dateText(deleting.attendance_date)}`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}</div>
+  return <div className="v2-stack"><PageTitle eyebrow={parentView ? 'KEHADIRAN ANAK' : 'REKAP KEHADIRAN'} title="Data Absen" text={parentView ? 'Riwayat masuk, pulang, dan status kehadiran anak yang terhubung.' : 'Cari, filter, tambah, edit, dan koreksi data kehadiran.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Manual</button> : undefined} />{message && <Notice {...message} />}<div className="v2-stat-grid three"><SmallStat label="Absen Hari Ini" value={todayRows.length} /><SmallStat label="Sudah Pulang" value={todayRows.filter((r) => r.check_out).length} /><SmallStat label="Terlambat" value={todayRows.filter((r) => r.status === 'late').length} /></div><section className="v2-panel"><div className="v2-toolbar wrap"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={parentView ? 'Cari nama anak...' : 'Cari nama, NIS, kelompok...'} /></label><label className="date"><CalendarDays size={17} /><input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} /></label><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Semua status</option><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select><button className="v2-icon-button" title="Muat ulang" aria-label="Muat ulang data absensi" onClick={() => void load()}><RefreshCw size={17} /></button></div>{loading ? <SkeletonRows /> : filtered.length ? <><div className="v2-attendance-list">{filtered.map((record) => <article key={record.id}><span className="v2-avatar">{initials(record.students?.full_name)}</span><div className="grow"><strong>{record.students?.full_name || 'Murid'}</strong><small>{dateText(record.attendance_date)} · {record.students?.class_name || 'Belum ada kelompok'}</small></div><div className="v2-time-pair"><span><small>Masuk</small><strong>{record.check_in ? timeText(record.check_in) : '—'}</strong></span><span><small>Pulang</small><strong>{record.check_out ? timeText(record.check_out) : '—'}</strong></span></div><span className={`v2-badge ${statusTone(record.status)}`}>{statusLabel(record.status)}</span>{canManage && <ActionMenu label={`Aksi absensi ${record.students?.full_name || 'murid'}`} items={[{ label: 'Edit absensi', icon: Edit3, onSelect: () => setEditing(record) }, { label: 'Hapus absensi', icon: Trash2, danger: true, onSelect: () => setDeleting(record) }]} />}</article>)}</div><PaginationControls page={page} total={total} onPage={setPage} /></> : <EmptyCard text="Tidak ada data absensi yang sesuai filter." />}</section>{editing && canManage && <AttendanceModal value={editing === 'new' ? null : editing} students={students} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Data absensi berhasil disimpan.' }); await load() }} />}{deleting && <ConfirmModal title="Hapus data absensi?" text={`${deleting.students?.full_name || 'Murid'} · ${dateText(deleting.attendance_date)}`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}</div>
 }
 
 function AttendanceModal({ value, students, onClose, onDone }: { value: AttendanceRecord | null; students: Student[]; onClose: () => void; onDone: () => void }) {

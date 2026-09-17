@@ -15,6 +15,7 @@ import {
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog } from './AppExperience'
+import { cachedQuery, invalidateQueryCache, PAGE_SIZE, PaginationControls, useDebouncedValue, usePaginatedItems } from './DataExperience'
 
 type Account = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
 type Student = {
@@ -46,6 +47,7 @@ export function AccountsPage() {
   const [editing, setEditing] = useState<Account | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
+  const debouncedSearch = useDebouncedValue(search)
 
   const load = async () => {
     setLoading(true)
@@ -57,9 +59,10 @@ export function AccountsPage() {
   useEffect(() => { void load() }, [])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = debouncedSearch.trim().toLowerCase()
     return accounts.filter((a) => (roleFilter === 'all' || a.role === roleFilter) && (!q || (a.display_name || '').toLowerCase().includes(q)))
-  }, [accounts, roleFilter, search])
+  }, [accounts, roleFilter, debouncedSearch])
+  const paged = usePaginatedItems(filtered, `${roleFilter}:${debouncedSearch}`)
 
   const remove = async () => {
     if (!deleting) return
@@ -70,7 +73,7 @@ export function AccountsPage() {
 
   return <div className="v2-stack"><PageTitle eyebrow="AKSES PENGGUNA" title="Manajemen Akun" text="Tambah, edit, nonaktifkan, reset password, atau hapus akun pengguna." action={<button className="v2-primary" onClick={() => setCreateOpen(true)}><Plus size={17} /> Tambah Akun</button>} />{message && <Notice {...message} />}
     <div className="v2-stat-grid three"><MiniStat label="Semua Akun" value={accounts.length} tone="green" /><MiniStat label="Guru" value={accounts.filter((a) => a.role === 'teacher').length} tone="blue" /><MiniStat label="Wali Murid" value={accounts.filter((a) => a.role === 'parent').length} tone="purple" /></div>
-    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama pengguna..." /></label><select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'all' | AppRole)}><option value="all">Semua role</option><option value="admin">Admin</option><option value="teacher">Guru</option><option value="parent">Wali</option></select></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="v2-list">{filtered.map((account) => <div className="v2-user-row" key={account.id}><span className="v2-avatar">{initials(account.display_name)}</span><div className="grow"><strong>{account.display_name || 'Tanpa nama'}</strong><small>{roleLabel(account.role)} · {account.is_active ? 'Aktif' : 'Nonaktif'}</small></div><span className={`v2-badge ${account.is_active ? 'green' : 'gray'}`}>{account.is_active ? 'Aktif' : 'Nonaktif'}</span><ActionMenu label={`Aksi untuk ${account.display_name || 'akun'}`} items={[{ label: 'Edit akun', icon: Edit3, onSelect: () => setEditing(account) }, { label: 'Hapus akun', icon: Trash2, danger: true, onSelect: () => setDeleting(account) }]} /></div>)}</div> : <EmptyCard text="Tidak ada akun yang sesuai filter." />}</section>
+    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama pengguna..." /></label><select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'all' | AppRole)}><option value="all">Semua role</option><option value="admin">Admin</option><option value="teacher">Guru</option><option value="parent">Wali</option></select></div>{loading ? <SkeletonRows /> : filtered.length ? <><div className="v2-list">{paged.items.map((account) => <div className="v2-user-row" key={account.id}><span className="v2-avatar">{initials(account.display_name)}</span><div className="grow"><strong>{account.display_name || 'Tanpa nama'}</strong><small>{roleLabel(account.role)} · {account.is_active ? 'Aktif' : 'Nonaktif'}</small></div><span className={`v2-badge ${account.is_active ? 'green' : 'gray'}`}>{account.is_active ? 'Aktif' : 'Nonaktif'}</span><ActionMenu label={`Aksi untuk ${account.display_name || 'akun'}`} items={[{ label: 'Edit akun', icon: Edit3, onSelect: () => setEditing(account) }, { label: 'Hapus akun', icon: Trash2, danger: true, onSelect: () => setDeleting(account) }]} /></div>)}</div><PaginationControls page={paged.page} total={paged.total} onPage={paged.setPage} /></> : <EmptyCard text="Tidak ada akun yang sesuai filter." />}</section>
     {createOpen && <CreateAccountModal onClose={() => setCreateOpen(false)} onDone={async () => { setCreateOpen(false); setMessage({ tone: 'success', text: 'Akun baru berhasil dibuat.' }); await load() }} />}
     {editing && <EditAccountModal account={editing} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Akun berhasil diperbarui.' }); await load() }} />}
     {deleting && <ConfirmModal title="Hapus akun?" text={`Akun ${deleting.display_name || 'pengguna'} akan dihapus permanen beserta akses loginnya.`} confirm="Ya, Hapus" danger onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
@@ -114,39 +117,45 @@ export function StudentsPage({ role }: { role: 'admin' | 'teacher' }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [editing, setEditing] = useState<Student | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
   const [qrStudent, setQrStudent] = useState<Student | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
+  const debouncedSearch = useDebouncedValue(search)
 
   const load = async () => {
     setLoading(true)
+    let studentQuery = supabase.from('students').select('*', { count: 'exact' }).order('full_name').range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    if (classFilter !== 'all') studentQuery = studentQuery.eq('class_name', classFilter)
+    if (debouncedSearch.trim()) {
+      const query = debouncedSearch.trim().replace(/[%_,()]/g, ' ')
+      studentQuery = studentQuery.or(`full_name.ilike.%${query}%,nik.ilike.%${query}%,nis.ilike.%${query}%,nisn.ilike.%${query}%`)
+    }
     const [studentResult, parentResult, classResult] = await Promise.all([
-      supabase.from('students').select('*').order('full_name'),
-      supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name'),
-      supabase.from('school_classes').select('*').eq('is_active', true).order('name'),
+      studentQuery,
+      cachedQuery('students:parents', async () => supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name')),
+      cachedQuery('students:classes', async () => supabase.from('school_classes').select('*').eq('is_active', true).order('name')),
     ])
     setStudents((studentResult.data as Student[] | null) ?? [])
     setParents((parentResult.data as Account[] | null) ?? [])
     setClasses((classResult.data as SchoolClass[] | null) ?? [])
+    setTotal(studentResult.count ?? 0)
     setLoading(false)
   }
-  useEffect(() => { void load() }, [])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return students.filter((s) => (classFilter === 'all' || s.class_name === classFilter) && (!q || `${s.full_name} ${s.nik || ''} ${s.nis || ''} ${s.nisn || ''}`.toLowerCase().includes(q)))
-  }, [classFilter, search, students])
+  useEffect(() => { void load() }, [page, debouncedSearch, classFilter])
+  useEffect(() => { setPage(1) }, [debouncedSearch, classFilter])
 
   const remove = async () => {
     if (!deleting || role !== 'admin') return
     const { error } = await supabase.from('students').delete().eq('id', deleting.id)
     if (error) { setMessage({ tone: 'error', text: error.message }); return }
-    setDeleting(null); setMessage({ tone: 'success', text: 'Data murid berhasil dihapus.' }); await load()
+    invalidateQueryCache('students:'); setDeleting(null); setMessage({ tone: 'success', text: 'Data murid berhasil dihapus.' }); await load()
   }
 
   return <div className="v2-stack"><PageTitle eyebrow="AKADEMIK" title="Data Murid" text={role === 'admin' ? 'Tambah, edit, hubungkan wali, tampilkan QR, dan hapus data murid.' : 'Tambah, edit, hubungkan wali, dan tampilkan QR murid.'} action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</button>} />{message && <Notice {...message} />}
-    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, NIK, NIS, atau NISN..." /></label><select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}><option value="all">Semua kelompok</option>{classes.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>{loading ? <SkeletonRows /> : filtered.length ? <div className="v2-card-grid">{filtered.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nisn ? `NISN ${student.nisn}` : student.nik ? `NIK ${student.nik}` : 'Identitas belum diisi'} · {student.is_active ? 'Aktif' : 'Nonaktif'}</small></div><ActionMenu label={`Aksi untuk ${student.full_name}`} items={[{ label: 'Tampilkan QR', icon: QrCode, onSelect: () => setQrStudent(student) }, { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) }, ...(role === 'admin' ? [{ label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) }] : [])]} /></article>)}</div> : <EmptyCard text="Tidak ada murid yang sesuai pencarian." />}</section>
+    <section className="v2-panel"><div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, NIK, NIS, atau NISN..." /></label><select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}><option value="all">Semua kelompok</option>{classes.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>{loading ? <SkeletonRows /> : students.length ? <><div className="v2-card-grid">{students.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nisn ? `NISN ${student.nisn}` : student.nik ? `NIK ${student.nik}` : 'Identitas belum diisi'} · {student.is_active ? 'Aktif' : 'Nonaktif'}</small></div><ActionMenu label={`Aksi untuk ${student.full_name}`} items={[{ label: 'Tampilkan QR', icon: QrCode, onSelect: () => setQrStudent(student) }, { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) }, ...(role === 'admin' ? [{ label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) }] : [])]} /></article>)}</div><PaginationControls page={page} total={total} onPage={setPage} /></> : <EmptyCard text="Tidak ada murid yang sesuai pencarian." />}</section>
     {editing && <StudentModal student={editing === 'new' ? null : editing} parents={parents} classes={classes} onClose={() => setEditing(null)} onDone={async () => { const wasNew = editing === 'new'; setEditing(null); setMessage({ tone: 'success', text: wasNew ? 'Murid berhasil ditambahkan.' : 'Data murid berhasil diperbarui.' }); await load() }} />}
     {deleting && <ConfirmModal title="Hapus data murid?" text={`${deleting.full_name} beserta riwayat absensi dan hubungan walinya akan terhapus.`} confirm="Ya, Hapus" danger onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
     {qrStudent && <StudentQrModal student={qrStudent} onClose={() => setQrStudent(null)} />}

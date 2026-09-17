@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   BadgeDollarSign,
@@ -20,12 +20,6 @@ import {
   X,
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
-import { AccountsPage, AnnouncementsPage, ClassesPage, SchedulePage, StudentsPage } from './portal-v2/CrudPages'
-import { AttendanceDataManager } from './portal-v2/AttendancePages'
-import { AttendanceScannerNative } from './portal-v2/AttendanceScannerNative'
-import { ChildrenPage, DashboardPage, SettingsPage } from './portal-v2/PortalPages'
-import { ProfilePageV3 } from './portal-v2/ProfilePageV3'
-import { DocumentsPage, PaymentsPage, ReportsPage, TeachersPage } from './portal-v2/SchoolModules'
 import { ChildSelectionProvider, GlobalChildSwitcher, OfflineBanner } from './portal-v2/AppExperience'
 import './portal-v2.css'
 import './portal-v2-polish.css'
@@ -33,6 +27,22 @@ import './school-modules.css'
 import './scanner-native.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
+
+const AccountsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.AccountsPage })))
+const AnnouncementsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.AnnouncementsPage })))
+const ClassesPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.ClassesPage })))
+const SchedulePage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.SchedulePage })))
+const StudentsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.StudentsPage })))
+const AttendanceDataManager = lazy(() => import('./portal-v2/AttendancePages').then((module) => ({ default: module.AttendanceDataManager })))
+const AttendanceScannerNative = lazy(() => import('./portal-v2/AttendanceScannerNative').then((module) => ({ default: module.AttendanceScannerNative })))
+const ChildrenPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.ChildrenPage })))
+const DashboardPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.DashboardPage })))
+const SettingsPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.SettingsPage })))
+const ProfilePageV3 = lazy(() => import('./portal-v2/ProfilePageV3').then((module) => ({ default: module.ProfilePageV3 })))
+const DocumentsPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.DocumentsPage })))
+const PaymentsPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.PaymentsPage })))
+const ReportsPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.ReportsPage })))
+const TeachersPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.TeachersPage })))
 
 const menus: Record<AppRole, NavItem[]> = {
   admin: [
@@ -175,7 +185,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
         <main className="v2-content">
           <OfflineBanner />
           {currentProfile.role === 'parent' && <GlobalChildSwitcher />}
-          <PageRouter role={currentProfile.role} page={active.id} profile={currentProfile} setProfile={setCurrentProfile} go={go} />
+          <Suspense fallback={<PageLoading />}><PageRouter role={currentProfile.role} page={active.id} profile={currentProfile} setProfile={setCurrentProfile} go={go} /></Suspense>
         </main>
       </div>
 
@@ -216,6 +226,8 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
   if (page === 'profile') return <ProfilePageV3 profile={profile} onProfileChange={setProfile} />
   return <DashboardPage role={role} profile={profile} go={go} />
 }
+
+function PageLoading() { return <div className="v5-page-loading" role="status" aria-live="polite"><span /><span /><span /><p>Memuat halaman…</p></div> }
 
 function initials(name?: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function roleLabel(role: AppRole) { return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Orang Tua / Wali' }
