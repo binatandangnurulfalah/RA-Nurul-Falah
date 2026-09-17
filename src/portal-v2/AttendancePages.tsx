@@ -10,6 +10,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { getPageRange } from '../lib/data-utils.js'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog, useChildSelection } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
@@ -46,7 +47,8 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
 
   const load = async () => {
     setLoading(true)
-    let recordQuery = supabase.from('attendance_records').select('id,student_id,attendance_date,check_in,check_out,status,created_at,students(full_name,class_name,nis)', { count: 'exact' }).order('attendance_date', { ascending: false }).order('created_at', { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    const range = getPageRange(page, PAGE_SIZE)
+    let recordQuery = supabase.from('attendance_records').select('id,student_id,attendance_date,check_in,check_out,status,created_at,students(full_name,class_name,nis)', { count: 'exact' }).order('attendance_date', { ascending: false }).order('created_at', { ascending: false }).range(range.from, range.to)
     if (parentView && childSelection.selectedChildId) recordQuery = recordQuery.eq('student_id', childSelection.selectedChildId)
     if (dateFilter) recordQuery = recordQuery.eq('attendance_date', dateFilter)
     if (statusFilter !== 'all') recordQuery = recordQuery.eq('status', statusFilter)
