@@ -12,14 +12,17 @@ export type StudentRow = {
   gender: 'L' | 'P' | null
   birth_place: string | null
   birth_date: string | null
+  class_id: string | null
   class_name: string | null
+  academic_year_id: string
   academic_year: string | null
   is_active: boolean
   qr_token: string
 }
 
 export type StudentAccount = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
-export type StudentClass = { id: string; name: string; academic_year: string; is_active: boolean }
+export type StudentClass = { id: string; name: string; academic_year_id: string; academic_year: string; is_active: boolean }
+export type StudentAcademicYear = { id: string; label: string; is_current: boolean; is_active: boolean }
 export type StudentPageParams = { page: number; pageSize: number; search: string; classFilter: string }
 
 export function studentPageOptions(params: StudentPageParams) {
@@ -29,7 +32,7 @@ export function studentPageOptions(params: StudentPageParams) {
     queryFn: async () => {
       const range = getPageRange(params.page, params.pageSize)
       let query = supabase.from('students').select('*', { count: 'exact' }).order('full_name').range(range.from, range.to)
-      if (params.classFilter !== 'all') query = query.eq('class_name', params.classFilter)
+      if (params.classFilter !== 'all') query = query.eq('class_id', params.classFilter)
       if (normalizedSearch) query = query.or(`full_name.ilike.%${normalizedSearch}%,nik.ilike.%${normalizedSearch}%,nis.ilike.%${normalizedSearch}%,nisn.ilike.%${normalizedSearch}%`)
       const { data, error, count } = await query
       if (error) throw new Error(error.message || 'Data murid gagal dimuat.')
@@ -43,15 +46,17 @@ export function studentLookupsOptions() {
   return queryOptions({
     queryKey: queryKeys.students.meta('lookups'),
     queryFn: async () => {
-      const [parents, classes] = await Promise.all([
+      const [parents, classes, academicYears] = await Promise.all([
         supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name'),
-        supabase.from('school_classes').select('id,name,academic_year,is_active').eq('is_active', true).order('name'),
+        supabase.from('school_classes').select('id,name,academic_year_id,academic_year,is_active').eq('is_active', true).order('academic_year', { ascending: false }).order('name'),
+        supabase.from('academic_years').select('id,label,is_current,is_active').eq('is_active', true).order('start_date', { ascending: false }),
       ])
-      const error = parents.error || classes.error
+      const error = parents.error || classes.error || academicYears.error
       if (error) throw new Error(error.message || 'Data pendukung murid gagal dimuat.')
       return {
         parents: (parents.data as StudentAccount[] | null) ?? [],
         classes: (classes.data as StudentClass[] | null) ?? [],
+        academicYears: (academicYears.data as StudentAcademicYear[] | null) ?? [],
       }
     },
     staleTime: 60_000,
