@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   AlertTriangle,
@@ -17,6 +18,7 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react'
+import { dashboardSummaryOptions, parentTodayAttendanceOptions, type DashboardAttendanceItem, type DashboardSummary } from '../data/queries/dashboard'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { Dialog, LoadError, useChildSelection } from './AppExperience'
 import '../dashboard-v11.css'
@@ -41,97 +43,27 @@ type SchoolSetting = {
   academic_year: string
 }
 
-type DashboardScheduleItem = {
-  id: string
-  class_name: string
-  activity: string
-  start_time: string
-  end_time: string
-  teacher_name: string | null
-}
-
-type DashboardAttendanceItem = {
-  id: string
-  student_id: string
-  student_name: string
-  status: string
-  check_in: string | null
-  check_out: string | null
-  event_time: string
-}
-
-type DashboardAnnouncementItem = {
-  id: string
-  title: string
-  created_at: string
-}
-
-type DashboardSummary = {
-  role: AppRole
-  generated_at: string
-  attendance_date: string
-  active_students: number
-  attendance_today: number
-  recorded_today: number
-  late_today: number
-  absent_today: number
-  unrecorded_today: number
-  active_accounts: number
-  draft_reports: number
-  open_payments: number
-  today_schedule_count: number
-  published_announcements: number
-  today_schedule: DashboardScheduleItem[]
-  recent_attendance: DashboardAttendanceItem[]
-  recent_announcements: DashboardAnnouncementItem[]
-}
-
 const JAKARTA = 'Asia/Jakarta'
-const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
 
 export function DashboardPage({ role, profile, go }: { role: AppRole; profile: UserProfile; go: (page: string) => void }) {
   const childSelection = useChildSelection()
-  const [summary, setSummary] = useState<DashboardSummary | null>(null)
-  const [summaryError, setSummaryError] = useState('')
-  const [reloadToken, setReloadToken] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [todayRecord, setTodayRecord] = useState<{ check_in: string | null; check_out: string | null; status: string } | null>(null)
-
-  useEffect(() => {
-    let mounted = true
-    const load = async () => {
-      setLoading(true)
-      setSummaryError('')
-      const { data, error } = await supabase.rpc('dashboard_summary')
-      if (!mounted) return
-      if (error) {
-        setSummary(null)
-        setSummaryError('Ringkasan dashboard belum dapat dimuat. Periksa koneksi lalu coba lagi.')
-      } else {
-        setSummary(data as unknown as DashboardSummary)
-      }
-      setLoading(false)
-    }
-    void load()
-    return () => { mounted = false }
-  }, [role, reloadToken])
-
-  useEffect(() => {
-    if (role !== 'parent' || !childSelection.selectedChildId) {
-      setTodayRecord(null)
-      return
-    }
-    let mounted = true
-    setTodayRecord(null)
-    void supabase.from('attendance_records').select('check_in,check_out,status').eq('student_id', childSelection.selectedChildId).eq('attendance_date', today()).maybeSingle().then(({ data }) => {
-      if (mounted) setTodayRecord(data as typeof todayRecord)
-    })
-    return () => { mounted = false }
-  }, [role, childSelection.selectedChildId])
+  const selectedChildId = role === 'parent' ? childSelection.selectedChildId : ''
+  const summaryQuery = useQuery(dashboardSummaryOptions(role))
+  const todayRecordQuery = useQuery(parentTodayAttendanceOptions({ role, childId: selectedChildId }))
+  const summary = summaryQuery.data ?? null
+  const todayRecord = todayRecordQuery.data ?? null
+  const loading = summaryQuery.isPending || (role === 'parent' && Boolean(selectedChildId) && todayRecordQuery.isPending)
+  const summaryError = summaryQuery.isError ? 'Ringkasan dashboard belum dapat dimuat. Periksa koneksi lalu coba lagi.' : ''
+  const todayRecordError = todayRecordQuery.isError ? 'Absensi anak hari ini belum dapat dimuat. Periksa koneksi lalu coba lagi.' : ''
 
   const greeting = new Intl.DateTimeFormat('id-ID', { timeZone: JAKARTA, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   const firstName = (profile.display_name || 'Pengguna').split(' ')[0]
-  const reload = () => setReloadToken((value) => value + 1)
+  const reload = () => {
+    void Promise.all([
+      summaryQuery.refetch(),
+      role === 'parent' && selectedChildId ? todayRecordQuery.refetch() : Promise.resolve(),
+    ])
+  }
 
   if (role === 'parent') {
     const children = childSelection.children as Student[]
@@ -140,6 +72,7 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
       <div className="v2-stack">
         <section className="v2-hero parent"><div><small>BERANDA WALI</small><h2>Assalamu'alaikum, {firstName}</h2><p>{greeting} · Pantau aktivitas anak dengan ringkas.</p></div><UserRound size={54} /></section>
         {summaryError && <LoadError text={summaryError} onRetry={reload} />}
+        {todayRecordError && <LoadError text={todayRecordError} onRetry={reload} />}
         {childSelection.error && <LoadError text={childSelection.error} onRetry={childSelection.retry} />}
         {loading ? <SkeletonCards /> : child ? (
           <>
