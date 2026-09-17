@@ -65,20 +65,6 @@ export async function requireAuthenticatedUser(req: Request): Promise<
     return { ok: false, response: jsonResponse({ ok: false, error: 'Akun tidak aktif.' }, 403) }
   }
 
-  if (profile.role === 'admin') {
-    const { data: assurance, error: assuranceError } = await userClient.auth.mfa.getAuthenticatorAssuranceLevel(jwt)
-    if (assuranceError || assurance.currentLevel !== 'aal2') {
-      return {
-        ok: false,
-        response: jsonResponse({
-          ok: false,
-          code: 'MFA_REQUIRED',
-          error: 'Administrator wajib menyelesaikan verifikasi MFA sebelum menggunakan fungsi ini.',
-        }, 403),
-      }
-    }
-  }
-
   return {
     ok: true,
     context: {
