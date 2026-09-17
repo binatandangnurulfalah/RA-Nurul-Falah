@@ -146,11 +146,17 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
 
   useEffect(() => {
     let mounted = true
-    const query = currentProfile.role === 'parent'
-      ? supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('is_published', true).in('audience', ['all', 'parent'])
-      : supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('is_published', true)
-    void query.then(({ count }) => { if (mounted) setAnnouncementCount(count ?? 0) })
-    return () => { mounted = false }
+    const loadUnread = () => {
+      const query = currentProfile.role === 'parent'
+        ? supabase.from('announcements').select('id').eq('is_published', true).in('audience', ['all', 'parent'])
+        : currentProfile.role === 'teacher'
+          ? supabase.from('announcements').select('id').eq('is_published', true).in('audience', ['all', 'teacher'])
+          : supabase.from('announcements').select('id').eq('is_published', true)
+      void query.then(({ data }) => { if (!mounted) return; let stored: string[] = []; try { stored = JSON.parse(localStorage.getItem('ra_read_announcements') || '[]') as string[] } catch { localStorage.removeItem('ra_read_announcements') }; const read = new Set(stored); setAnnouncementCount((data ?? []).filter((row) => !read.has(row.id)).length) })
+    }
+    loadUnread()
+    window.addEventListener('ra-announcements-read', loadUnread)
+    return () => { mounted = false; window.removeEventListener('ra-announcements-read', loadUnread) }
   }, [currentProfile.role])
 
   useEffect(() => {

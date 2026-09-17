@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
+import { validatePassword } from '../lib/auth-utils.js'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog } from './AppExperience'
 import { cachedQuery, invalidateQueryCache, PAGE_SIZE, PaginationControls, useDebouncedValue, usePaginatedItems } from './DataExperience'
@@ -87,7 +88,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
   const [errorText, setErrorText] = useState('')
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setErrorText('')
-    if (form.password.length < 8 || !/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) { setErrorText('Password minimal 8 karakter serta berisi huruf dan angka.'); return }
+    const passwordError = validatePassword(form.password); if (passwordError) { setErrorText(passwordError); return }
     setBusy(true)
     const { data, error } = await supabase.functions.invoke('admin-create-user', { body: { email: form.email.trim().toLowerCase(), password: form.password, display_name: form.name.trim(), role: form.role } })
     setBusy(false)
@@ -317,6 +318,7 @@ export function AnnouncementsPage({ canManage }: { canManage: boolean }) {
 
   const load = async () => { setLoading(true); const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }); setRows((data as Announcement[] | null) ?? []); setLoading(false) }
   useEffect(() => { void load() }, [])
+  useEffect(() => { if (!loading && rows.length) { const publishedIds = rows.filter((row) => row.is_published).map((row) => row.id); localStorage.setItem('ra_read_announcements', JSON.stringify(publishedIds)); window.dispatchEvent(new Event('ra-announcements-read')) } }, [loading, rows])
   const remove = async () => { if (!deleting || !canManage) return; const { error } = await supabase.from('announcements').delete().eq('id', deleting.id); if (error) { setMessage({ tone: 'error', text: error.message }); return }; setDeleting(null); setMessage({ tone: 'success', text: 'Pengumuman berhasil dihapus.' }); await load() }
 
   return <div className="v2-stack"><PageTitle eyebrow="INFORMASI SEKOLAH" title="Pengumuman" text={canManage ? 'Buat dan kelola informasi resmi untuk Guru dan Wali.' : 'Informasi resmi terbaru dari RA Nurul Falah.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Buat Pengumuman</button> : undefined} />{message && <Notice {...message} />}{loading ? <SkeletonRows /> : rows.length ? <div className="v2-announcement-grid">{rows.map((row) => <article className="v2-announcement" key={row.id}><div className="v2-announcement-icon"><Megaphone /></div><div className="grow"><div className="v2-meta"><span className={`v2-badge ${row.is_published ? 'green' : 'gray'}`}>{row.is_published ? 'Terbit' : 'Draft'}</span><span>{audienceLabel(row.audience)}</span><span>{dateText(row.created_at)}</span></div><h3>{row.title}</h3><p>{row.body}</p></div>{canManage && <ActionMenu label={`Aksi pengumuman ${row.title}`} items={[{ label: 'Edit pengumuman', icon: Edit3, onSelect: () => setEditing(row) }, { label: 'Hapus pengumuman', icon: Trash2, danger: true, onSelect: () => setDeleting(row) }]} />}</article>)}</div> : <EmptyCard text="Belum ada pengumuman aktif." />}{editing && canManage && <AnnouncementModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Pengumuman berhasil disimpan.' }); await load() }} />}{deleting && <ConfirmModal title="Hapus pengumuman?" text={deleting.title} confirm="Hapus Pengumuman" danger onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}</div>

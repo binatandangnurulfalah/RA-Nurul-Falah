@@ -2,6 +2,7 @@ import { lazy, Suspense, type FormEvent, type ReactNode, useEffect, useMemo, use
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
+import { validatePassword } from './lib/auth-utils.js'
 
 const RolePortal = lazy(() => import('./RolePortal'))
 
@@ -75,10 +76,13 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
       void loadProfile()
     })
+    const verifyVisibleSession = () => { if (document.visibilityState !== 'visible') return; void supabase.auth.getUser().then(async ({ data, error }) => { if (!mounted || (!error && data.user)) return; await supabase.auth.signOut(); if (mounted) { setProfile(null); setLoading(false) } }) }
+    document.addEventListener('visibilitychange', verifyVisibleSession)
 
     return () => {
       mounted = false
       listener.subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', verifyVisibleSession)
     }
   }, [])
 
@@ -294,8 +298,8 @@ function NewPasswordPage() {
 
   const strength = useMemo(() => {
     let score = 0
-    if (password.length >= 8) score++
-    if (/[A-Za-z]/.test(password)) score++
+    if (password.length >= 10) score++
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++
     if (/\d/.test(password)) score++
     return score
   }, [password])
@@ -304,8 +308,9 @@ function NewPasswordPage() {
     event.preventDefault()
     setError('')
 
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      setError('Password minimal 8 karakter dan harus berisi huruf serta angka.')
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      setError(passwordError)
       return
     }
 
@@ -333,7 +338,7 @@ function NewPasswordPage() {
   return (
     <AuthLayout title="Buat password baru" subtitle="Gunakan password baru yang aman dan mudah Anda ingat.">
       <form onSubmit={submit} className="form-stack">
-        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 8 karakter" />
+        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 10 karakter" />
         <div className="strength">
           <span className={strength >= 1 ? 'filled' : ''} />
           <span className={strength >= 2 ? 'filled' : ''} />
