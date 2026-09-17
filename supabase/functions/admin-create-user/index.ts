@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { validatePassword } from '../_shared/password-policy.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,7 +52,8 @@ Deno.serve(async (req: Request) => {
     const role = String(payload.role ?? '')
 
     if (!email || !email.includes('@')) return json({ error: 'Email tidak valid' }, 400)
-    if (password.length < 8) return json({ error: 'Password minimal 8 karakter' }, 400)
+    const passwordError = validatePassword(password)
+    if (passwordError) return json({ error: passwordError }, 400)
     if (!['admin', 'teacher', 'parent'].includes(role)) return json({ error: 'Role tidak valid' }, 400)
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
