@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const migration = await readFile(new URL('../supabase/migrations/20260917125645_stage11_dashboard_summary.sql', import.meta.url), 'utf8')
 const rpcNormalization = await readFile(new URL('../supabase/migrations/20260917130537_normalize_optional_rpc_ids.sql', import.meta.url), 'utf8')
+const attendanceSemantics = await readFile(new URL('../supabase/migrations/20260917131531_refine_dashboard_attendance_semantics.sql', import.meta.url), 'utf8')
 const dashboard = await readFile(new URL('../src/portal-v2/PortalPages.tsx', import.meta.url), 'utf8')
 const styles = await readFile(new URL('../src/dashboard-v11.css', import.meta.url), 'utf8')
 const types = await readFile(new URL('../src/lib/database.types.ts', import.meta.url), 'utf8')
@@ -25,6 +26,15 @@ test('dashboard summary memakai zona waktu sekolah dan query role-scoped', () =>
   assert.match(migration, /from public\.announcements a/)
   assert.match(migration, /if v_role = 'admin'/i)
   assert.match(migration, /if v_role in \('admin'.*'parent'/is)
+})
+
+test('semantik dashboard membedakan hadir, alpa, dan belum tercatat', () => {
+  assert.match(attendanceSemantics, /status in \('present', 'late'\)/i)
+  assert.match(attendanceSemantics, /status = 'absent'/i)
+  assert.match(attendanceSemantics, /'unrecorded_today'/i)
+  assert.match(attendanceSemantics, /greatest\(v_active_students - v_recorded_today, 0\)/i)
+  assert.match(dashboard, /unrecorded_today: number/)
+  assert.match(dashboard, /Belum Absen/)
 })
 
 test('dashboard frontend memakai satu rpc summary bukan query count terpisah', () => {
