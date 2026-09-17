@@ -6,6 +6,7 @@ const migration = await readFile(new URL('../supabase/migrations/20260917125645_
 const rpcNormalization = await readFile(new URL('../supabase/migrations/20260917130537_normalize_optional_rpc_ids.sql', import.meta.url), 'utf8')
 const attendanceSemantics = await readFile(new URL('../supabase/migrations/20260917131531_refine_dashboard_attendance_semantics.sql', import.meta.url), 'utf8')
 const dashboard = await readFile(new URL('../src/portal-v2/PortalPages.tsx', import.meta.url), 'utf8')
+const dashboardQuery = await readFile(new URL('../src/data/queries/dashboard.ts', import.meta.url), 'utf8')
 const styles = await readFile(new URL('../src/dashboard-v11.css', import.meta.url), 'utf8')
 const types = await readFile(new URL('../src/lib/database.types.ts', import.meta.url), 'utf8')
 
@@ -33,18 +34,27 @@ test('semantik dashboard membedakan hadir, alpa, dan belum tercatat', () => {
   assert.match(attendanceSemantics, /status = 'absent'/i)
   assert.match(attendanceSemantics, /'unrecorded_today'/i)
   assert.match(attendanceSemantics, /greatest\(v_active_students - v_recorded_today, 0\)/i)
-  assert.match(dashboard, /unrecorded_today: number/)
+  assert.match(dashboardQuery, /unrecorded_today: number/)
   assert.match(dashboard, /Belum Absen/)
 })
 
-test('dashboard frontend memakai satu rpc summary bukan query count terpisah', () => {
-  assert.match(dashboard, /supabase\.rpc\('dashboard_summary'\)/)
-  assert.doesNotMatch(dashboard, /select\('id', \{ count: 'exact', head: true \}\)/)
+test('dashboard frontend memakai satu rpc summary melalui TanStack Query, bukan query count terpisah', () => {
+  assert.match(dashboard, /useQuery\(dashboardSummaryOptions\(role\)\)/)
+  assert.match(dashboardQuery, /supabase\.rpc\('dashboard_summary'\)/)
+  assert.doesNotMatch(dashboardQuery, /select\('id', \{ count: 'exact', head: true \}\)/)
   assert.match(dashboard, /Murid Dalam Scope/)
   assert.match(dashboard, /Tagihan Aktif/)
   assert.match(dashboard, /JADWAL HARI INI/)
   assert.match(dashboard, /ABSENSI TERBARU/)
   assert.match(dashboard, /PENGUMUMAN TERBARU/)
+})
+
+test('dashboard wali memakai query terpisah untuk absensi anak terpilih', () => {
+  assert.match(dashboard, /parentTodayAttendanceOptions/)
+  assert.match(dashboardQuery, /attendance_records/)
+  assert.match(dashboardQuery, /\.eq\('student_id', childId\)/)
+  assert.match(dashboardQuery, /\.eq\('attendance_date', attendanceDate\)/)
+  assert.match(dashboardQuery, /enabled: role === 'parent' && Boolean\(childId\)/)
 })
 
 test('generated types mengenali dashboard_summary dan metadata audit absensi', () => {
