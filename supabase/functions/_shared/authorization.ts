@@ -32,18 +32,10 @@ export async function teacherCanAccessStudent(context: AuthContext, studentId: s
 
   const { data: student } = await context.adminClient
     .from('students')
-    .select('class_name')
+    .select('class_id')
     .eq('id', studentId)
     .maybeSingle()
-  if (!student?.class_name) return false
+  if (!student?.class_id) return false
 
-  const { data: schoolClass } = await context.adminClient
-    .from('school_classes')
-    .select('id')
-    .eq('name', student.class_name)
-    .eq('is_active', true)
-    .maybeSingle()
-  if (!schoolClass) return false
-
-  return teacherCanAccessClass(context, schoolClass.id)
+  return teacherCanAccessClass(context, student.class_id)
 }
