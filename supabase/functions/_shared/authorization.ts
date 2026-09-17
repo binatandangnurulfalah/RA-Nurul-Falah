@@ -38,9 +38,9 @@ export async function teacherCanAccessClass(admin: SupabaseClient, teacherUserId
 export async function teacherCanAccessStudent(admin: SupabaseClient, teacherUserId: string, studentId: string) {
   const { data: student } = await admin
     .from('students')
-    .select('class_id,class_name')
+    .select('class_name')
     .eq('id', studentId)
     .maybeSingle()
   if (!student) return false
-  return teacherCanAccessClass(admin, teacherUserId, student.class_id ?? null, student.class_name ?? null)
+  return teacherCanAccessClass(admin, teacherUserId, null, student.class_name ?? null)
 }
