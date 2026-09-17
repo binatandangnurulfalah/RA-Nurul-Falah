@@ -341,7 +341,10 @@ $$;
 revoke all on function public.append_account_audit_event(uuid, text, jsonb) from public, anon;
 grant execute on function public.append_account_audit_event(uuid, text, jsonb) to authenticated;
 
-create or replace view public.audit_events_view
+-- Column order changed in Stage 11.11, so PostgreSQL requires a transactional
+-- drop/recreate rather than CREATE OR REPLACE on the older view signature.
+drop view if exists public.audit_events_view;
+create view public.audit_events_view
 with (security_invoker = true)
 as
 select
