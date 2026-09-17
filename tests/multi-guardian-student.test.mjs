@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const studentsPage = await readFile(new URL('../src/portal-v2/StudentsPageV2.tsx', import.meta.url), 'utf8')
-const migration = await readFile(new URL('../supabase/migrations/20260917040500_multi_guardian_student_transaction.sql', import.meta.url), 'utf8')
+const migration = await readFile(new URL('../supabase/migrations/20260917040446_harden_multi_guardian_student_rpc.sql', import.meta.url), 'utf8')
 const rolePortal = await readFile(new URL('../src/RolePortalV5.tsx', import.meta.url), 'utf8')
 
 test('form murid mendukung banyak wali dan menyimpan melalui RPC atomik', () => {
@@ -19,6 +19,7 @@ test('RPC menggunakan invoker RLS dan menyinkronkan seluruh wali dalam satu tran
   assert.match(migration, /insert into public\.student_guardians/)
   assert.match(migration, /on conflict \(student_id, guardian_user_id\) do nothing/)
   assert.match(migration, /role = 'parent'::public\.app_role/)
+  assert.match(migration, /from public, anon/)
 })
 
 test('portal aktif menggunakan StudentsPageV2', () => {
