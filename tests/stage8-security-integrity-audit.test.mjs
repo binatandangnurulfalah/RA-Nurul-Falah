@@ -4,8 +4,9 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
 
-const [migration, announcements, payments, auditPage, portal, manifestText] = await Promise.all([
+const [migration, permissionMigration, announcements, payments, auditPage, portal, manifestText] = await Promise.all([
   read('../supabase/migrations/20260917074753_stage8_announcement_payment_audit.sql'),
+  read('../supabase/migrations/20260917075517_stage8_harden_audit_permissions.sql'),
   read('../src/portal-v2/AnnouncementsPage.tsx'),
   read('../src/portal-v2/PaymentsPage.tsx'),
   read('../src/portal-v2/AuditTrailPage.tsx'),
@@ -42,9 +43,12 @@ test('audit trail append-only mencatat perubahan pengumuman dan pembayaran', () 
   assert.match(migration, /security definer/)
   assert.match(migration, /announcements_capture_audit/)
   assert.match(migration, /student_payments_capture_audit/)
-  assert.match(migration, /revoke insert, update, delete on public\.audit_events from authenticated, anon/)
   assert.match(migration, /admin read audit events/)
   assert.match(migration, /with \(security_invoker = true\)/)
+  assert.match(permissionMigration, /revoke all privileges on table public\.audit_events from anon, authenticated/)
+  assert.match(permissionMigration, /grant select on table public\.audit_events to authenticated/)
+  assert.match(permissionMigration, /revoke all privileges on sequence public\.audit_events_id_seq from anon, authenticated/)
+  assert.match(permissionMigration, /revoke all privileges on function private\.capture_audit_event\(\) from anon, authenticated/)
   assert.match(auditPage, /\.from\('audit_events_view'\)/)
   assert.match(portal, /page === 'audit' && role === 'admin'/)
   assert.match(portal, /Riwayat Aktivitas/)
@@ -52,4 +56,5 @@ test('audit trail append-only mencatat perubahan pengumuman dan pembayaran', () 
 
 test('migration Tahap 8 sinkron dengan manifest produksi', () => {
   assert.ok(manifest.production_migrations.includes('20260917074753_stage8_announcement_payment_audit.sql'))
+  assert.ok(manifest.production_migrations.includes('20260917075517_stage8_harden_audit_permissions.sql'))
 })
