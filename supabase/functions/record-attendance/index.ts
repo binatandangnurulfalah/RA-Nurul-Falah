@@ -23,6 +23,13 @@ Deno.serve(async (req: Request) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)) return json({ ok: false, error: "Kode QR tidak dikenali." }, 400);
   const { data: student } = await adminClient.from("students").select("id,full_name,class_name,is_active").eq("qr_token", token).maybeSingle();
   if (!student?.is_active) return json({ ok: false, error: "Data murid tidak ditemukan atau tidak aktif." }, 404);
+  if (profile.role === "teacher") {
+    const { data: teacher } = await adminClient.from("teacher_profiles").select("id").eq("teacher_user_id", authData.user.id).maybeSingle();
+    const { data: schoolClass } = await adminClient.from("school_classes").select("id").eq("name", student.class_name).eq("is_active", true).maybeSingle();
+    if (!teacher || !schoolClass) return json({ ok: false, error: "Guru belum ditugaskan ke kelas murid ini." }, 403);
+    const { data: assignment } = await adminClient.from("teacher_class_assignments").select("class_id").eq("class_id", schoolClass.id).eq("teacher_profile_id", teacher.id).maybeSingle();
+    if (!assignment) return json({ ok: false, error: "Anda hanya dapat memindai QR murid dari kelas yang ditugaskan." }, 403);
+  }
   const now = new Date();
   const { data: settings } = await adminClient.from("school_settings").select("timezone,late_cutoff").eq("id", 1).maybeSingle();
   const timezone = settings?.timezone || "Asia/Jakarta";

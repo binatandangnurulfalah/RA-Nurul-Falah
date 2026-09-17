@@ -90,6 +90,27 @@
 
 .auth-brand-logo { width: 76px; height: 76px; }
 
+.v5-offline,
+.v5-load-error,
+.v5-global-child {
+  border: 1px solid var(--v2-line);
+  border-radius: 14px;
+  background: #fff;
+}
+.v5-offline { display: flex; align-items: center; gap: 9px; padding: 11px 13px; margin-bottom: 12px; color: #8a5518; background: #fff8e9; border-color: #efd9ab; font-size: 12px; font-weight: 750; }
+.v5-load-error { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 14px; color: #8f463a; background: #fff8f6; border-color: #f0cec7; }
+.v5-load-error strong { display: block; font-size: 13px; }
+.v5-load-error p { margin: 3px 0 0; color: #796b67; font-size: 11px; }
+.v5-global-child { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 12px; }
+.v5-global-child label { color: var(--v2-muted); font-size: 11px; font-weight: 850; white-space: nowrap; }
+.v5-global-child select { flex: 1; min-width: 0; min-height: 42px; border: 1px solid var(--v2-line); border-radius: 11px; background: #f8fbf9; padding: 0 10px; font-weight: 800; color: var(--v2-ink); }
+.v5-teacher-picker { border: 1px solid var(--v2-line); border-radius: 13px; padding: 10px; display: grid; gap: 7px; }
+.v5-teacher-picker legend { padding: 0 5px; color: #52635b; font-size: 11px; font-weight: 800; }
+.v5-teacher-picker > label { min-height: 48px; display: flex; grid-template-columns: none; align-items: center; gap: 9px; border-radius: 10px; padding: 6px 8px; background: #f8fbf9; }
+.v5-teacher-picker input { width: 20px !important; min-height: 20px !important; }
+.v5-teacher-picker span { display: grid; font-size: 12px; }
+.v5-teacher-picker small { color: var(--v2-muted); font-size: 10px; font-weight: 600; }
+
 @media (max-width: 1050px) {
   .v5-section .v2-quick-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -140,6 +161,9 @@
   .v2-toolbar { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 8; background: white; padding: 8px 0; }
   .auth-page .brand-panel { min-height: 160px; padding: 26px 22px; }
   .auth-brand-logo { width: 64px; height: 64px; }
+  .v5-global-child { position: sticky; top: calc(64px + env(safe-area-inset-top)); z-index: 7; box-shadow: 0 5px 18px rgba(31,66,53,.06); }
+  .v5-load-error { grid-template-columns: auto 1fr; }
+  .v5-load-error button { grid-column: 1 / -1; width: 100%; }
 }
 
 @media (max-width: 430px) {

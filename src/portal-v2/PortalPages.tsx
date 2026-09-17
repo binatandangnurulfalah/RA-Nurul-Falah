@@ -13,9 +13,9 @@ import {
   ShieldCheck,
   UserRound,
   UsersRound,
-  X,
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
+import { Dialog, LoadError, useChildSelection } from './AppExperience'
 
 type Student = {
   id: string
@@ -45,8 +45,7 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
   const [attendanceCount, setAttendanceCount] = useState(0)
   const [lateCount, setLateCount] = useState(0)
   const [accountCount, setAccountCount] = useState(0)
-  const [children, setChildren] = useState<Student[]>([])
-  const [selectedChildId, setSelectedChildId] = useState('')
+  const childSelection = useChildSelection()
   const [todayRecord, setTodayRecord] = useState<{ check_in: string | null; check_out: string | null; status: string } | null>(null)
   const [draftReports, setDraftReports] = useState(0)
   const [openPayments, setOpenPayments] = useState(0)
@@ -56,11 +55,6 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
     let mounted = true
     const load = async () => {
       if (role === 'parent') {
-        const { data: childData } = await supabase.from('students').select('id,full_name,nis,class_name,academic_year,qr_token').order('full_name')
-        if (!mounted) return
-        const list = (childData as Student[] | null) ?? []
-        setChildren(list)
-        if (list[0]) setSelectedChildId((current) => current || list[0].id)
         if (mounted) setLoading(false)
         return
       }
@@ -91,26 +85,27 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
   }, [role])
 
   useEffect(() => {
-    if (role !== 'parent' || !selectedChildId) return
+    if (role !== 'parent' || !childSelection.selectedChildId) return
     let mounted = true
     setTodayRecord(null)
-    void supabase.from('attendance_records').select('check_in,check_out,status').eq('student_id', selectedChildId).eq('attendance_date', today()).maybeSingle().then(({ data }) => {
+    void supabase.from('attendance_records').select('check_in,check_out,status').eq('student_id', childSelection.selectedChildId).eq('attendance_date', today()).maybeSingle().then(({ data }) => {
       if (mounted) setTodayRecord(data as typeof todayRecord)
     })
     return () => { mounted = false }
-  }, [role, selectedChildId])
+  }, [role, childSelection.selectedChildId])
 
   const greeting = new Intl.DateTimeFormat('id-ID', { timeZone: JAKARTA, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   const firstName = (profile.display_name || 'Pengguna').split(' ')[0]
 
   if (role === 'parent') {
-    const child = children.find((item) => item.id === selectedChildId) ?? children[0]
+    const children = childSelection.children as Student[]
+    const child = children.find((item) => item.id === childSelection.selectedChildId) ?? children[0]
     return (
       <div className="v2-stack">
         <section className="v2-hero parent"><div><small>BERANDA WALI</small><h2>Assalamu'alaikum, {firstName}</h2><p>{greeting} · Pantau aktivitas anak dengan ringkas.</p></div><UserRound size={54} /></section>
         {loading ? <SkeletonCards /> : child ? (
           <>
-            {children.length > 1 && <div className="v5-child-switcher" role="tablist" aria-label="Pilih anak">{children.map((item) => <button role="tab" aria-selected={item.id === child.id} className={item.id === child.id ? 'active' : ''} key={item.id} onClick={() => setSelectedChildId(item.id)}>{item.full_name.split(' ')[0]}</button>)}</div>}
+            {childSelection.error && <LoadError text={childSelection.error} onRetry={childSelection.retry} />}
             <section className="v2-child-focus"><span>{initials(child.full_name)}</span><div><small>Anak terhubung</small><h3>{child.full_name}</h3><p>{child.class_name || 'Belum ada kelompok'} · {child.academic_year || 'Tahun ajaran belum diisi'}</p></div><button onClick={() => go('children')}><QrCode size={18} /> QR Anak</button></section>
             <div className="v2-stat-grid three">
               <StatCard icon={ClipboardCheck} label="Status Hari Ini" value={todayRecord?.check_in ? 'Sudah Absen' : 'Belum Absen'} meta={todayRecord?.status === 'late' ? 'Terlambat' : todayRecord?.check_in ? 'Tepat waktu' : 'Belum tercatat'} tone="green" />
@@ -170,7 +165,7 @@ export function ChildrenPage() {
     })
   }, [])
 
-  return <div className="v2-stack"><PageTitle eyebrow="DATA KELUARGA" title="Data Anak" text="Data resmi anak yang terhubung dengan akun wali." />{loading ? <SkeletonRows /> : students.length ? <div className="v2-card-grid">{students.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nis ? `NIS ${student.nis}` : 'NIS belum diisi'} · {student.academic_year || '-'}</small></div><button onClick={() => setSelected(student)}><QrCode size={17} /> Tampilkan QR</button></article>)}</div> : <EmptyCard text="Belum ada anak yang terhubung." />}{selected && <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={() => setSelected(null)} /><section className="v2-modal qr"><button className="v2-close" onClick={() => setSelected(null)}><X size={19} /></button><span className="v2-modal-icon"><QrCode /></span><h2>{selected.full_name}</h2><p>{selected.class_name || 'RA Nurul Falah'}</p><div className="v2-qr"><QRCodeSVG value={`RA-NF:${selected.qr_token}`} size={230} level="H" includeMargin /></div><small>Tunjukkan QR kepada Guru saat masuk dan pulang.</small></section></div>}</div>
+  return <div className="v2-stack"><PageTitle eyebrow="DATA KELUARGA" title="Data Anak" text="Data resmi anak yang terhubung dengan akun wali." />{loading ? <SkeletonRows /> : students.length ? <div className="v2-card-grid">{students.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nis ? `NIS ${student.nis}` : 'NIS belum diisi'} · {student.academic_year || '-'}</small></div><button onClick={() => setSelected(student)}><QrCode size={17} /> Tampilkan QR</button></article>)}</div> : <EmptyCard text="Belum ada anak yang terhubung." />}{selected && <Dialog title={selected.full_name} onClose={() => setSelected(null)}><div className="v2-qr"><QRCodeSVG value={`RA-NF:${selected.qr_token}`} size={230} level="H" includeMargin /></div><p>{selected.class_name || 'RA Nurul Falah'}</p><small>Tunjukkan QR kepada Guru saat masuk dan pulang.</small></Dialog>}</div>
 }
 
 export function SettingsPage() {

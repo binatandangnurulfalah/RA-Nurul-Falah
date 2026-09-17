@@ -11,10 +11,10 @@ import {
   Search,
   Trash2,
   UsersRound,
-  X,
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { Dialog } from './AppExperience'
 
 type Account = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
 type Student = {
@@ -31,7 +31,8 @@ type Student = {
   is_active: boolean
   qr_token: string
 }
-type SchoolClass = { id: string; name: string; teacher_name: string | null; academic_year: string; is_active: boolean }
+type SchoolClass = { id: string; name: string; teacher_name: string | null; academic_year: string; is_active: boolean; teacher_class_assignments?: { teacher_profile_id: string; teacher_profiles: { full_name: string; teacher_user_id: string | null } | null }[] }
+type TeacherOption = { id: string; full_name: string; teacher_user_id: string | null }
 type Schedule = { id: string; class_name: string; day_of_week: number; start_time: string; end_time: string; activity: string; teacher_name: string | null; academic_year: string; is_active: boolean }
 type Announcement = { id: string; title: string; body: string; audience: 'all' | 'teacher' | 'parent'; is_published: boolean; created_at: string; updated_at: string }
 type Message = { tone: 'success' | 'error'; text: string }
@@ -153,7 +154,7 @@ export function StudentsPage({ role }: { role: 'admin' | 'teacher' }) {
 }
 
 function StudentQrModal({ student, onClose }: { student: Student; onClose: () => void }) {
-  return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup QR" onClick={onClose} /><section className="v2-modal qr"><button className="v2-close" aria-label="Tutup QR" onClick={onClose}><X size={19} /></button><span className="v2-modal-icon"><QrCode /></span><h2>{student.full_name}</h2><p>{student.nis ? `NIS ${student.nis} · ` : ''}{student.class_name || 'RA Nurul Falah'}</p><div className="v2-qr"><QRCodeSVG value={`RA-NF:${student.qr_token}`} size={230} level="H" includeMargin /></div><small>QR digunakan untuk absensi masuk dan pulang.</small><button className="v2-primary full-button" onClick={() => window.print()}><QrCode size={17} /> Cetak QR</button></section></div>
+  return <Dialog title={student.full_name} onClose={onClose}><p>{student.nis ? `NIS ${student.nis} · ` : ''}{student.class_name || 'RA Nurul Falah'}</p><div className="v2-qr"><QRCodeSVG value={`RA-NF:${student.qr_token}`} size={230} level="H" includeMargin /></div><small>QR digunakan untuk absensi masuk dan pulang.</small><button className="v2-primary full-button" onClick={() => window.print()}><QrCode size={17} /> Cetak QR</button></Dialog>
 }
 
 function StudentModal({ student, parents, classes, onClose, onDone }: { student: Student | null; parents: Account[]; classes: SchoolClass[]; onClose: () => void; onDone: () => void }) {
@@ -190,6 +191,7 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
 
 export function ClassesPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([])
+  const [teachers, setTeachers] = useState<TeacherOption[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<SchoolClass | 'new' | null>(null)
   const [deleting, setDeleting] = useState<SchoolClass | null>(null)
@@ -198,11 +200,12 @@ export function ClassesPage() {
 
   const load = async () => {
     setLoading(true)
-    const [classResult, studentResult] = await Promise.all([supabase.from('school_classes').select('*').order('name'), supabase.from('students').select('class_name').eq('is_active', true)])
+    const [classResult, studentResult, teacherResult] = await Promise.all([supabase.from('school_classes').select('*,teacher_class_assignments(teacher_profile_id,teacher_profiles(full_name,teacher_user_id))').order('name'), supabase.from('students').select('class_name').eq('is_active', true), supabase.from('teacher_profiles').select('id,full_name,teacher_user_id').order('full_name')])
     const list = (classResult.data as SchoolClass[] | null) ?? []
     const nextCounts: Record<string, number> = {}
     for (const row of studentResult.data ?? []) if (row.class_name) nextCounts[row.class_name] = (nextCounts[row.class_name] || 0) + 1
-    setClasses(list); setCounts(nextCounts); setLoading(false)
+    if (classResult.error || studentResult.error || teacherResult.error) setMessage({ tone: 'error', text: classResult.error?.message || studentResult.error?.message || teacherResult.error?.message || 'Data kelas gagal dimuat.' })
+    setClasses(list); setTeachers((teacherResult.data as TeacherOption[] | null) ?? []); setCounts(nextCounts); setLoading(false)
   }
   useEffect(() => { void load() }, [])
 
@@ -214,16 +217,18 @@ export function ClassesPage() {
     setDeleting(null); setMessage({ tone: 'success', text: 'Kelas berhasil dihapus.' }); await load()
   }
 
-  return <div className="v2-stack"><PageTitle eyebrow="STRUKTUR AKADEMIK" title="Kelas & Tahun Ajaran" text="Kelola kelompok belajar, wali/guru kelas, dan tahun ajaran." action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Kelas</button>} />{message && <Notice {...message} />}{loading ? <SkeletonRows /> : classes.length ? <div className="v2-card-grid">{classes.map((c) => <article className="v2-class-card" key={c.id}><span><GraduationCap /></span><div><small>{c.academic_year}</small><h3>{c.name}</h3><p>{c.teacher_name || 'Guru belum ditentukan'} · {counts[c.name] || 0} murid</p></div><span className={`v2-badge ${c.is_active ? 'green' : 'gray'}`}>{c.is_active ? 'Aktif' : 'Nonaktif'}</span><div className="v2-inline-actions"><button onClick={() => setEditing(c)}><Edit3 size={17} /></button><button className="danger" onClick={() => setDeleting(c)}><Trash2 size={17} /></button></div></article>)}</div> : <EmptyCard text="Belum ada kelas. Tambahkan kelompok belajar pertama." />}{editing && <ClassModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Data kelas berhasil disimpan.' }); await load() }} />}{deleting && <ConfirmModal title="Hapus kelas?" text={`Kelas ${deleting.name} akan dihapus jika tidak memiliki murid.`} confirm="Hapus Kelas" danger onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}</div>
+  return <div className="v2-stack"><PageTitle eyebrow="STRUKTUR AKADEMIK" title="Kelas & Tahun Ajaran" text="Kelola kelompok belajar, wali/guru kelas, dan tahun ajaran." action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Kelas</button>} />{message && <Notice {...message} />}{loading ? <SkeletonRows /> : classes.length ? <div className="v2-card-grid">{classes.map((c) => { const assigned = c.teacher_class_assignments?.map((item) => item.teacher_profiles?.full_name).filter(Boolean).join(', '); return <article className="v2-class-card" key={c.id}><span><GraduationCap /></span><div><small>{c.academic_year}</small><h3>{c.name}</h3><p>{assigned || c.teacher_name || 'Guru belum ditentukan'} · {counts[c.name] || 0} murid</p></div><span className={`v2-badge ${c.is_active ? 'green' : 'gray'}`}>{c.is_active ? 'Aktif' : 'Nonaktif'}</span><div className="v2-inline-actions"><button aria-label={`Edit kelas ${c.name}`} onClick={() => setEditing(c)}><Edit3 size={17} /></button><button aria-label={`Hapus kelas ${c.name}`} className="danger" onClick={() => setDeleting(c)}><Trash2 size={17} /></button></div></article> })}</div> : <EmptyCard text="Belum ada kelas. Tambahkan kelompok belajar pertama." />}{editing && <ClassModal value={editing === 'new' ? null : editing} teachers={teachers} onClose={() => setEditing(null)} onDone={async () => { setEditing(null); setMessage({ tone: 'success', text: 'Data kelas dan penugasan Guru berhasil disimpan.' }); await load() }} />}{deleting && <ConfirmModal title="Hapus kelas?" text={`Kelas ${deleting.name} akan dihapus jika tidak memiliki murid.`} confirm="Hapus Kelas" danger onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}</div>
 }
 
-function ClassModal({ value, onClose, onDone }: { value: SchoolClass | null; onClose: () => void; onDone: () => void }) {
-  const [form, setForm] = useState({ name: value?.name || '', teacher_name: value?.teacher_name || '', academic_year: value?.academic_year || '2026/2027', active: value?.is_active ?? true })
+function ClassModal({ value, teachers, onClose, onDone }: { value: SchoolClass | null; teachers: TeacherOption[]; onClose: () => void; onDone: () => void }) {
+  const [form, setForm] = useState({ name: value?.name || '', teacher_profile_ids: value?.teacher_class_assignments?.map((item) => item.teacher_profile_id) || [], academic_year: value?.academic_year || '2026/2027', active: value?.is_active ?? true })
   const [busy, setBusy] = useState(false)
   const [errorText, setErrorText] = useState('')
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setErrorText('')
-    const payload = { name: form.name.trim(), teacher_name: form.teacher_name.trim() || null, academic_year: form.academic_year.trim(), is_active: form.active }
+    const selectedNames = teachers.filter((teacher) => form.teacher_profile_ids.includes(teacher.id)).map((teacher) => teacher.full_name)
+    const payload = { name: form.name.trim(), teacher_name: selectedNames.join(', ') || null, academic_year: form.academic_year.trim(), is_active: form.active }
+    let classId = value?.id
     if (value) {
       const oldName = value.name
       const { error } = await supabase.from('school_classes').update(payload).eq('id', value.id)
@@ -232,12 +237,21 @@ function ClassModal({ value, onClose, onDone }: { value: SchoolClass | null; onC
         await Promise.all([supabase.from('students').update({ class_name: payload.name }).eq('class_name', oldName), supabase.from('school_schedules').update({ class_name: payload.name }).eq('class_name', oldName)])
       }
     } else {
-      const { error } = await supabase.from('school_classes').insert(payload)
+      const { data, error } = await supabase.from('school_classes').insert(payload).select('id').single()
       if (error) { setBusy(false); setErrorText(error.code === '23505' ? 'Nama kelas sudah digunakan.' : error.message); return }
+      classId = data?.id
+    }
+    if (classId) {
+      const { error: clearError } = await supabase.from('teacher_class_assignments').delete().eq('class_id', classId)
+      if (clearError) { setBusy(false); setErrorText(clearError.message); return }
+      if (form.teacher_profile_ids.length) {
+        const { error: assignmentError } = await supabase.from('teacher_class_assignments').insert(form.teacher_profile_ids.map((teacherProfileId) => ({ class_id: classId, teacher_profile_id: teacherProfileId })))
+        if (assignmentError) { setBusy(false); setErrorText(assignmentError.message); return }
+      }
     }
     setBusy(false); onDone()
   }
-  return <Modal title={value ? 'Edit Kelas' : 'Tambah Kelas'} onClose={onClose}><form className="v2-form" onSubmit={submit}><label>Nama kelas<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Kelompok A" /></label><label>Guru / wali kelas<input value={form.teacher_name} onChange={(e) => setForm({ ...form, teacher_name: e.target.value })} /></label><label>Tahun ajaran<input required value={form.academic_year} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} /></label><label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /><span>Kelas aktif</span></label>{errorText && <p className="v2-field-error">{errorText}</p>}<button className="v2-primary" disabled={busy}><Save size={17} /> Simpan</button></form></Modal>
+  return <Modal title={value ? 'Edit Kelas' : 'Tambah Kelas'} onClose={onClose}><form className="v2-form" onSubmit={submit}><label>Nama kelas<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Kelompok A" /></label><fieldset className="v5-teacher-picker"><legend>Guru yang ditugaskan</legend>{teachers.length ? teachers.map((teacher) => <label key={teacher.id}><input type="checkbox" checked={form.teacher_profile_ids.includes(teacher.id)} onChange={(event) => setForm({ ...form, teacher_profile_ids: event.target.checked ? [...form.teacher_profile_ids, teacher.id] : form.teacher_profile_ids.filter((id) => id !== teacher.id) })} /><span>{teacher.full_name}<small>{teacher.teacher_user_id ? 'Akun terhubung' : 'Belum memiliki akun'}</small></span></label>) : <p>Belum ada data Guru.</p>}</fieldset><label>Tahun ajaran<input required value={form.academic_year} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} /></label><label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /><span>Kelas aktif</span></label>{errorText && <p className="v2-field-error">{errorText}</p>}<button className="v2-primary" disabled={busy}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan'}</button></form></Modal>
 }
 
 export function SchedulePage({ canManage }: { canManage: boolean }) {
@@ -305,8 +319,8 @@ function AnnouncementModal({ value, onClose, onDone }: { value: Announcement | n
   return <Modal title={value ? 'Edit Pengumuman' : 'Buat Pengumuman'} onClose={onClose} wide><form className="v2-form" onSubmit={submit}><label>Judul<input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label><label>Isi pengumuman<textarea required rows={6} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} /></label><label>Ditujukan untuk<select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value as 'all' | 'teacher' | 'parent' })}><option value="all">Semua pengguna</option><option value="teacher">Guru</option><option value="parent">Orang Tua/Wali</option></select></label><label className="v2-toggle"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} /><span>Publikasikan sekarang</span></label>{errorText && <p className="v2-field-error">{errorText}</p>}<button className="v2-primary" disabled={busy}><Save size={17} /> Simpan Pengumuman</button></form></Modal>
 }
 
-function Modal({ title, onClose, wide = false, children }: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) { return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className={`v2-modal ${wide ? 'wide' : ''}`}><header><div><small>FORMULIR</small><h2>{title}</h2></div><button className="v2-close" onClick={onClose}><X size={19} /></button></header>{children}</section></div> }
-function ConfirmModal({ title, text, confirm, danger = false, onClose, onConfirm }: { title: string; text: string; confirm: string; danger?: boolean; onClose: () => void; onConfirm: () => void }) { return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup" onClick={onClose} /><section className="v2-modal confirm"><span className={`v2-modal-icon ${danger ? 'danger' : ''}`}>{danger ? <Trash2 /> : <CheckCircle2 />}</span><h2>{title}</h2><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className={danger ? 'v2-danger' : 'v2-primary'} onClick={onConfirm}>{confirm}</button></div></section></div> }
+function Modal({ title, onClose, wide = false, children }: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) { return <Dialog title={title} eyebrow="FORMULIR" onClose={onClose} wide={wide}>{children}</Dialog> }
+function ConfirmModal({ title, text, confirm, danger = false, onClose, onConfirm }: { title: string; text: string; confirm: string; danger?: boolean; onClose: () => void; onConfirm: () => void }) { return <Dialog title={title} onClose={onClose} confirm><span className={`v2-modal-icon ${danger ? 'danger' : ''}`}>{danger ? <Trash2 /> : <CheckCircle2 />}</span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className={danger ? 'v2-danger' : 'v2-primary'} onClick={onConfirm}>{confirm}</button></div></Dialog> }
 function MiniStat({ label, value, tone }: { label: string; value: number; tone: string }) { return <article className={`v2-stat mini ${tone}`}><span><UsersRound size={20} /></span><div><small>{label}</small><strong>{value}</strong><p>Terdaftar</p></div></article> }
 function initials(name?: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function roleLabel(role: AppRole) { return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Wali Murid' }
