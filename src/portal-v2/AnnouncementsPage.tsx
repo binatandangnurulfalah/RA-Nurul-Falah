@@ -1,43 +1,31 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { Edit3, Megaphone, Plus, Save, Trash2 } from 'lucide-react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Edit3, Megaphone, Plus, Trash2 } from 'lucide-react'
+import { ConfirmDialog, FormDialog } from '../components/forms'
+import { queryKeys } from '../data/queryKeys'
+import { announcementsOptions, type AnnouncementRow } from '../data/queries/announcements'
+import { userErrorMessage } from '../lib/error-utils'
 import { type AppRole, supabase } from '../lib/supabase'
-import { ActionMenu, Dialog } from './AppExperience'
-import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { ActionMenu, LoadError } from './AppExperience'
+import { EmptyCard, Notice, PageTitle } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
-type Announcement = {
-  id: string
-  title: string
-  body: string
-  audience: 'all' | 'teacher' | 'parent'
-  is_published: boolean
-  created_by: string | null
-  created_at: string
-  updated_at: string
-}
+type Announcement = AnnouncementRow
 
 export function AnnouncementsPage({ role, currentUserId }: { role: AppRole; currentUserId: string }) {
+  const queryClient = useQueryClient()
   const canCreate = role === 'admin' || role === 'teacher'
-  const [rows, setRows] = useState<Announcement[]>([])
+  const announcementsQuery = useQuery(announcementsOptions({ role, currentUserId }))
+  const rows = announcementsQuery.data ?? []
+  const loading = announcementsQuery.isPending
   const [editing, setEditing] = useState<Announcement | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Announcement | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const removingRef = useRef(false)
   const [message, setMessage] = useState<Message | null>(null)
-  const [loading, setLoading] = useState(true)
 
   const canManageRow = (row: Announcement) => role === 'admin' || (role === 'teacher' && row.created_by === currentUserId)
 
-  const load = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('id,title,body,audience,is_published,created_by,created_at,updated_at')
-      .order('created_at', { ascending: false })
-    if (error) setMessage({ tone: 'error', text: error.message })
-    setRows((data as Announcement[] | null) ?? [])
-    setLoading(false)
-  }
-
-  useEffect(() => { void load() }, [role, currentUserId])
   useEffect(() => {
     if (loading || !rows.length) return
     const publishedIds = rows.filter((row) => row.is_published).map((row) => row.id)
@@ -45,16 +33,32 @@ export function AnnouncementsPage({ role, currentUserId }: { role: AppRole; curr
     window.dispatchEvent(new Event('ra-announcements-read'))
   }, [loading, rows])
 
+  const refreshAnnouncements = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.announcements.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+    ])
+  }
+
+  const closeDelete = () => {
+    if (removingRef.current) return
+    setDeleting(null)
+  }
+
   const remove = async () => {
-    if (!deleting || !canManageRow(deleting)) return
+    if (!deleting || !canManageRow(deleting) || removingRef.current) return
+    removingRef.current = true
+    setRemoving(true)
     const { error } = await supabase.from('announcements').delete().eq('id', deleting.id)
+    removingRef.current = false
+    setRemoving(false)
     if (error) {
       setMessage({ tone: 'error', text: error.message })
       return
     }
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Pengumuman berhasil dihapus.' })
-    await load()
+    await refreshAnnouncements()
   }
 
   const pageText = role === 'admin'
@@ -71,7 +75,7 @@ export function AnnouncementsPage({ role, currentUserId }: { role: AppRole; curr
       action={canCreate ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Buat Pengumuman</button> : undefined}
     />
     {message && <Notice {...message} />}
-    {loading ? <SkeletonRows /> : rows.length ? <div className="v2-announcement-grid">
+    {announcementsQuery.isError ? <LoadError text={userErrorMessage(announcementsQuery.error, 'Pengumuman belum dapat dimuat.')} onRetry={() => void announcementsQuery.refetch()} /> : loading ? <AnnouncementSkeleton /> : rows.length ? <div className="v2-announcement-grid">
       {rows.map((row) => {
         const canManage = canManageRow(row)
         return <article className="v2-announcement" key={row.id}>
@@ -96,9 +100,18 @@ export function AnnouncementsPage({ role, currentUserId }: { role: AppRole; curr
     {editing && canCreate && <AnnouncementModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
       setMessage({ tone: 'success', text: 'Pengumuman berhasil disimpan.' })
-      await load()
+      await refreshAnnouncements()
     }} />}
-    {deleting && <Confirm title="Hapus pengumuman?" text={deleting.title} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    <ConfirmDialog
+      open={Boolean(deleting)}
+      title="Hapus pengumuman?"
+      description={deleting ? `${deleting.title} akan dihapus dari informasi sekolah.` : ''}
+      confirmLabel="Ya, Hapus"
+      danger
+      busy={removing}
+      onClose={closeDelete}
+      onConfirm={() => void remove()}
+    />
   </div>
 }
 
@@ -110,10 +123,13 @@ function AnnouncementModal({ value, onClose, onDone }: { value: Announcement | n
     published: value?.is_published ?? true,
   })
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setErrorText('')
     const payload = {
@@ -125,6 +141,7 @@ function AnnouncementModal({ value, onClose, onDone }: { value: Announcement | n
     const result = value
       ? await supabase.from('announcements').update(payload).eq('id', value.id)
       : await supabase.from('announcements').insert(payload)
+    busyRef.current = false
     setBusy(false)
     if (result.error) {
       setErrorText(result.error.message)
@@ -133,24 +150,27 @@ function AnnouncementModal({ value, onClose, onDone }: { value: Announcement | n
     onDone()
   }
 
-  return <Dialog title={value ? 'Edit Pengumuman' : 'Buat Pengumuman'} onClose={onClose} wide>
-    <form className="v2-form" onSubmit={submit}>
+  return <FormDialog
+    open
+    title={value ? 'Edit Pengumuman' : 'Buat Pengumuman'}
+    description="Atur isi, audiens, dan status publikasi. Hak edit tetap mengikuti kebijakan RLS akun Anda."
+    submitLabel="Simpan Pengumuman"
+    busy={busy}
+    error={errorText}
+    onSubmit={submit}
+    onClose={() => { if (!busyRef.current) onClose() }}
+  >
+    <div className="v2-form">
       <label>Judul<input required minLength={3} maxLength={140} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
       <label>Isi pengumuman<textarea required minLength={3} maxLength={5000} rows={6} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /></label>
       <label>Ditujukan untuk<select value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value as 'all' | 'teacher' | 'parent' })}><option value="all">Semua pengguna</option><option value="teacher">Guru</option><option value="parent">Orang Tua/Wali</option></select></label>
       <label className="v2-toggle"><input type="checkbox" checked={form.published} onChange={(event) => setForm({ ...form, published: event.target.checked })} /><span>Publikasikan sekarang</span></label>
-      {errorText && <p className="v2-field-error">{errorText}</p>}
-      <button className="v2-primary" disabled={busy}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Pengumuman'}</button>
-    </form>
-  </Dialog>
+    </div>
+  </FormDialog>
 }
 
-function Confirm({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm>
-    <span className="v2-modal-icon danger"><Trash2 /></span>
-    <p>{text}</p>
-    <div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Hapus Pengumuman</button></div>
-  </Dialog>
+function AnnouncementSkeleton() {
+  return <div className="v2-skeleton-list">{Array.from({ length: 4 }, (_, index) => <i key={index} />)}</div>
 }
 
 function audienceLabel(audience: Announcement['audience']) {
