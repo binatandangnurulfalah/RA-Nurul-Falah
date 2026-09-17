@@ -36,13 +36,18 @@ export async function requireAuthenticatedUser(req: Request): Promise<
     return { ok: false, response: jsonResponse({ ok: false, error: 'Silakan login kembali.' }, 401) }
   }
 
+  const jwt = authorization.slice('Bearer '.length).trim()
+  if (!jwt) {
+    return { ok: false, response: jsonResponse({ ok: false, error: 'Silakan login kembali.' }, 401) }
+  }
+
   const userClient = createClient(requiredEnv('SUPABASE_URL'), requiredEnv('SUPABASE_ANON_KEY'), {
     global: { headers: { Authorization: authorization } },
     auth: { autoRefreshToken: false, persistSession: false },
   })
   const adminClient = createAdminClient()
 
-  const { data: authData, error: authError } = await userClient.auth.getUser()
+  const { data: authData, error: authError } = await userClient.auth.getUser(jwt)
   if (authError || !authData.user) {
     return { ok: false, response: jsonResponse({ ok: false, error: 'Sesi tidak valid. Silakan login kembali.' }, 401) }
   }
@@ -58,6 +63,20 @@ export async function requireAuthenticatedUser(req: Request): Promise<
   }
   if (!profile.is_active) {
     return { ok: false, response: jsonResponse({ ok: false, error: 'Akun tidak aktif.' }, 403) }
+  }
+
+  if (profile.role === 'admin') {
+    const { data: assurance, error: assuranceError } = await userClient.auth.mfa.getAuthenticatorAssuranceLevel(jwt)
+    if (assuranceError || assurance.currentLevel !== 'aal2') {
+      return {
+        ok: false,
+        response: jsonResponse({
+          ok: false,
+          code: 'MFA_REQUIRED',
+          error: 'Administrator wajib menyelesaikan verifikasi MFA sebelum menggunakan fungsi ini.',
+        }, 403),
+      }
+    }
   }
 
   return {
