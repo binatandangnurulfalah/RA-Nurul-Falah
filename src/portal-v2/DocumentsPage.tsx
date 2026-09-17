@@ -1,9 +1,10 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Edit3, ExternalLink, FileText, Plus, Search, Trash2, Upload } from 'lucide-react'
 import { type AppRole, supabase } from '../lib/supabase'
+import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog } from './AppExperience'
-import { PaginationControls, useDebouncedValue, usePaginatedItems } from './DataExperience'
+import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 
 type Message = { tone: 'success' | 'error'; text: string }
 type SchoolDocument = {
@@ -116,6 +117,8 @@ export function DocumentsPage({ role }: { role: AppRole }) {
   const [rows, setRows] = useState<SchoolDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [editing, setEditing] = useState<SchoolDocument | 'new' | null>(null)
   const [deleting, setDeleting] = useState<SchoolDocument | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
@@ -123,32 +126,36 @@ export function DocumentsPage({ role }: { role: AppRole }) {
 
   const load = async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    const range = getPageRange(page, PAGE_SIZE)
+    let query = supabase
       .from('school_documents')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('document_date', { ascending: false })
       .order('created_at', { ascending: false })
+      .range(range.from, range.to)
+
+    const normalizedSearch = sanitizeSearch(debouncedSearch)
+    if (normalizedSearch) {
+      query = query.or(`title.ilike.%${normalizedSearch}%,category.ilike.%${normalizedSearch}%,document_number.ilike.%${normalizedSearch}%,recipient.ilike.%${normalizedSearch}%`)
+    }
+
+    const { data, error, count } = await query
     if (error) setMessage({ tone: 'error', text: error.message })
     setRows((data as SchoolDocument[] | null) ?? [])
+    setTotal(count ?? 0)
     setLoading(false)
   }
 
+  useEffect(() => { void load() }, [page, debouncedSearch])
+  useEffect(() => { setPage(1) }, [debouncedSearch])
   useEffect(() => {
-    void load()
-    if (canManage) {
-      void flushDocumentStorageCleanup().then((summary) => {
-        if (summary.error || summary.failed > 0) {
-          setMessage({ tone: 'error', text: 'Ada file lama yang belum dapat dibersihkan. Sistem akan mencoba lagi otomatis saat Admin membuka halaman Dokumen.' })
-        }
-      })
-    }
+    if (!canManage) return
+    void flushDocumentStorageCleanup().then((summary) => {
+      if (summary.error || summary.failed > 0) {
+        setMessage({ tone: 'error', text: 'Ada file lama yang belum dapat dibersihkan. Sistem akan mencoba lagi otomatis saat Admin membuka halaman Dokumen.' })
+      }
+    })
   }, [canManage])
-
-  const filtered = useMemo(() => {
-    const query = debouncedSearch.trim().toLowerCase()
-    return rows.filter((row) => !query || `${row.title} ${row.category} ${row.document_number || ''} ${row.recipient || ''}`.toLowerCase().includes(query))
-  }, [rows, debouncedSearch])
-  const paged = usePaginatedItems(filtered, debouncedSearch)
 
   const remove = async () => {
     if (!deleting || !canManage) return
@@ -158,10 +165,12 @@ export function DocumentsPage({ role }: { role: AppRole }) {
       return
     }
 
+    const shouldGoBack = rows.length === 1 && page > 1
     setDeleting(null)
     const cleanup = await flushDocumentStorageCleanup()
     setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil dihapus.') })
-    await load()
+    if (shouldGoBack) setPage((current) => Math.max(1, current - 1))
+    else await load()
   }
 
   const openDocument = async (row: SchoolDocument) => {
@@ -184,14 +193,14 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     {message && <Notice {...message} />}
     <section className="v2-panel">
       <div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari judul, kategori, nomor surat..." /></label></div>
-      {loading ? <SkeletonRows /> : filtered.length ? <>
-        <div className="document-grid">{paged.items.map((row) => <article key={row.id}>
+      {loading ? <SkeletonRows /> : rows.length ? <>
+        <div className="document-grid">{rows.map((row) => <article key={row.id}>
           <span className="document-icon"><FileText /></span>
           <div className="grow"><div className="school-meta"><span className={`v2-badge ${row.is_published ? 'green' : 'gray'}`}>{row.is_published ? 'Terbit' : 'Draft'}</span><span>{audienceLabel(row.audience)}</span>{row.document_date && <span>{dateText(row.document_date)}</span>}</div><h3>{row.title}</h3><p>{row.category}{row.document_number ? ` · ${row.document_number}` : ''}</p><small>{row.description || row.recipient || 'Tidak ada keterangan tambahan.'}</small></div>
           <ActionMenu label={`Aksi dokumen ${row.title}`} items={[...(row.file_url ? [{ label: 'Buka dokumen', icon: ExternalLink, onSelect: () => void openDocument(row) }] : []), ...(canManage ? [{ label: 'Edit dokumen', icon: Edit3, onSelect: () => setEditing(row) }, { label: 'Hapus dokumen', icon: Trash2, danger: true, onSelect: () => setDeleting(row) }] : [])]} />
         </article>)}</div>
-        <PaginationControls page={paged.page} total={paged.total} onPage={paged.setPage} />
-      </> : <EmptyCard text="Belum ada dokumen yang tersedia." />}
+        <PaginationControls page={page} total={total} onPage={setPage} />
+      </> : <EmptyCard text="Belum ada dokumen yang sesuai pencarian." />}
     </section>
     {editing && canManage && <DocumentModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
