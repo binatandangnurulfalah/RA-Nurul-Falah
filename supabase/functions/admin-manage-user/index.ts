@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.4.5/edge-runtime.d.ts";
 import { corsPreflight } from '../_shared/cors.ts'
 import { createPublicClient, requireAuthenticatedUser } from '../_shared/auth.ts'
+import { appendAccountAudit } from '../_shared/audit.ts'
 import { requireRole } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
 import { isUuid } from '../_shared/validation.ts'
@@ -46,11 +47,20 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ ok: false, error: 'Admin tidak dapat menghapus akun yang sedang digunakan.' }, 400)
       }
 
-      const { data: targetData } = await context.adminClient.auth.admin.getUserById(userId)
+      const [{ data: targetData }, { data: targetProfile }] = await Promise.all([
+        context.adminClient.auth.admin.getUserById(userId),
+        context.adminClient.from('user_profiles').select('display_name,role,is_active').eq('id', userId).maybeSingle(),
+      ])
       const email = targetData?.user?.email?.toLowerCase() ?? null
       const { error: deleteError } = await context.adminClient.auth.admin.deleteUser(userId)
       if (deleteError) return jsonResponse({ ok: false, error: 'Akun gagal dihapus.' }, 400)
       if (email) await context.adminClient.from('account_allowlist').delete().eq('email', email)
+
+      await appendAccountAudit(context, userId, 'ACCOUNT_DELETED', {
+        display_name: targetProfile?.display_name ?? null,
+        role: targetProfile?.role ?? null,
+        was_active: targetProfile?.is_active ?? null,
+      })
       return jsonResponse({ ok: true })
     }
 
@@ -64,7 +74,10 @@ Deno.serve(async (req: Request) => {
       const resetOptions = redirectTo ? { redirectTo } : undefined
       const { error: resetError } = await publicClient.auth.resetPasswordForEmail(email, resetOptions)
 
-      if (!resetError) return jsonResponse({ ok: true, delivery: 'email' })
+      if (!resetError) {
+        await appendAccountAudit(context, userId, 'PASSWORD_RESET_REQUESTED', { delivery: 'email' })
+        return jsonResponse({ ok: true, delivery: 'email' })
+      }
 
       const { data: generated, error: linkError } = await context.adminClient.auth.admin.generateLink({
         type: 'recovery',
@@ -74,6 +87,7 @@ Deno.serve(async (req: Request) => {
       if (linkError || !manualLink) {
         return jsonResponse({ ok: false, error: 'Reset password tidak dapat dikirim. Konfigurasi email perlu diperiksa.' }, 503)
       }
+      await appendAccountAudit(context, userId, 'PASSWORD_RESET_REQUESTED', { delivery: 'manual_link' })
       return jsonResponse({ ok: true, delivery: 'manual_link', manual_link: manualLink })
     }
 
@@ -107,6 +121,12 @@ Deno.serve(async (req: Request) => {
           .update({ display_name: displayName, role, is_active: isActive })
           .eq('email', email)
       }
+
+      await appendAccountAudit(context, userId, 'ACCOUNT_UPDATED', {
+        display_name: displayName,
+        role,
+        is_active: isActive,
+      })
       return jsonResponse({ ok: true })
     }
 
