@@ -111,6 +111,26 @@
 .v5-teacher-picker span { display: grid; font-size: 12px; }
 .v5-teacher-picker small { color: var(--v2-muted); font-size: 10px; font-weight: 600; }
 
+.v5-action-menu { position: relative; flex: 0 0 auto; margin-left: auto; }
+.v5-action-trigger {
+  width: 40px; height: 40px; display: grid; place-items: center; padding: 0;
+  border: 1px solid var(--v2-border); border-radius: 10px; background: #fff; color: var(--v2-text);
+}
+.v5-action-trigger:hover, .v5-action-trigger[aria-expanded="true"] { background: #f1f7f4; border-color: #a7c7b7; color: var(--v2-green); }
+.v5-action-popover {
+  position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: max-content; min-width: 190px;
+  padding: 6px; border: 1px solid var(--v2-border); border-radius: 12px; background: #fff;
+  box-shadow: 0 14px 34px rgba(31, 66, 53, .16);
+}
+.v5-action-popover button, .v5-action-popover a {
+  width: 100%; min-height: 42px; display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--v2-text); font: inherit;
+  font-size: 13px; font-weight: 700; text-align: left; text-decoration: none; white-space: nowrap;
+}
+.v5-action-popover button:hover, .v5-action-popover a:hover { background: #f1f7f4; }
+.v5-action-popover .danger { color: #b42318; }
+.v5-action-popover .danger:hover { background: #fff1f0; }
+
 @media (max-width: 1050px) {
   .v5-section .v2-quick-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -159,6 +179,11 @@
   .v2-sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .v2-sheet-grid > button { min-height: 72px; }
   .v2-toolbar { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 8; background: white; padding: 8px 0; }
+  .v2-toolbar, .v2-toolbar.wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .v2-toolbar > label:first-child { grid-column: 1 / -1; width: 100%; }
+  .v2-toolbar > select, .v2-toolbar > .date { min-width: 0; width: 100%; }
+  .v5-action-trigger { width: 44px; height: 44px; }
+  .v5-action-popover { position: fixed; left: 12px; right: 12px; top: auto; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; }
   .auth-page .brand-panel { min-height: 160px; padding: 26px 22px; }
   .auth-brand-logo { width: 64px; height: 64px; }
   .v5-global-child { position: sticky; top: calc(64px + env(safe-area-inset-top)); z-index: 7; box-shadow: 0 5px 18px rgba(31,66,53,.06); }

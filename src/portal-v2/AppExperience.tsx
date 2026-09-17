@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
-import { AlertTriangle, RefreshCw, WifiOff, X } from 'lucide-react'
+import { AlertTriangle, EllipsisVertical, RefreshCw, WifiOff, X, type LucideIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export type LinkedChild = { id: string; full_name: string; class_name: string | null; academic_year: string | null; nis?: string | null; qr_token?: string }
@@ -57,6 +57,36 @@ export function OfflineBanner() {
 
 export function LoadError({ text = 'Data gagal dimuat.', onRetry }: { text?: string; onRetry: () => void }) {
   return <section className="v5-load-error" role="alert"><AlertTriangle size={24} /><div><strong>{text}</strong><p>Data lama tidak dihapus. Silakan periksa koneksi Anda.</p></div><button className="v2-secondary" onClick={onRetry}><RefreshCw size={16} /> Coba lagi</button></section>
+}
+
+export type ActionMenuItem = {
+  label: string
+  icon: LucideIcon
+  onSelect?: () => void
+  href?: string
+  external?: boolean
+  danger?: boolean
+}
+
+export function ActionMenu({ label, items }: { label: string; items: ActionMenuItem[] }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const closeOutside = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false) }
+    const closeKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeKey)
+    return () => { document.removeEventListener('pointerdown', closeOutside); document.removeEventListener('keydown', closeKey) }
+  }, [open])
+  if (!items.length) return null
+  return <div className="v5-action-menu" ref={rootRef}>
+    <button type="button" className="v5-action-trigger" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}><EllipsisVertical size={20} /></button>
+    {open && <div className="v5-action-popover" role="menu">{items.map(({ label: itemLabel, icon: Icon, onSelect, href, external, danger }) => href
+      ? <a key={itemLabel} role="menuitem" className={danger ? 'danger' : ''} href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined} onClick={() => setOpen(false)}><Icon size={17} /><span>{itemLabel}</span></a>
+      : <button key={itemLabel} type="button" role="menuitem" className={danger ? 'danger' : ''} onClick={() => { setOpen(false); onSelect?.() }}><Icon size={17} /><span>{itemLabel}</span></button>
+    )}</div>}
+  </div>
 }
 
 export function Dialog({ title, eyebrow = 'RA NURUL FALAH', onClose, wide = false, confirm = false, children }: { title: string; eyebrow?: string; onClose: () => void; wide?: boolean; confirm?: boolean; children: ReactNode }) {
