@@ -1,104 +1,66 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
-import { validatePassword } from '../_shared/password-policy.ts'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
+import { corsResponse } from '../_shared/cors.ts'
+import { requireAuthenticatedUser } from '../_shared/auth.ts'
+import { requireRole } from '../_shared/authorization.ts'
+import { errorResponse, HttpError, jsonResponse } from '../_shared/response.ts'
+import { createTemporaryPassword, isEmail } from '../_shared/validation.ts'
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const preflight = corsResponse(req)
+  if (preflight) return preflight
+  if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    })
-
-    const token = authHeader.replace('Bearer ', '')
-    const { data: userData, error: userError } = await userClient.auth.getUser(token)
-    if (userError || !userData.user) return json({ error: 'Unauthorized' }, 401)
-
-    const { data: profile, error: profileError } = await userClient
-      .from('user_profiles')
-      .select('role,is_active')
-      .eq('id', userData.user.id)
-      .single()
-
-    if (profileError || !profile || profile.role !== 'admin' || !profile.is_active) {
-      return json({ error: 'Admin access required' }, 403)
-    }
+    const { user, adminClient, profile } = await requireAuthenticatedUser(req)
+    requireRole(profile, ['admin'], 'Hanya Admin yang dapat membuat akun.')
 
     const payload = await req.json()
     const email = String(payload.email ?? '').trim().toLowerCase()
-    const password = String(payload.password ?? '')
     const displayName = String(payload.display_name ?? '').trim()
     const role = String(payload.role ?? '')
 
-    if (!email || !email.includes('@')) return json({ error: 'Email tidak valid' }, 400)
-    const passwordError = validatePassword(password)
-    if (passwordError) return json({ error: passwordError }, 400)
-    if (!['admin', 'teacher', 'parent'].includes(role)) return json({ error: 'Role tidak valid' }, 400)
+    if (!isEmail(email)) throw new HttpError(400, 'Email tidak valid.')
+    if (displayName.length < 2) throw new HttpError(400, 'Nama pengguna wajib diisi.')
+    if (!['admin', 'teacher', 'parent'].includes(role)) throw new HttpError(400, 'Role tidak valid.')
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    const { data: allow, error: allowError } = await admin
+    const { data: allow, error: allowError } = await adminClient
       .from('account_allowlist')
-      .insert({
-        email,
-        role,
-        display_name: displayName || null,
-        created_by: userData.user.id,
-      })
+      .insert({ email, role, display_name: displayName, created_by: user.id })
       .select('id')
       .single()
 
     if (allowError) {
-      return json({
-        error: allowError.code === '23505' ? 'Email sudah pernah disiapkan' : allowError.message,
-      }, 400)
+      throw new HttpError(400, allowError.code === '23505' ? 'Email sudah pernah disiapkan.' : 'Akun gagal disiapkan.')
     }
 
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
+    const temporaryPassword = createTemporaryPassword()
+    const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
-      password,
+      password: temporaryPassword,
       email_confirm: true,
-      user_metadata: { display_name: displayName || null },
+      user_metadata: { display_name: displayName },
     })
 
     if (createError || !created.user) {
-      await admin.from('account_allowlist').delete().eq('id', allow.id)
-      return json({ error: createError?.message ?? 'Gagal membuat akun' }, 400)
+      await adminClient.from('account_allowlist').delete().eq('id', allow.id)
+      throw new HttpError(400, createError?.message?.includes('already') ? 'Email sudah terdaftar.' : 'Akun gagal dibuat.')
     }
 
-    return json({
+    const { error: resetError } = await adminClient.auth.resetPasswordForEmail(email)
+
+    return jsonResponse({
       ok: true,
+      delivery: resetError ? 'email_pending_configuration' : 'reset_email_sent',
+      message: resetError
+        ? 'Akun berhasil dibuat. Email reset belum dapat dikirim; konfigurasi email perlu diperiksa sebelum pengguna dapat membuat password sendiri.'
+        : 'Akun berhasil dibuat. Pengguna akan menentukan password sendiri melalui email reset.',
       user: {
         id: created.user.id,
         email: created.user.email,
         role,
-        display_name: displayName || null,
+        display_name: displayName,
       },
     }, 201)
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Terjadi kesalahan server' }, 500)
+    return errorResponse(error)
   }
 })
