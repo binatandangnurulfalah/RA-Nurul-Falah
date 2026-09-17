@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Camera, CameraOff, CheckCircle2, Flashlight, Image, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { PageTitle } from './PortalPages'
 
@@ -16,7 +16,6 @@ type DetectedBarcode = { rawValue: string }
 type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<DetectedBarcode[]> }
 type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDetectorLike
 type CameraAttempt = { label: string; constraints: MediaTrackConstraints; deviceId?: string }
-type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean }
 
 const JAKARTA = 'Asia/Jakarta'
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
@@ -51,16 +50,13 @@ export function AttendanceScannerNative() {
   const [manual, setManual] = useState('')
   const [active, setActive] = useState(false)
   const [starting, setStarting] = useState(false)
-  const [captureBusy, setCaptureBusy] = useState(false)
   const [cameraLabel, setCameraLabel] = useState('')
   const [cameraCount, setCameraCount] = useState(0)
   const [decoderAvailable, setDecoderAvailable] = useState(true)
-  const [torchSupported, setTorchSupported] = useState(false)
-  const [torchOn, setTorchOn] = useState(false)
+  const [frontCamera, setFrontCamera] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'info', text: 'Kamera belum diaktifkan.' })
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const devicesRef = useRef<MediaDeviceInfo[]>([])
   const selectedDeviceRef = useRef<string | null>(null)
@@ -147,8 +143,7 @@ export function AttendanceScannerNative() {
     setActive(false)
     setStarting(false)
     setCameraLabel('')
-    setTorchSupported(false)
-    setTorchOn(false)
+    setFrontCamera(false)
     selectedDeviceRef.current = null
     if (!quiet) setFeedback({ tone: 'info', text: 'Kamera dihentikan.' })
   }
@@ -244,26 +239,10 @@ export function AttendanceScannerNative() {
     return video
   }
 
-  const tryTorchForDarkFrame = async (stream: MediaStream, video: HTMLVideoElement) => {
-    const track = stream.getVideoTracks()[0]
-    const caps = typeof track?.getCapabilities === 'function' ? track.getCapabilities() as TorchCapabilities : null
-    if (!caps?.torch) return false
-    try {
-      await track.applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] })
-      setTorchSupported(true)
-      setTorchOn(true)
-      await new Promise((resolve) => window.setTimeout(resolve, 1200))
-      return !frameIsBlack(video)
-    } catch {
-      return false
-    }
-  }
-
   const openAttempt = async (attempt: CameraAttempt) => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: attempt.constraints })
     const video = await attachStream(stream)
-    let visible = await verifyVisibleFrame(video)
-    if (!visible) visible = await tryTorchForDarkFrame(stream, video)
+    const visible = await verifyVisibleFrame(video)
     if (!visible) {
       releaseStream()
       throw new Error(`Preview ${attempt.label} gelap`)
@@ -284,10 +263,10 @@ export function AttendanceScannerNative() {
     const inputs = await refreshDeviceList()
     const track = stream.getVideoTracks()[0]
     const settings = track.getSettings()
-    const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() as TorchCapabilities : null
     selectedDeviceRef.current = settings.deviceId || null
-    setCameraLabel(track.label || inputs.find((item) => item.deviceId === settings.deviceId)?.label || fallbackLabel || 'Kamera perangkat')
-    setTorchSupported(Boolean(caps?.torch))
+    const resolvedLabel = track.label || inputs.find((item) => item.deviceId === settings.deviceId)?.label || fallbackLabel || 'Kamera perangkat'
+    setCameraLabel(resolvedLabel)
+    setFrontCamera(settings.facingMode === 'user' || isClearlyFrontCamera(resolvedLabel))
     setActive(true)
 
     const decoderReady = prepareDetector()
@@ -295,7 +274,7 @@ export function AttendanceScannerNative() {
       setFeedback({ tone: 'info', text: 'Kamera belakang aktif. Arahkan QR murid ke kotak pemindai.' })
       scheduleDecode()
     } else {
-      setFeedback({ tone: 'error', text: 'QR belum dapat dibaca otomatis. Coba tombol Kamera HP.' })
+      setFeedback({ tone: 'error', text: 'Pemindaian QR live belum didukung browser ini. Gunakan Chrome versi terbaru.' })
     }
   }
 
@@ -346,7 +325,7 @@ export function AttendanceScannerNative() {
       setFeedback({
         tone: 'error',
         text: dark
-          ? 'Kamera belakang tidak tersedia. Gunakan Kamera HP atau pilih kamera depan.'
+          ? 'Kamera belakang tidak tersedia. Gunakan tombol Ganti Kamera untuk mencoba kamera depan.'
           : friendlyCameraError(error),
       })
     } finally {
@@ -363,45 +342,6 @@ export function AttendanceScannerNative() {
     await startCamera(next.deviceId)
   }
 
-  const toggleTorch = async () => {
-    const track = streamRef.current?.getVideoTracks()[0]
-    if (!track || !torchSupported) return
-    const next = !torchOn
-    try {
-      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] })
-      setTorchOn(next)
-    } catch {
-      setFeedback({ tone: 'error', text: 'Lampu kamera tidak dapat diubah pada perangkat ini.' })
-    }
-  }
-
-  const openNativeCapture = () => {
-    stopCamera(true)
-    fileInputRef.current?.click()
-  }
-
-  const handleNativeCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setCaptureBusy(true)
-    setFeedback({ tone: 'info', text: 'Membaca QR dari kamera HP...' })
-    try {
-      const { Html5Qrcode } = await import('html5-qrcode')
-      const reader = new Html5Qrcode('native-file-reader')
-      try {
-        const decoded = await reader.scanFile(file, false)
-        await record(decoded)
-      } finally {
-        try { reader.clear() } catch { /* aman diabaikan */ }
-      }
-    } catch {
-      setFeedback({ tone: 'error', text: 'QR belum terbaca dari foto. Ambil ulang dengan QR memenuhi sebagian besar layar dan fokus tajam.' })
-    } finally {
-      setCaptureBusy(false)
-    }
-  }
-
   const todayRows = records.filter((row) => row.attendance_date === TODAY)
 
   return (
@@ -409,20 +349,17 @@ export function AttendanceScannerNative() {
       <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Pindai QR murid untuk mencatat waktu masuk atau pulang." />
       <div className="v2-two-col scanner">
         <section className="v2-panel native-scanner-panel">
-          <div className={`native-camera ${active ? 'active' : ''}`}>
+          <div className={`native-camera ${active ? 'active' : ''} ${frontCamera ? 'front-camera' : ''}`}>
             <video ref={videoRef} muted playsInline autoPlay />
             {active && <div className="native-camera-guide" aria-hidden="true"><span /><span /><span /><span /></div>}
             {!active && (
               <div className="native-camera-empty">
                 <span><Camera size={58} /></span>
                 <h3>Kamera siap digunakan</h3>
-                <p>Coba scan live terlebih dahulu. Bila kamera belakang tetap gelap, gunakan kamera HP native.</p>
+                <p>Aktifkan kamera lalu arahkan QR murid ke kotak pemindai. Absensi diproses langsung dari video live.</p>
                 <div className="native-start-actions">
-                  <button className="v2-primary" disabled={starting || captureBusy} onClick={() => void startCamera()}>
-                    <Camera size={18} /> {starting ? 'Mencari Kamera...' : 'Scan Live'}
-                  </button>
-                  <button className="v2-secondary native-capture-button" disabled={starting || captureBusy} onClick={openNativeCapture}>
-                    <Image size={18} /> {captureBusy ? 'Membaca QR...' : 'Scan dengan Kamera HP'}
+                  <button className="v2-primary" disabled={starting} onClick={() => void startCamera()}>
+                    <Camera size={18} /> {starting ? 'Membuka Kamera...' : 'Mulai Scan Live'}
                   </button>
                 </div>
               </div>
@@ -433,8 +370,6 @@ export function AttendanceScannerNative() {
             <div className="native-camera-actions">
               <button className="v2-secondary" onClick={() => stopCamera(false)}><CameraOff size={17} /> Hentikan</button>
               {cameraCount > 1 && <button className="v2-secondary" disabled={starting} onClick={() => void switchCamera()}><RefreshCw size={17} /> Ganti Kamera</button>}
-              {torchSupported && <button className="v2-secondary" onClick={() => void toggleTorch()}><Flashlight size={17} /> {torchOn ? 'Matikan Lampu' : 'Nyalakan Lampu'}</button>}
-              <button className="v2-secondary" disabled={captureBusy} onClick={openNativeCapture}><Image size={17} /> Kamera HP</button>
             </div>
           )}
           {active && cameraLabel && <small className="native-camera-name">{cameraLabel}</small>}
@@ -444,10 +379,7 @@ export function AttendanceScannerNative() {
             <span>{feedback.text}</span>
           </div>
 
-          {!decoderAvailable && active && <p className="native-decoder-note">QR belum dapat dibaca otomatis. Gunakan tombol Kamera HP.</p>}
-
-          <input ref={fileInputRef} className="native-camera-file-input" type="file" accept="image/*" capture="environment" onChange={(event) => void handleNativeCapture(event)} />
-          <div id="native-file-reader" className="native-file-reader" aria-hidden="true" />
+          {!decoderAvailable && active && <p className="native-decoder-note">Pemindaian live memerlukan Chrome versi terbaru dengan dukungan BarcodeDetector.</p>}
 
           <details className="v2-manual">
             <summary>Masukkan kode QR secara manual</summary>
