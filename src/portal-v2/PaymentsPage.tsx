@@ -1,10 +1,13 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { BadgeDollarSign, Edit3, Plus, Printer, ReceiptText, Search, Trash2 } from 'lucide-react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { BadgeDollarSign, Edit3, Plus, Printer, ReceiptText, Trash2 } from 'lucide-react'
+import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
+import { ConfirmDialog, FormDialog } from '../components/forms'
+import { Button, EmptyState, PageHeader } from '../components/ui'
 import { supabase } from '../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { ActionMenu, Dialog, useChildSelection } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
-import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { Notice } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
 type StudentLite = { id: string; full_name: string; class_name: string | null; academic_year: string | null; is_active?: boolean }
@@ -34,18 +37,22 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
   const [students, setStudents] = useState<StudentLite[]>([])
   const [rows, setRows] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState<PaymentSummary>(EMPTY_SUMMARY)
   const [editing, setEditing] = useState<Payment | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Payment | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const removingRef = useRef(false)
   const [receipt, setReceipt] = useState<Payment | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const debouncedSearch = useDebouncedValue(search)
 
   const loadRows = async () => {
     setLoading(true)
+    setLoadError('')
     const range = getPageRange(page, PAGE_SIZE)
     let query = supabase
       .from('student_payments_search')
@@ -60,9 +67,14 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
     }
 
     const { data, error, count } = await query
-    if (error) setMessage({ tone: 'error', text: error.message })
-    setRows((data as Payment[] | null) ?? [])
-    setTotal(count ?? 0)
+    if (error) {
+      setLoadError(error.message || 'Data pembayaran gagal dimuat.')
+      setRows([])
+      setTotal(0)
+    } else {
+      setRows((data as Payment[] | null) ?? [])
+      setTotal(count ?? 0)
+    }
     setLoading(false)
   }
 
@@ -96,9 +108,20 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
     await Promise.all([loadRows(), loadSummary()])
   }
 
+  const resetFilters = () => setSearch('')
+
+  const closeDelete = () => {
+    if (removingRef.current) return
+    setDeleting(null)
+  }
+
   const remove = async () => {
-    if (!deleting || !canManage) return
+    if (!deleting || !canManage || removingRef.current) return
+    removingRef.current = true
+    setRemoving(true)
     const { error } = await supabase.from('student_payments').delete().eq('id', deleting.id)
+    removingRef.current = false
+    setRemoving(false)
     if (error) {
       setMessage({ tone: 'error', text: error.message })
       return
@@ -115,43 +138,104 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
     }
   }
 
+  const actionItems = (row: Payment) => [
+    { label: 'Lihat kuitansi', icon: ReceiptText, onSelect: () => setReceipt(row) },
+    ...(canManage ? [
+      { label: 'Edit pembayaran', icon: Edit3, onSelect: () => setEditing(row) },
+      { label: 'Hapus pembayaran', icon: Trash2, danger: true, onSelect: () => setDeleting(row) },
+    ] : []),
+  ]
+
+  const columns: DataTableColumn<Payment>[] = [
+    {
+      key: 'payment',
+      header: 'Pembayaran',
+      render: (row) => <div className="data-primary-cell"><span className="data-primary-cell__avatar"><BadgeDollarSign size={18} /></span><div className="data-primary-cell__copy"><strong>{row.payment_type}</strong><small>{row.period_label || 'Tanpa periode'}</small></div></div>,
+    },
+    { key: 'student', header: 'Murid', render: (row) => <div><strong>{row.student_full_name || 'Murid'}</strong><small className="data-cell-subtitle">{row.student_class_name || 'Belum ada kelompok'}</small></div> },
+    { key: 'due', header: 'Jatuh Tempo', render: (row) => row.due_date ? dateText(row.due_date) : '—' },
+    { key: 'paid', header: 'Dibayar', align: 'right', render: (row) => currency(Number(row.paid_amount)) },
+    { key: 'balance', header: 'Sisa', align: 'right', render: (row) => row.status === 'waived' ? 'Dibebaskan' : currency(Math.max(0, Number(row.amount) - Number(row.paid_amount))) },
+    { key: 'status', header: 'Status', render: (row) => <StatusBadge tone={paymentStatusTone(row.status)}>{paymentLabel(row.status)}</StatusBadge> },
+    { key: 'actions', header: 'Aksi', align: 'right', render: (row) => <ActionMenu label={`Aksi pembayaran ${row.payment_type}`} items={actionItems(row)} /> },
+  ]
+
+  const hasFilters = Boolean(search.trim())
+  const emptyState = (
+    <EmptyState
+      icon={<BadgeDollarSign size={24} />}
+      title={hasFilters ? 'Tidak ada pembayaran yang cocok' : 'Belum ada data pembayaran'}
+      description={hasFilters ? 'Ubah pencarian atau reset untuk melihat transaksi lainnya.' : canManage ? 'Tagihan dan pembayaran murid akan tampil setelah ditambahkan.' : 'Tagihan anak yang terhubung akan tampil di sini.'}
+      action={hasFilters
+        ? <Button variant="secondary" onClick={resetFilters}>Reset Pencarian</Button>
+        : canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Tagihan</Button> : undefined}
+    />
+  )
+
   return <div className="v2-stack">
-    <PageTitle eyebrow="KEUANGAN SEKOLAH" title="Pembayaran" text={canManage ? 'Kelola tagihan, pembayaran, jatuh tempo dan status pembayaran murid.' : 'Pantau tagihan dan pembayaran anak yang terhubung.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Tagihan</button> : undefined} />
+    <PageHeader
+      eyebrow="KEUANGAN SEKOLAH"
+      title="Pembayaran"
+      subtitle={canManage ? 'Kelola tagihan, pembayaran, jatuh tempo dan status pembayaran murid.' : 'Pantau tagihan dan pembayaran anak yang terhubung.'}
+      actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Tagihan</Button> : undefined}
+    />
     {message && <Notice {...message} />}
-    <div className="v2-stat-grid three">
-      <MoneyStat label="Total Tagihan" value={Number(summary.total_billed)} tone="gold" />
-      <MoneyStat label="Sudah Dibayar" value={Number(summary.total_paid)} tone="green" />
-      <MoneyStat label="Sisa Tagihan" value={Number(summary.total_outstanding)} tone="blue" />
+    <div className="data-stat-grid">
+      <StatCard icon={<BadgeDollarSign size={20} />} label="Total Tagihan" value={currency(Number(summary.total_billed))} supportingText="Seluruh nominal tagihan" tone="warning" />
+      <StatCard icon={<BadgeDollarSign size={20} />} label="Sudah Dibayar" value={currency(Number(summary.total_paid))} supportingText="Pembayaran diterima" tone="success" />
+      <StatCard icon={<BadgeDollarSign size={20} />} label="Sisa Tagihan" value={currency(Number(summary.total_outstanding))} supportingText="Nominal belum terselesaikan" tone="info" />
     </div>
     <section className="v2-panel">
-      <div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid, jenis atau periode pembayaran..." /></label></div>
-      {loading ? <SkeletonRows /> : rows.length ? <>
-        <div className="payment-list">
-          {rows.map((row) => <article key={row.id}>
-            <span className="payment-icon"><BadgeDollarSign /></span>
-            <div className="grow">
-              <div className="school-meta"><span className={`v2-badge ${paymentTone(row.status)}`}>{paymentLabel(row.status)}</span>{row.period_label && <span>{row.period_label}</span>}{row.due_date && <span>Jatuh tempo {dateText(row.due_date)}</span>}</div>
-              <h3>{row.payment_type}</h3>
-              <p>{row.student_full_name || 'Murid'} · {row.student_class_name || 'Belum ada kelompok'}</p>
-              <small>{currency(Number(row.paid_amount))} dari {currency(Number(row.amount))} dibayar</small>
-            </div>
-            <strong className="payment-balance">{row.status === 'waived' ? 'Dibebaskan' : currency(Math.max(0, Number(row.amount) - Number(row.paid_amount)))}</strong>
-            <ActionMenu label={`Aksi pembayaran ${row.payment_type}`} items={[
-              { label: 'Lihat kuitansi', icon: ReceiptText, onSelect: () => setReceipt(row) },
-              ...(canManage ? [{ label: 'Edit pembayaran', icon: Edit3, onSelect: () => setEditing(row) }, { label: 'Hapus pembayaran', icon: Trash2, danger: true, onSelect: () => setDeleting(row) }] : []),
-            ]} />
-          </article>)}
+      <SearchFilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        placeholder="Cari murid, jenis atau periode pembayaran..."
+        searchLabel="Cari data pembayaran"
+        onReset={resetFilters}
+      />
+
+      {loadError ? <ErrorState description={loadError} onRetry={() => void loadRows()} /> : <>
+        <div className="desktop-data-view">
+          <DataTable rows={rows} columns={columns} getRowKey={(row) => row.id} loading={loading} empty={emptyState} caption="Daftar pembayaran murid" />
         </div>
-        <PaginationControls page={page} total={total} onPage={setPage} />
-      </> : <EmptyCard text="Belum ada data pembayaran yang sesuai pencarian." />}
+        <div className="mobile-data-view">
+          {loading ? <DataListSkeleton /> : rows.length ? <div className="mobile-data-list">{rows.map((row) => (
+            <MobileDataCard
+              key={row.id}
+              leading={<BadgeDollarSign size={18} />}
+              title={row.payment_type}
+              subtitle={`${row.student_full_name || 'Murid'} · ${row.period_label || 'Tanpa periode'}`}
+              badges={<StatusBadge tone={paymentStatusTone(row.status)}>{paymentLabel(row.status)}</StatusBadge>}
+              fields={[
+                { label: 'Total', value: currency(Number(row.amount)) },
+                { label: 'Dibayar', value: currency(Number(row.paid_amount)) },
+                { label: 'Sisa', value: row.status === 'waived' ? 'Dibebaskan' : currency(Math.max(0, Number(row.amount) - Number(row.paid_amount))) },
+                { label: 'Jatuh tempo', value: row.due_date ? dateText(row.due_date) : '—' },
+              ]}
+              actions={<ActionMenu label={`Aksi pembayaran ${row.payment_type}`} items={actionItems(row)} />}
+            />
+          ))}</div> : emptyState}
+        </div>
+        {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+      </>}
     </section>
+
     {editing && canManage && <PaymentModal value={editing === 'new' ? null : editing} students={students} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
       setMessage({ tone: 'success', text: 'Data pembayaran berhasil disimpan.' })
       await refreshAfterMutation()
     }} />}
     {receipt && <PaymentReceipt payment={receipt} onClose={() => setReceipt(null)} />}
-    {deleting && <Confirm title="Hapus pembayaran?" text={`${deleting.payment_type} akan dihapus dari riwayat pembayaran.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    <ConfirmDialog
+      open={Boolean(deleting)}
+      title="Hapus pembayaran?"
+      description={deleting ? `${deleting.payment_type} akan dihapus dari riwayat pembayaran ${deleting.student_full_name || 'murid'}.` : ''}
+      confirmLabel="Ya, Hapus"
+      danger
+      busy={removing}
+      onClose={closeDelete}
+      onConfirm={() => void remove()}
+    />
   </div>
 }
 
@@ -175,10 +259,12 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
     notes: value?.notes || '',
   })
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busyRef.current) return
     const amount = Number(form.amount)
     const paidAmount = Number(form.paid)
     if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(paidAmount) || paidAmount < 0) {
@@ -190,6 +276,7 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
       return
     }
     const status: Payment['status'] = form.waived ? 'waived' : paidAmount === amount && amount > 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid'
+    busyRef.current = true
     setBusy(true)
     setErrorText('')
     const payload = {
@@ -206,6 +293,7 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
     const result = value
       ? await supabase.from('student_payments').update(payload).eq('id', value.id)
       : await supabase.from('student_payments').insert(payload)
+    busyRef.current = false
     setBusy(false)
     if (result.error) {
       setErrorText(result.error.message)
@@ -214,8 +302,16 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
     onDone()
   }
 
-  return <Dialog title={value ? 'Edit Pembayaran' : 'Tambah Tagihan'} onClose={onClose} wide>
-    <form className="v2-form v2-form-grid" onSubmit={submit}>
+  return <FormDialog
+    open
+    title={value ? 'Edit Pembayaran' : 'Tambah Tagihan'}
+    submitLabel="Simpan Pembayaran"
+    busy={busy}
+    error={errorText}
+    onSubmit={submit}
+    onClose={onClose}
+  >
+    <div className="v2-form v2-form-grid">
       <label>Murid<select required value={form.student_id} onChange={(event) => setForm({ ...form, student_id: event.target.value })}>{students.map((student) => <option key={student.id} value={student.id}>{student.full_name} {student.class_name ? `· ${student.class_name}` : ''}</option>)}</select></label>
       <label>Jenis pembayaran<input required value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} placeholder="SPP / Kegiatan / Seragam" /></label>
       <label>Periode<input value={form.period} onChange={(event) => setForm({ ...form, period: event.target.value })} placeholder="September 2026" /></label>
@@ -225,18 +321,8 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
       <label>Tanggal pembayaran<input type="date" value={form.paid_at} onChange={(event) => setForm({ ...form, paid_at: event.target.value })} /></label>
       <label className="v2-toggle"><input type="checkbox" checked={form.waived} onChange={(event) => setForm({ ...form, waived: event.target.checked })} /><span>Dibebaskan dari tagihan</span></label>
       <label className="full">Catatan<textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
-      {errorText && <p className="v2-field-error full">{errorText}</p>}
-      <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Pembayaran'}</button></div>
-    </form>
-  </Dialog>
-}
-
-function Confirm({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog>
-}
-
-function MoneyStat({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return <article className={`v2-stat mini ${tone}`}><span><BadgeDollarSign size={20} /></span><div><small>{label}</small><strong className="money-value">{currency(value)}</strong><p>Rekap transaksi</p></div></article>
+    </div>
+  </FormDialog>
 }
 
 function currency(value: number) {
@@ -248,8 +334,8 @@ function dateText(value: string) {
   return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
 }
 
-function paymentTone(status: Payment['status']) {
-  return status === 'paid' ? 'green' : status === 'partial' ? 'blue' : status === 'waived' ? 'purple' : 'gold'
+function paymentStatusTone(status: Payment['status']) {
+  return status === 'paid' ? 'success' : status === 'partial' ? 'info' : status === 'waived' ? 'purple' : 'warning'
 }
 
 function paymentLabel(status: Payment['status']) {
