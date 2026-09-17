@@ -26,8 +26,10 @@ import './portal-v2.css'
 import './portal-v2-polish.css'
 import './school-modules.css'
 import './scanner-native.css'
+import './navigation-shell.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
+type NavGroupDefinition = { label: string; ids: readonly string[] }
 
 const AccountsPage = lazy(() => import('./portal-v2/AccountsPage').then((module) => ({ default: module.AccountsPage })))
 const AnnouncementsPage = lazy(() => import('./portal-v2/AnnouncementsPage').then((module) => ({ default: module.AnnouncementsPage })))
@@ -88,6 +90,49 @@ const menus: Record<AppRole, NavItem[]> = {
   ],
 }
 
+const desktopNavGroups: Record<AppRole, readonly NavGroupDefinition[]> = {
+  admin: [
+    { label: 'Ringkasan', ids: ['dashboard'] },
+    { label: 'Akademik', ids: ['students', 'teachers', 'classes', 'schedule', 'reports'] },
+    { label: 'Kehadiran', ids: ['attendance', 'attendance-data'] },
+    { label: 'Administrasi', ids: ['payments', 'documents', 'announcements'] },
+    { label: 'Sistem', ids: ['accounts', 'audit', 'settings'] },
+  ],
+  teacher: [
+    { label: 'Ringkasan', ids: ['dashboard'] },
+    { label: 'Akademik', ids: ['students', 'schedule', 'reports'] },
+    { label: 'Kehadiran', ids: ['attendance', 'attendance-data'] },
+    { label: 'Administrasi', ids: ['documents', 'announcements'] },
+  ],
+  parent: [
+    { label: 'Ringkasan', ids: ['dashboard'] },
+    { label: 'Anak', ids: ['children', 'attendance-data', 'schedule', 'reports'] },
+    { label: 'Administrasi', ids: ['payments', 'documents', 'announcements'] },
+  ],
+}
+
+const mobilePrimaryIds: Record<AppRole, readonly string[]> = {
+  teacher: ['dashboard', 'attendance-data', 'attendance', 'students'],
+  admin: ['dashboard', 'students', 'attendance', 'attendance-data'],
+  parent: ['dashboard', 'children', 'reports', 'payments'],
+}
+
+const mobileMoreGroups: Record<AppRole, readonly NavGroupDefinition[]> = {
+  admin: [
+    { label: 'Akademik', ids: ['teachers', 'classes', 'schedule', 'reports'] },
+    { label: 'Administrasi', ids: ['payments', 'documents', 'announcements'] },
+    { label: 'Sistem', ids: ['accounts', 'audit', 'settings'] },
+  ],
+  teacher: [
+    { label: 'Akademik', ids: ['schedule', 'reports'] },
+    { label: 'Informasi', ids: ['documents', 'announcements'] },
+  ],
+  parent: [
+    { label: 'Aktivitas Anak', ids: ['attendance-data', 'schedule'] },
+    { label: 'Informasi', ids: ['announcements', 'documents'] },
+  ],
+}
+
 export default function RolePortalV5({ profile }: { profile: UserProfile }) {
   return <ChildSelectionProvider enabled={profile.role === 'parent'}><RolePortalShell profile={profile} /></ChildSelectionProvider>
 }
@@ -104,48 +149,38 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
   const page = location.pathname.split('/')[2] || 'dashboard'
   const active = menu.find((item) => item.id === page) ?? menu[0]
 
-  const mobilePrimary = useMemo(() => {
-    const preferred = currentProfile.role === 'teacher'
-      ? ['dashboard', 'attendance-data', 'attendance', 'students']
-      : currentProfile.role === 'admin'
-        ? ['dashboard', 'students', 'attendance', 'attendance-data']
-        : ['dashboard', 'children', 'reports', 'payments']
-    return preferred
+  const desktopGroups = useMemo(
+    () => desktopNavGroups[currentProfile.role]
+      .map((group) => ({
+        label: group.label,
+        items: group.ids.map((id) => menu.find((item) => item.id === id)).filter((item): item is NavItem => Boolean(item)),
+      }))
+      .filter((group) => group.items.length),
+    [currentProfile.role, menu],
+  )
+
+  const mobilePrimary = useMemo(
+    () => mobilePrimaryIds[currentProfile.role]
       .map((id) => menu.find((item) => item.id === id))
-      .filter((item): item is NavItem => Boolean(item))
-  }, [currentProfile.role, menu])
+      .filter((item): item is NavItem => Boolean(item)),
+    [currentProfile.role, menu],
+  )
 
   const mobileSecondary = useMemo(
-    () => menu.filter((item) => !mobilePrimary.some((primary) => primary.id === item.id)),
+    () => menu.filter((item) => item.id !== 'profile' && !mobilePrimary.some((primary) => primary.id === item.id)),
     [menu, mobilePrimary],
   )
   const moreIsActive = mobileSecondary.some((item) => item.id === active.id)
 
-  const groupedSecondary = useMemo(() => {
-    const groups = currentProfile.role === 'admin'
-      ? [
-          ['Akademik', ['students', 'teachers', 'classes', 'schedule', 'reports']],
-          ['Kehadiran', ['attendance', 'attendance-data']],
-          ['Administrasi', ['payments', 'documents', 'announcements']],
-          ['Sistem', ['accounts', 'audit', 'settings', 'profile']],
-        ] as const
-      : currentProfile.role === 'teacher'
-        ? [
-            ['Akademik', ['students', 'schedule', 'reports']],
-            ['Kehadiran', ['attendance', 'attendance-data']],
-            ['Informasi', ['documents', 'announcements']],
-            ['Akun', ['profile']],
-          ] as const
-        : [
-            ['Aktivitas Anak', ['attendance-data', 'schedule']],
-            ['Informasi', ['announcements', 'documents']],
-            ['Akun', ['profile']],
-          ] as const
-    return groups.map(([label, ids]) => ({
-      label,
-      items: ids.map((id) => mobileSecondary.find((item) => item.id === id)).filter((item): item is NavItem => Boolean(item)),
-    })).filter((group) => group.items.length)
-  }, [currentProfile.role, mobileSecondary])
+  const groupedSecondary = useMemo(
+    () => mobileMoreGroups[currentProfile.role]
+      .map((group) => ({
+        label: group.label,
+        items: group.ids.map((id) => mobileSecondary.find((item) => item.id === id)).filter((item): item is NavItem => Boolean(item)),
+      }))
+      .filter((group) => group.items.length),
+    [currentProfile.role, mobileSecondary],
+  )
 
   useEffect(() => {
     let mounted = true
@@ -166,6 +201,15 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [location.pathname])
 
+  useEffect(() => {
+    if (!moreOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [moreOpen])
+
   const go = (id: string) => {
     navigate(id === 'dashboard' ? base : `${base}/${id}`)
     setMoreOpen(false)
@@ -180,7 +224,20 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
     <div className="v2-shell">
       <aside className="v2-sidebar">
         <div className="v2-brand"><img className="v2-brand-logo" src={`${import.meta.env.BASE_URL}logo-ra-nurul-falah.png`} alt="Logo RA Nurul Falah" /><div><strong>Nurul Falah</strong><small>Sistem Informasi Sekolah</small></div></div>
-        <nav className="v2-side-nav"><small className="v2-nav-caption">MENU UTAMA</small>{menu.map((item) => <button key={item.id} className={active.id === item.id ? 'active' : ''} onClick={() => go(item.id)}><span className="v2-nav-icon"><item.icon size={19} /></span><span>{item.label}</span>{item.id === 'announcements' && announcementCount > 0 && <b>{announcementCount}</b>}</button>)}</nav>
+        <nav className="v2-side-nav" aria-label="Navigasi desktop">
+          {desktopGroups.map((group) => (
+            <div className="v5-side-group" key={group.label}>
+              <small className="v2-nav-caption">{group.label}</small>
+              {group.items.map((item) => (
+                <button key={item.id} className={active.id === item.id ? 'active' : ''} aria-current={active.id === item.id ? 'page' : undefined} onClick={() => go(item.id)}>
+                  <span className="v2-nav-icon"><item.icon size={19} /></span>
+                  <span>{item.label}</span>
+                  {item.id === 'announcements' && announcementCount > 0 && <b>{announcementCount}</b>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
         <div className="v2-sidebar-profile"><span className="v2-avatar large">{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || roleLabel(currentProfile.role)}</strong><small>{roleLabel(currentProfile.role)}</small></div><button aria-label="Keluar" onClick={() => void logout()}><LogOut size={18} /></button></div>
       </aside>
 
@@ -188,7 +245,10 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
         <header className="v2-topbar">
           <img className="v2-mobile-logo" src={`${import.meta.env.BASE_URL}logo-ra-nurul-falah.png`} alt="" />
           <div className="v2-top-title"><h1>{active.label}</h1><small>{roleLabel(currentProfile.role)}</small></div>
-          <div className="v2-top-actions"><button className="v2-bell" onClick={() => go('announcements')} aria-label="Pengumuman"><Bell size={20} />{announcementCount > 0 && <i>{Math.min(announcementCount, 9)}</i>}</button><button className="v2-top-profile" onClick={() => go('profile')}><span>{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button></div>
+          <div className="v2-top-actions">
+            <button className="v2-bell" onClick={() => go('announcements')} aria-label="Buka pengumuman" aria-current={active.id === 'announcements' ? 'page' : undefined}><Bell size={20} />{announcementCount > 0 && <i>{Math.min(announcementCount, 9)}</i>}</button>
+            <button className={`v2-top-profile ${active.id === 'profile' ? 'active' : ''}`} onClick={() => go('profile')} aria-label="Buka profil" aria-current={active.id === 'profile' ? 'page' : undefined}><span>{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button>
+          </div>
         </header>
 
         <main className="v2-content">
@@ -203,16 +263,17 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
           <button
             key={item.id}
             className={`${active.id === item.id ? 'active' : ''} ${item.id === 'attendance' ? 'scan-center-item' : ''}`}
+            aria-current={active.id === item.id ? 'page' : undefined}
             onClick={() => go(item.id)}
           >
             <span><item.icon size={item.id === 'attendance' ? 25 : 21} /></span>
             <small>{mobileLabel(item.label)}</small>
           </button>
         ))}
-        <button className={moreIsActive || moreOpen ? 'active' : ''} onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
+        <button className={moreIsActive || moreOpen ? 'active' : ''} aria-expanded={moreOpen} aria-controls="mobile-more-menu" onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
       </nav>
 
-      {moreOpen && <div className="v2-sheet-layer"><button className="v2-sheet-backdrop" aria-label="Tutup" onClick={() => setMoreOpen(false)} /><section className="v2-sheet"><div className="v2-sheet-handle" /><header><div><small>NAVIGASI</small><h3>Menu lainnya</h3></div><button onClick={() => setMoreOpen(false)} aria-label="Tutup menu"><X size={19} /></button></header><div className="v5-sheet-scroll">{groupedSecondary.map((group) => <section className="v5-menu-group" key={group.label}><h4>{group.label}</h4><div className="v2-sheet-grid">{group.items.map((item) => <button key={item.id} className={active.id === item.id ? 'active' : ''} onClick={() => go(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><small>Buka halaman</small></div></button>)}</div></section>)}<section className="v5-menu-group"><h4>Sesi</h4><div className="v2-sheet-grid"><button className="danger" onClick={() => void logout()}><span><LogOut size={21} /></span><div><strong>Keluar</strong><small>Akhiri sesi akun</small></div></button></div></section></div></section></div>}
+      {moreOpen && <div className="v2-sheet-layer"><button className="v2-sheet-backdrop" aria-label="Tutup" onClick={() => setMoreOpen(false)} /><section id="mobile-more-menu" className="v2-sheet" role="dialog" aria-modal="true" aria-label="Menu lainnya"><div className="v2-sheet-handle" /><header><div><small>NAVIGASI</small><h3>Menu lainnya</h3></div><button onClick={() => setMoreOpen(false)} aria-label="Tutup menu"><X size={19} /></button></header><div className="v5-sheet-scroll">{groupedSecondary.map((group) => <section className="v5-menu-group" key={group.label}><h4>{group.label}</h4><div className="v2-sheet-grid">{group.items.map((item) => <button key={item.id} className={active.id === item.id ? 'active' : ''} aria-current={active.id === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><small>Buka halaman</small></div></button>)}</div></section>)}<section className="v5-menu-group"><h4>Sesi</h4><div className="v2-sheet-grid"><button className="danger" onClick={() => void logout()}><span><LogOut size={21} /></span><div><strong>Keluar</strong><small>Akhiri sesi akun</small></div></button></div></section></div></section></div>}
     </div>
   )
 }
