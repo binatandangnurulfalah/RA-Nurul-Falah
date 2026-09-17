@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 import { supabase, type UserProfile } from '../../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../../lib/data-utils.js'
 import { queryKeys } from '../queryKeys'
@@ -35,6 +35,7 @@ export function studentPageOptions(params: StudentPageParams) {
       if (error) throw new Error(error.message || 'Data murid gagal dimuat.')
       return { rows: (data as StudentRow[] | null) ?? [], total: count ?? 0 }
     },
+    placeholderData: keepPreviousData,
   })
 }
 
