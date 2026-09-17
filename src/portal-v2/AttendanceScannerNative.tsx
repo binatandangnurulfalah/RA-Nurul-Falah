@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Button, PageHeader } from '../components/ui'
 import { supabase } from '../lib/supabase'
-import { PageTitle } from './PortalPages'
 
 type AttendanceRecord = {
   id: string
@@ -18,8 +18,11 @@ type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDete
 type CameraAttempt = { label: string; constraints: MediaTrackConstraints; deviceId?: string }
 
 const JAKARTA = 'Asia/Jakarta'
-const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
 const SCAN_INTERVAL = 280
+
+function jakartaDate() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
+}
 
 function friendlyCameraError(error: unknown) {
   const name = error instanceof DOMException ? error.name : ''
@@ -53,6 +56,8 @@ export function AttendanceScannerNative() {
   const [cameraCount, setCameraCount] = useState(0)
   const [decoderAvailable, setDecoderAvailable] = useState(true)
   const [frontCamera, setFrontCamera] = useState(false)
+  const [canTryAlternativeCamera, setCanTryAlternativeCamera] = useState(false)
+  const [summaryError, setSummaryError] = useState('')
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'info', text: 'Kamera belum diaktifkan.' })
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -62,15 +67,21 @@ export function AttendanceScannerNative() {
   const detectorRef = useRef<BarcodeDetectorLike | null>(null)
   const scanTimerRef = useRef<number | null>(null)
   const decodingRef = useRef(false)
+  const startingRef = useRef(false)
   const busyRef = useRef(false)
   const lastScanRef = useRef<{ token: string; at: number } | null>(null)
 
   const load = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('attendance_records')
       .select('id,attendance_date,check_in,check_out,status')
       .order('created_at', { ascending: false })
       .limit(40)
+    if (error) {
+      setSummaryError('Ringkasan hari ini belum dapat dimuat.')
+      return
+    }
+    setSummaryError('')
     setRecords((data as AttendanceRecord[] | null) ?? [])
   }
 
@@ -114,6 +125,9 @@ export function AttendanceScannerNative() {
       lastScanRef.current = { token: cleanToken, at: Date.now() }
       await load()
       return true
+    } catch {
+      setFeedback({ tone: 'error', text: 'Absensi gagal disimpan. Periksa koneksi lalu arahkan QR ke pemindai lagi.' })
+      return false
     } finally {
       window.setTimeout(() => { busyRef.current = false }, 1100)
     }
@@ -138,10 +152,12 @@ export function AttendanceScannerNative() {
   const stopCamera = (quiet = false) => {
     stopDecodeLoop()
     releaseStream()
+    startingRef.current = false
     setActive(false)
     setStarting(false)
     setCameraLabel('')
     setFrontCamera(false)
+    setCanTryAlternativeCamera(false)
     selectedDeviceRef.current = null
     if (!quiet) setFeedback({ tone: 'info', text: 'Kamera dihentikan.' })
   }
@@ -265,6 +281,7 @@ export function AttendanceScannerNative() {
     const resolvedLabel = track.label || inputs.find((item) => item.deviceId === settings.deviceId)?.label || fallbackLabel || 'Kamera perangkat'
     setCameraLabel(resolvedLabel)
     setFrontCamera(settings.facingMode === 'user' || isClearlyFrontCamera(resolvedLabel))
+    setCanTryAlternativeCamera(false)
     setActive(true)
 
     const decoderReady = prepareDetector()
@@ -277,8 +294,10 @@ export function AttendanceScannerNative() {
   }
 
   const startCamera = async (deviceId?: string) => {
-    if (starting) return
+    if (startingRef.current) return
+    startingRef.current = true
     setStarting(true)
+    setCanTryAlternativeCamera(false)
     setFeedback({ tone: 'info', text: deviceId ? 'Membuka kamera yang dipilih...' : 'Mencari kamera belakang utama...' })
     stopDecodeLoop()
     releaseStream()
@@ -318,47 +337,85 @@ export function AttendanceScannerNative() {
 
       throw lastError instanceof Error ? lastError : new Error('Semua sensor kamera belakang menghasilkan frame gelap.')
     } catch (error) {
+      const hasAlternative = devicesRef.current.length > 1
       stopCamera(true)
+      setCanTryAlternativeCamera(hasAlternative)
       const dark = error instanceof Error && /gelap/i.test(error.message)
       setFeedback({
         tone: 'error',
-        text: dark
-          ? 'Kamera belakang tidak tersedia. Gunakan tombol Ganti Kamera untuk mencoba kamera depan.'
+        text: dark && hasAlternative
+          ? 'Kamera belakang tidak tersedia. Coba kamera lain di perangkat ini.'
           : friendlyCameraError(error),
       })
     } finally {
+      startingRef.current = false
       setStarting(false)
     }
   }
 
   const switchCamera = async () => {
+    if (startingRef.current) return
     const devices = devicesRef.current.length ? devicesRef.current : await refreshDeviceList()
-    if (devices.length < 2 || starting) return
+    if (devices.length < 2) {
+      setFeedback({ tone: 'error', text: 'Tidak ada kamera lain yang tersedia pada perangkat ini.' })
+      return
+    }
     const current = selectedDeviceRef.current
-    const currentIndex = Math.max(0, devices.findIndex((item) => item.deviceId === current))
-    const next = devices[(currentIndex + 1) % devices.length]
+    const currentIndex = devices.findIndex((item) => item.deviceId === current)
+    const next = currentIndex >= 0
+      ? devices[(currentIndex + 1) % devices.length]
+      : devices.find((item) => isClearlyFrontCamera(item.label)) ?? devices[1] ?? devices[0]
     await startCamera(next.deviceId)
   }
 
-  const todayRows = records.filter((row) => row.attendance_date === TODAY)
+  const todayRows = records.filter((row) => row.attendance_date === jakartaDate())
+  const scannerLive = active && decoderAvailable
+  const statusTitle = starting ? 'Membuka kamera' : scannerLive ? 'Scanner live aktif' : active ? 'Kamera aktif' : 'Scanner siap'
+  const statusDetail = active
+    ? `${frontCamera ? 'Kamera depan' : 'Kamera belakang'}${cameraLabel ? ` · ${cameraLabel}` : ''}`
+    : 'Kamera hanya aktif saat Anda memulai scan.'
 
   return (
     <div className="v2-stack native-scanner-page">
-      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Pindai QR murid dari kamera live untuk mencatat waktu masuk atau pulang." />
+      <PageHeader
+        eyebrow="ABSENSI QR"
+        title="Scan Kehadiran"
+        subtitle="Pindai QR murid langsung dari kamera live untuk mencatat waktu masuk atau pulang."
+      />
+
+      <div className={`native-scanner-status ${scannerLive ? 'is-live' : ''}`} aria-live="polite">
+        <span className="native-status-indicator" aria-hidden="true" />
+        <div>
+          <strong>{statusTitle}</strong>
+          <small title={cameraLabel || undefined}>{statusDetail}</small>
+        </div>
+        {scannerLive ? <span className="native-live-badge">LIVE</span> : null}
+      </div>
+
       <div className="v2-two-col scanner">
-        <section className="v2-panel native-scanner-panel">
+        <section className="v2-panel native-scanner-panel" aria-label="Pemindai QR kamera live">
           <div className={`native-camera ${active ? 'active' : ''} ${frontCamera ? 'front-camera' : ''}`}>
-            <video ref={videoRef} muted playsInline autoPlay />
-            {active && <div className="native-camera-guide" aria-hidden="true"><span /><span /><span /><span /></div>}
+            <video ref={videoRef} muted playsInline autoPlay aria-label="Pratinjau kamera live" />
+            {active && (
+              <>
+                <div className="native-camera-guide" aria-hidden="true"><span /><span /><span /><span /></div>
+                <div className="native-camera-hint" aria-hidden="true">Posisikan QR di dalam bingkai</div>
+              </>
+            )}
             {!active && (
               <div className="native-camera-empty">
-                <span><Camera size={58} /></span>
+                <span><Camera size={54} /></span>
                 <h3>Kamera siap digunakan</h3>
                 <p>Aktifkan kamera lalu arahkan QR murid ke kotak pemindai. Absensi diproses langsung dari video live.</p>
                 <div className="native-start-actions">
-                  <button className="v2-primary" disabled={starting} onClick={() => void startCamera()}>
-                    <Camera size={18} /> {starting ? 'Membuka Kamera...' : 'Mulai Scan Live'}
-                  </button>
+                  <Button size="lg" disabled={starting} onClick={() => void startCamera()}>
+                    <Camera size={18} /> {starting ? 'Membuka Kamera...' : feedback.tone === 'error' ? 'Coba Lagi' : 'Mulai Scan Live'}
+                  </Button>
+                  {canTryAlternativeCamera ? (
+                    <Button variant="secondary" size="lg" disabled={starting} onClick={() => void switchCamera()}>
+                      <RefreshCw size={18} /> Coba Kamera Lain
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -366,22 +423,34 @@ export function AttendanceScannerNative() {
 
           {active && (
             <div className="native-camera-actions">
-              <button className="v2-secondary" onClick={() => stopCamera(false)}><CameraOff size={17} /> Hentikan</button>
-              {cameraCount > 1 && <button className="v2-secondary" disabled={starting} onClick={() => void switchCamera()}><RefreshCw size={17} /> Ganti Kamera</button>}
+              <Button variant="secondary" onClick={() => stopCamera(false)}><CameraOff size={17} /> Hentikan</Button>
+              {cameraCount > 1 ? (
+                <Button variant="secondary" disabled={starting} onClick={() => void switchCamera()}><RefreshCw size={17} /> Ganti Kamera</Button>
+              ) : null}
             </div>
           )}
-          {active && cameraLabel && <small className="native-camera-name">{cameraLabel}</small>}
 
-          <div className={`v2-scan-feedback ${feedback.tone}`}>
+          <div
+            className={`v2-scan-feedback ${feedback.tone}`}
+            role={feedback.tone === 'error' ? 'alert' : 'status'}
+            aria-live={feedback.tone === 'error' ? 'assertive' : 'polite'}
+            aria-atomic="true"
+          >
             {feedback.tone === 'success' ? <CheckCircle2 /> : feedback.tone === 'error' ? <AlertTriangle /> : <QrCode />}
             <span>{feedback.text}</span>
           </div>
 
-          {!decoderAvailable && active && <p className="native-decoder-note">Pemindaian live memerlukan Chrome versi terbaru dengan dukungan BarcodeDetector.</p>}
+          {!decoderAvailable && active ? <p className="native-decoder-note">Pemindaian live memerlukan Chrome versi terbaru dengan dukungan BarcodeDetector.</p> : null}
         </section>
 
-        <section className="v2-panel">
-          <h3>Ringkasan Hari Ini</h3>
+        <section className="v2-panel native-scanner-summary" aria-labelledby="scanner-summary-title">
+          <div className="native-summary-heading">
+            <div>
+              <h3 id="scanner-summary-title">Ringkasan Hari Ini</h3>
+              <p>Aktivitas absensi terbaru pada perangkat ini.</p>
+            </div>
+          </div>
+          {summaryError ? <p className="native-summary-error" role="status">{summaryError}</p> : null}
           <div className="v2-stat-grid one">
             <SummaryStat label="Masuk" value={todayRows.filter((row) => row.check_in).length} />
             <SummaryStat label="Pulang" value={todayRows.filter((row) => row.check_out).length} />
