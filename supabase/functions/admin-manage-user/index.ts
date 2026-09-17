@@ -72,8 +72,8 @@ Deno.serve(async (req: Request) => {
       if (userId === authData.user.id && (!isActive || role !== 'admin')) {
         return json({ ok: false, error: 'Admin tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.' }, 400)
       }
-      if (newPassword && (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword))) {
-        return json({ ok: false, error: 'Password baru minimal 8 karakter serta berisi huruf dan angka.' }, 400)
+      if (newPassword && newPassword.length < 6) {
+        return json({ ok: false, error: 'Password baru minimal 6 karakter.' }, 400)
       }
 
       const authPatch: { user_metadata: { display_name: string }; password?: string } = {
