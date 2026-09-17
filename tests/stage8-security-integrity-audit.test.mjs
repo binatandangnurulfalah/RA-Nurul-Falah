@@ -10,7 +10,7 @@ const [migration, permissionMigration, announcements, payments, auditPage, porta
   read('../src/portal-v2/AnnouncementsPage.tsx'),
   read('../src/portal-v2/PaymentsPage.tsx'),
   read('../src/portal-v2/AuditTrailPage.tsx'),
-  read('../src/RolePortalV4.tsx'),
+  read('../src/RolePortalV5.tsx'),
   read('../supabase/production-migration-manifest.json'),
 ])
 const manifest = JSON.parse(manifestText)

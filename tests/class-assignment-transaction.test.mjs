@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const classes = await readFile(new URL('../src/portal-v2/ClassesPage.tsx', import.meta.url), 'utf8')
-const portal = await readFile(new URL('../src/RolePortalV4.tsx', import.meta.url), 'utf8')
+const portal = await readFile(new URL('../src/RolePortalV5.tsx', import.meta.url), 'utf8')
 const migration = await readFile(new URL('../supabase/migrations/20260917053404_save_class_with_assignments_transaction.sql', import.meta.url), 'utf8')
 
 test('halaman Kelas aktif memakai RPC transaksi tunggal', () => {

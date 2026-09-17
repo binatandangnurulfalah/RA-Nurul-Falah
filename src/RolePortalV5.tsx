@@ -9,6 +9,7 @@ import {
   ContactRound,
   FileText,
   GraduationCap,
+  History,
   Home,
   LogOut,
   Megaphone,
@@ -28,10 +29,11 @@ import './scanner-native.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
 
-const AccountsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.AccountsPage })))
-const AnnouncementsPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.AnnouncementsPage })))
-const ClassesPage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.ClassesPage })))
-const SchedulePage = lazy(() => import('./portal-v2/CrudPages').then((module) => ({ default: module.SchedulePage })))
+const AccountsPage = lazy(() => import('./portal-v2/AccountsPage').then((module) => ({ default: module.AccountsPage })))
+const AnnouncementsPage = lazy(() => import('./portal-v2/AnnouncementsPage').then((module) => ({ default: module.AnnouncementsPage })))
+const AuditTrailPage = lazy(() => import('./portal-v2/AuditTrailPage').then((module) => ({ default: module.AuditTrailPage })))
+const ClassesPage = lazy(() => import('./portal-v2/ClassesPage').then((module) => ({ default: module.ClassesPage })))
+const SchedulePage = lazy(() => import('./portal-v2/SchedulePage'))
 const StudentsPage = lazy(() => import('./portal-v2/StudentsPageV2'))
 const AttendanceDataManager = lazy(() => import('./portal-v2/AttendancePages').then((module) => ({ default: module.AttendanceDataManager })))
 const AttendanceScannerNative = lazy(() => import('./portal-v2/AttendanceScannerNative').then((module) => ({ default: module.AttendanceScannerNative })))
@@ -58,6 +60,7 @@ const menus: Record<AppRole, NavItem[]> = {
     { id: 'classes', label: 'Kelas & Tahun Ajaran', icon: GraduationCap },
     { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
     { id: 'announcements', label: 'Pengumuman', icon: Megaphone },
+    { id: 'audit', label: 'Riwayat Aktivitas', icon: History },
     { id: 'settings', label: 'Pengaturan', icon: Settings },
     { id: 'profile', label: 'Profil Saya', icon: UserRound },
   ],
@@ -124,7 +127,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
           ['Akademik', ['students', 'teachers', 'classes', 'schedule', 'reports']],
           ['Kehadiran', ['attendance', 'attendance-data']],
           ['Administrasi', ['payments', 'documents', 'announcements']],
-          ['Sistem', ['accounts', 'settings', 'profile']],
+          ['Sistem', ['accounts', 'audit', 'settings', 'profile']],
         ] as const
       : currentProfile.role === 'teacher'
         ? [
@@ -226,7 +229,8 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
   if (page === 'documents') return <DocumentsPage role={role} />
   if (page === 'classes' && role === 'admin') return <ClassesPage />
   if (page === 'schedule') return <SchedulePage canManage={role !== 'parent'} />
-  if (page === 'announcements') return <AnnouncementsPage canManage={role !== 'parent'} />
+  if (page === 'announcements') return <AnnouncementsPage role={role} currentUserId={profile.id} />
+  if (page === 'audit' && role === 'admin') return <AuditTrailPage />
   if (page === 'settings' && role === 'admin') return <SettingsPage />
   if (page === 'children' && role === 'parent') return <ChildrenPage />
   if (page === 'profile') return <ProfilePageV3 profile={profile} onProfileChange={setProfile} />
