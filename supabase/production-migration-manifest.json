@@ -1,0 +1,35 @@
+{
+  "project_ref": "mtfeuozwxwayzcjltaak",
+  "captured_at": "2026-09-17",
+  "production_migrations": [
+    "20260916024441_setup_auth_profiles_and_roles.sql",
+    "20260916025000_lock_signup_and_create_profiles.sql",
+    "20260916025037_secure_auth_helpers_private_schema.sql",
+    "20260916025815_enable_http_extension_for_auth_bootstrap.sql",
+    "20260916030015_ensure_admin_allowlist_unique_index.sql",
+    "20260916030023_noop_placeholder.sql",
+    "20260916030030_noop_placeholder_2.sql",
+    "20260916030208_add_private_bootstrap_user_function.sql",
+    "20260916030226_remove_unused_private_bootstrap_user_function.sql",
+    "20260916080135_expand_school_management_crud.sql",
+    "20260916081252_default_schedule_creator.sql",
+    "20260916082042_protect_class_consistency_and_timezone.sql",
+    "20260916082337_restrict_internal_class_triggers.sql",
+    "20260916082405_index_new_management_foreign_keys.sql",
+    "20260916091034_add_update_my_profile_rpc.sql",
+    "20260916091221_harden_update_my_profile_rpc.sql",
+    "20260916103158_add_teacher_reports_payments_documents.sql",
+    "20260916153134_scope_teachers_to_assigned_classes.sql",
+    "20260917022532_teacher_class_assignments_and_rls.sql",
+    "20260917032201_school_documents_storage_bucket.sql",
+    "20260917032213_school_documents_storage_policies.sql",
+    "20260917040340_multi_guardian_student_transaction.sql",
+    "20260917040446_harden_multi_guardian_student_rpc.sql"
+  ],
+  "bootstrap_untracked": [
+    "20260916035026_add_students_and_attendance.sql",
+    "20260916040102_add_weekly_school_schedules.sql",
+    "20260916144500_support_unlinked_teacher_records.sql",
+    "20260916150500_deduplicate_teacher_profile_policies.sql"
+  ]
+}
