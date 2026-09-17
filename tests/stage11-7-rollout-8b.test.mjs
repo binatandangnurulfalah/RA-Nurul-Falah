@@ -4,7 +4,9 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 const payments = read('src/portal-v2/PaymentsPage.tsx')
+const paymentsQuery = read('src/data/queries/payments.ts')
 const documents = read('src/portal-v2/DocumentsPage.tsx')
+const documentsQuery = read('src/data/queries/documents.ts')
 
 test('payments memakai reusable data UI dan mempertahankan server-side data contract', () => {
   for (const name of ['DataTable', 'MobileDataCard', 'SearchFilterBar', 'StatCard', 'StatusBadge', 'ErrorState', 'EmptyState']) {
@@ -12,10 +14,10 @@ test('payments memakai reusable data UI dan mempertahankan server-side data cont
   }
   assert.match(payments, /FormDialog/)
   assert.match(payments, /ConfirmDialog/)
-  assert.match(payments, /student_payments_search/)
-  assert.match(payments, /payment_summary/)
-  assert.match(payments, /getPageRange\(page, PAGE_SIZE\)/)
-  assert.match(payments, /\.range\(range\.from, range\.to\)/)
+  assert.match(paymentsQuery, /student_payments_search/)
+  assert.match(paymentsQuery, /payment_summary/)
+  assert.match(paymentsQuery, /getPageRange\(page, pageSize\)/)
+  assert.match(paymentsQuery, /\.range\(range\.from, range\.to\)/)
   assert.doesNotMatch(payments, /SkeletonRows/)
   assert.doesNotMatch(payments, /PageTitle/)
   assert.doesNotMatch(payments, /function Confirm\(/)
@@ -32,8 +34,8 @@ test('documents memakai reusable data UI tanpa mengubah private storage lifecycl
   assert.match(documents, /school_document_storage_cleanup/)
   assert.match(documents, /removeUploadedFileOrQueue/)
   assert.match(documents, /DOCUMENT_MAX_BYTES = 10 \* 1024 \* 1024/)
-  assert.match(documents, /getPageRange\(page, PAGE_SIZE\)/)
-  assert.match(documents, /\.range\(range\.from, range\.to\)/)
+  assert.match(documentsQuery, /getPageRange\(page, pageSize\)/)
+  assert.match(documentsQuery, /\.range\(range\.from, range\.to\)/)
   assert.doesNotMatch(documents, /SkeletonRows/)
   assert.doesNotMatch(documents, /PageTitle/)
   assert.doesNotMatch(documents, /function Confirm\(/)
