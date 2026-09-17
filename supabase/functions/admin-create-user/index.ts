@@ -1,104 +1,119 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
-import { validatePassword } from '../_shared/password-policy.ts'
+import "jsr:@supabase/functions-js@2.4.5/edge-runtime.d.ts";
+import { corsPreflight } from '../_shared/cors.ts'
+import { createPublicClient, requireAuthenticatedUser } from '../_shared/auth.ts'
+import { requireRole } from '../_shared/authorization.ts'
+import { jsonResponse } from '../_shared/response.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+function randomBootstrapPassword() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  const random = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `Nf!${random}aA7`
 }
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+function safeRedirect(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return undefined
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) return undefined
+    return url.toString()
+  } catch {
+    return undefined
+  }
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const preflight = corsPreflight(req)
+  if (preflight) return preflight
+  if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+    const authenticated = await requireAuthenticatedUser(req)
+    if (!authenticated.ok) return authenticated.response
+    const context = authenticated.context
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const roleError = requireRole(context, ['admin'], 'Hanya Admin yang dapat membuat akun.')
+    if (roleError) return roleError
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    })
-
-    const token = authHeader.replace('Bearer ', '')
-    const { data: userData, error: userError } = await userClient.auth.getUser(token)
-    if (userError || !userData.user) return json({ error: 'Unauthorized' }, 401)
-
-    const { data: profile, error: profileError } = await userClient
-      .from('user_profiles')
-      .select('role,is_active')
-      .eq('id', userData.user.id)
-      .single()
-
-    if (profileError || !profile || profile.role !== 'admin' || !profile.is_active) {
-      return json({ error: 'Admin access required' }, 403)
+    let payload: Record<string, unknown>
+    try {
+      payload = await req.json()
+    } catch {
+      return jsonResponse({ ok: false, error: 'Permintaan tidak valid.' }, 400)
     }
 
-    const payload = await req.json()
     const email = String(payload.email ?? '').trim().toLowerCase()
-    const password = String(payload.password ?? '')
     const displayName = String(payload.display_name ?? '').trim()
     const role = String(payload.role ?? '')
+    const redirectTo = safeRedirect(payload.redirect_to)
 
-    if (!email || !email.includes('@')) return json({ error: 'Email tidak valid' }, 400)
-    const passwordError = validatePassword(password)
-    if (passwordError) return json({ error: passwordError }, 400)
-    if (!['admin', 'teacher', 'parent'].includes(role)) return json({ error: 'Role tidak valid' }, 400)
+    if (!email || !email.includes('@')) return jsonResponse({ ok: false, error: 'Email tidak valid.' }, 400)
+    if (displayName.length < 2) return jsonResponse({ ok: false, error: 'Nama pengguna wajib diisi.' }, 400)
+    if (!['admin', 'teacher', 'parent'].includes(role)) return jsonResponse({ ok: false, error: 'Role tidak valid.' }, 400)
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    const { data: allow, error: allowError } = await admin
+    const { data: allow, error: allowError } = await context.adminClient
       .from('account_allowlist')
       .insert({
         email,
         role,
-        display_name: displayName || null,
-        created_by: userData.user.id,
+        display_name: displayName,
+        created_by: context.user.id,
       })
       .select('id')
       .single()
 
     if (allowError) {
-      return json({
-        error: allowError.code === '23505' ? 'Email sudah pernah disiapkan' : allowError.message,
+      return jsonResponse({
+        ok: false,
+        error: allowError.code === '23505' ? 'Email sudah pernah disiapkan.' : 'Akun gagal disiapkan.',
       }, 400)
     }
 
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
+    const { data: created, error: createError } = await context.adminClient.auth.admin.createUser({
       email,
-      password,
+      password: randomBootstrapPassword(),
       email_confirm: true,
-      user_metadata: { display_name: displayName || null },
+      user_metadata: { display_name: displayName },
     })
 
     if (createError || !created.user) {
-      await admin.from('account_allowlist').delete().eq('id', allow.id)
-      return json({ error: createError?.message ?? 'Gagal membuat akun' }, 400)
+      await context.adminClient.from('account_allowlist').delete().eq('id', allow.id)
+      return jsonResponse({ ok: false, error: 'Akun gagal dibuat. Periksa kembali email pengguna.' }, 400)
     }
 
-    return json({
+    const publicClient = createPublicClient()
+    const resetOptions = redirectTo ? { redirectTo } : undefined
+    const { error: resetError } = await publicClient.auth.resetPasswordForEmail(email, resetOptions)
+
+    let manualLink: string | null = null
+    let delivery: 'email' | 'manual_link' = 'email'
+
+    if (resetError) {
+      const { data: generated, error: linkError } = await context.adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+      })
+      manualLink = generated?.properties?.action_link ?? null
+      if (linkError || !manualLink) {
+        await context.adminClient.auth.admin.deleteUser(created.user.id)
+        await context.adminClient.from('account_allowlist').delete().eq('id', allow.id)
+        return jsonResponse({ ok: false, error: 'Akun tidak dapat mengirim alur pembuatan password. Konfigurasi email perlu diperiksa.' }, 503)
+      }
+      delivery = 'manual_link'
+    }
+
+    return jsonResponse({
       ok: true,
+      delivery,
+      manual_link: manualLink,
       user: {
         id: created.user.id,
         email: created.user.email,
         role,
-        display_name: displayName || null,
+        display_name: displayName,
       },
     }, 201)
-  } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Terjadi kesalahan server' }, 500)
+  } catch {
+    return jsonResponse({ ok: false, error: 'Terjadi kesalahan server.' }, 500)
   }
 })
