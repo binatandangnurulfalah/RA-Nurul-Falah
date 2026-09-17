@@ -7,7 +7,7 @@ Aplikasi web manajemen RA (Raudhatul Athfal) Nurul Falah untuk Admin, Guru, dan 
 - Login email + password dengan role `admin`, `teacher`, dan `parent`
 - Tidak ada registrasi publik
 - Admin membuat akun dengan Nama, Email, dan Role; pengguna menentukan password sendiri melalui alur recovery/invitation
-- MFA TOTP diwajibkan pada portal Administrator
+- Portal internal tidak menggunakan MFA/TOTP; seluruh role masuk cukup dengan email + password
 - Profil pengguna dan status aktif tersimpan di `public.user_profiles`
 - Row Level Security (RLS) membatasi data sesuai role dan relasi wali murid
 - Lupa password menggunakan OTP/recovery Supabase Auth
@@ -59,22 +59,17 @@ Hardening yang diterapkan:
 - Authorization Edge Function dipusatkan melalui helper shared.
 - Akun baru tidak lagi memakai password yang dipilih atau diketahui Admin.
 - Password aplikasi minimal 10 karakter dan wajib menggunakan minimal 3 kelompok karakter.
-- Portal Admin menggunakan MFA TOTP.
+- Admin tetap dibatasi oleh role, status akun aktif, RLS, dan authorization Edge Function tanpa mewajibkan MFA.
 
 ### Leaked Password Protection
 
-Supabase Security Advisor dapat menampilkan warning `Leaked Password Protection Disabled`. Project production saat ini berada pada Supabase Free plan, sedangkan fitur tersebut memerlukan Pro plan atau lebih tinggi. Jangan menganggap warning ini sudah terselesaikan tanpa upgrade plan yang disetujui. Mitigasi saat ini adalah kebijakan password kuat, user-owned password setup/recovery, dan MFA TOTP untuk Admin.
+Supabase Security Advisor dapat menampilkan warning `Leaked Password Protection Disabled`. Project production saat ini berada pada Supabase Free plan, sedangkan fitur tersebut memerlukan Pro plan atau lebih tinggi. Jangan menganggap warning ini sudah terselesaikan tanpa upgrade plan yang disetujui. Mitigasi saat ini adalah kebijakan password kuat, user-owned password setup/recovery, RLS, role-based authorization, dan akun internal tanpa registrasi publik.
 
-## MFA Administrator dan recovery
+## Login dan recovery
 
-Admin yang belum memiliki faktor TOTP akan diminta mengaktifkan authenticator sebelum portal Admin dibuka. Admin yang sudah memiliki faktor TOTP harus menyelesaikan challenge sampai session mencapai `aal2`.
+Aplikasi ini digunakan sebagai sistem internal. Login normal untuk Admin, Guru, dan Orang Tua/Wali cukup menggunakan email dan password. Tidak ada langkah authenticator, QR MFA, TOTP, atau kewajiban session `aal2`.
 
-Supabase Auth tidak menyediakan recovery code TOTP. Karena itu prosedur operasionalnya:
-
-1. Setiap Administrator harus mendaftarkan faktor TOTP cadangan pada perangkat/aplikasi authenticator yang berbeda jika tersedia.
-2. Secret/faktor cadangan harus disimpan terpisah dari perangkat utama dan tidak dimasukkan ke source code, database aplikasi, log, atau tiket dukungan.
-3. Jika faktor utama hilang tetapi faktor cadangan masih tersedia, login memakai faktor cadangan lalu kelola faktor yang tidak lagi digunakan.
-4. Jika seluruh faktor hilang, jangan membuat bypass MFA di frontend atau melemahkan RLS. Recovery harus dilakukan oleh operator Supabase yang berwenang mengikuti prosedur Auth project, kemudian MFA didaftarkan ulang.
+Jika pengguna lupa password, alur recovery email/OTP Supabase Auth tetap tersedia. MFA factor yang mungkin pernah terdaftar pada akun lama tidak digunakan oleh aplikasi dan tidak menjadi syarat untuk membuka portal atau menjalankan Edge Function.
 
 ## Menjalankan lokal
 
@@ -114,7 +109,6 @@ Konfigurasi TypeScript mengaktifkan `noUnusedLocals` dan `noUnusedParameters`, s
 ```text
 src/
   App.tsx
-  AdminMfaGate.tsx
   RolePortal.tsx
   lib/
   portal-v2/
