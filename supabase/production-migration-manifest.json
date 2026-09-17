@@ -40,7 +40,8 @@
     "20260917175117_stage11_10_academic_year_class_normalization.sql",
     "20260917175125_stage11_10_current_year_guard.sql",
     "20260917175148_stage11_10_trigger_compatibility_hardening.sql",
-    "20260917175154_stage11_10_class_year_change_guard.sql"
+    "20260917175154_stage11_10_class_year_change_guard.sql",
+    "20260918102000_stage11_11_global_audit_events.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
