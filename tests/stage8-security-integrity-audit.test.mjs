@@ -4,12 +4,13 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
 
-const [migration, permissionMigration, announcements, payments, auditPage, portal, manifestText] = await Promise.all([
+const [migration, permissionMigration, announcements, payments, auditPage, auditQuery, portal, manifestText] = await Promise.all([
   read('../supabase/migrations/20260917074753_stage8_announcement_payment_audit.sql'),
   read('../supabase/migrations/20260917075517_stage8_harden_audit_permissions.sql'),
   read('../src/portal-v2/AnnouncementsPage.tsx'),
   read('../src/portal-v2/PaymentsPage.tsx'),
   read('../src/portal-v2/AuditTrailPage.tsx'),
+  read('../src/data/queries/audit.ts'),
   read('../src/RolePortalV5.tsx'),
   read('../supabase/production-migration-manifest.json'),
 ])
@@ -49,7 +50,9 @@ test('audit trail append-only mencatat perubahan pengumuman dan pembayaran', () 
   assert.match(permissionMigration, /grant select on table public\.audit_events to authenticated/)
   assert.match(permissionMigration, /revoke all privileges on sequence public\.audit_events_id_seq from anon, authenticated/)
   assert.match(permissionMigration, /revoke all privileges on function private\.capture_audit_event\(\) from anon, authenticated/)
-  assert.match(auditPage, /\.from\('audit_events_view'\)/)
+  assert.match(auditQuery, /\.from\('audit_events_view'\)/)
+  assert.match(auditQuery, /count: 'exact'/)
+  assert.match(auditPage, /useQuery\(auditPageOptions/)
   assert.match(portal, /page === 'audit' && role === 'admin'/)
   assert.match(portal, /Riwayat Aktivitas/)
 })
