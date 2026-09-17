@@ -1,19 +1,24 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Edit3, Plus, Save, Search, Trash2, UsersRound } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { validatePassword } from '../lib/auth-utils.js'
+import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog } from './AppExperience'
-import { PaginationControls, useDebouncedValue, usePaginatedItems } from './DataExperience'
+import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 
 type Account = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
 type Message = { tone: 'success' | 'error'; text: string }
+type AccountStats = { total: number; teachers: number; parents: number }
 
 export function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | AppRole>('all')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState<AccountStats>({ total: 0, teachers: 0, parents: 0 })
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
@@ -22,26 +27,34 @@ export function AccountsPage() {
 
   const load = async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    const range = getPageRange(page, PAGE_SIZE)
+    let accountQuery = supabase
       .from('user_profiles')
-      .select('id,role,display_name,is_active,created_at')
+      .select('id,role,display_name,is_active,created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-    if (error) setMessage({ tone: 'error', text: error.message })
-    setAccounts((data as Account[] | null) ?? [])
+      .range(range.from, range.to)
+
+    if (roleFilter !== 'all') accountQuery = accountQuery.eq('role', roleFilter)
+    const normalizedSearch = sanitizeSearch(debouncedSearch)
+    if (normalizedSearch) accountQuery = accountQuery.ilike('display_name', `%${normalizedSearch}%`)
+
+    const [accountResult, allCount, teacherCount, parentCount] = await Promise.all([
+      accountQuery,
+      supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
+      supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
+      supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'parent'),
+    ])
+
+    const firstError = accountResult.error || allCount.error || teacherCount.error || parentCount.error
+    if (firstError) setMessage({ tone: 'error', text: firstError.message })
+    setAccounts((accountResult.data as Account[] | null) ?? [])
+    setTotal(accountResult.count ?? 0)
+    setStats({ total: allCount.count ?? 0, teachers: teacherCount.count ?? 0, parents: parentCount.count ?? 0 })
     setLoading(false)
   }
 
-  useEffect(() => { void load() }, [])
-
-  const filtered = useMemo(() => {
-    const query = debouncedSearch.trim().toLowerCase()
-    return accounts.filter((account) =>
-      (roleFilter === 'all' || account.role === roleFilter)
-      && (!query || (account.display_name || '').toLowerCase().includes(query)),
-    )
-  }, [accounts, roleFilter, debouncedSearch])
-
-  const paged = usePaginatedItems(filtered, `${roleFilter}:${debouncedSearch}`)
+  useEffect(() => { void load() }, [page, roleFilter, debouncedSearch])
+  useEffect(() => { setPage(1) }, [roleFilter, debouncedSearch])
 
   const remove = async () => {
     if (!deleting) return
@@ -66,9 +79,9 @@ export function AccountsPage() {
     />
     {message && <Notice {...message} />}
     <div className="v2-stat-grid three">
-      <MiniStat label="Semua Akun" value={accounts.length} tone="green" />
-      <MiniStat label="Guru" value={accounts.filter((account) => account.role === 'teacher').length} tone="blue" />
-      <MiniStat label="Wali Murid" value={accounts.filter((account) => account.role === 'parent').length} tone="purple" />
+      <MiniStat label="Semua Akun" value={stats.total} tone="green" />
+      <MiniStat label="Guru" value={stats.teachers} tone="blue" />
+      <MiniStat label="Wali Murid" value={stats.parents} tone="purple" />
     </div>
     <section className="v2-panel">
       <div className="v2-toolbar">
@@ -80,9 +93,9 @@ export function AccountsPage() {
           <option value="parent">Wali</option>
         </select>
       </div>
-      {loading ? <SkeletonRows /> : filtered.length ? <>
+      {loading ? <SkeletonRows /> : accounts.length ? <>
         <div className="v2-list">
-          {paged.items.map((account) => <div className="v2-user-row" key={account.id}>
+          {accounts.map((account) => <div className="v2-user-row" key={account.id}>
             <span className="v2-avatar">{initials(account.display_name)}</span>
             <div className="grow"><strong>{account.display_name || 'Tanpa nama'}</strong><small>{roleLabel(account.role)} · {account.is_active ? 'Aktif' : 'Nonaktif'}</small></div>
             <span className={`v2-badge ${account.is_active ? 'green' : 'gray'}`}>{account.is_active ? 'Aktif' : 'Nonaktif'}</span>
@@ -95,7 +108,7 @@ export function AccountsPage() {
             />
           </div>)}
         </div>
-        <PaginationControls page={paged.page} total={paged.total} onPage={paged.setPage} />
+        <PaginationControls page={page} total={total} onPage={setPage} />
       </> : <EmptyCard text="Tidak ada akun yang sesuai filter." />}
     </section>
 
