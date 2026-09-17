@@ -33,5 +33,9 @@ drop trigger if exists school_documents_touch_updated_at on public.school_docume
 create trigger school_documents_touch_updated_at before update on public.school_documents
 for each row execute function public.touch_updated_at();
 
-drop function if exists public.set_updated_at();
+drop trigger if exists set_account_allowlist_updated_at on public.account_allowlist;
+drop trigger if exists account_allowlist_touch_updated_at on public.account_allowlist;
+create trigger account_allowlist_touch_updated_at before update on public.account_allowlist
+for each row execute function public.touch_updated_at();
 
+drop function if exists public.set_updated_at();

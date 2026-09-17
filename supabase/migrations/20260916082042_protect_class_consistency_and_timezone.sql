@@ -26,7 +26,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $$;
+as $$
 begin
   if exists (select 1 from public.students where class_name = old.name) then
     raise exception 'Kelas masih memiliki murid dan tidak dapat dihapus.';
