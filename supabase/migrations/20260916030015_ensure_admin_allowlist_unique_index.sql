@@ -1,0 +1,1 @@
+create unique index if not exists account_allowlist_email_lower_idx on public.account_allowlist (lower(email));

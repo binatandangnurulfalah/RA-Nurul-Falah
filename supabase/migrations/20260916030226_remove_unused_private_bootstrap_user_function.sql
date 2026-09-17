@@ -1,0 +1,1 @@
+drop function if exists private.bootstrap_create_user_with_hash(text,text,text,public.app_role);
