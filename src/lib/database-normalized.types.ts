@@ -1,6 +1,7 @@
-import type { Database as GeneratedDatabase } from './database.types'
+import type { Database as GeneratedDatabase, Json } from './database.types'
 
 type BaseTables = GeneratedDatabase['public']['Tables']
+type BaseViews = GeneratedDatabase['public']['Views']
 type BaseFunctions = GeneratedDatabase['public']['Functions']
 
 type PatchTable<
@@ -127,16 +128,57 @@ type SchoolSettingsTable = PatchTable<
   }]
 >
 
+type AuditEventsTable = Omit<BaseTables['audit_events'], 'Row' | 'Insert' | 'Update'> & {
+  Row: Omit<BaseTables['audit_events']['Row'], 'record_id'> & {
+    record_id: string | null
+    record_key: string
+    changed_fields: string[]
+    event_name: string | null
+  }
+  Insert: Omit<BaseTables['audit_events']['Insert'], 'record_id'> & {
+    record_id?: string | null
+    record_key: string
+    changed_fields?: string[]
+    event_name?: string | null
+  }
+  Update: Omit<BaseTables['audit_events']['Update'], 'record_id'> & {
+    record_id?: string | null
+    record_key?: string
+    changed_fields?: string[]
+    event_name?: string | null
+  }
+}
+
+type AuditEventsView = Omit<BaseViews['audit_events_view'], 'Row'> & {
+  Row: BaseViews['audit_events_view']['Row'] & {
+    record_key: string | null
+    changed_fields: string[] | null
+    event_name: string | null
+  }
+}
+
 export type Database = Omit<GeneratedDatabase, 'public'> & {
-  public: Omit<GeneratedDatabase['public'], 'Tables' | 'Functions'> & {
-    Tables: Omit<BaseTables, 'school_classes' | 'students' | 'school_schedules' | 'school_settings'> & {
+  public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views' | 'Functions'> & {
+    Tables: Omit<BaseTables, 'audit_events' | 'school_classes' | 'students' | 'school_schedules' | 'school_settings'> & {
       academic_years: AcademicYearsTable
+      audit_events: AuditEventsTable
       school_classes: SchoolClassesTable
       students: StudentsTable
       school_schedules: SchoolSchedulesTable
       school_settings: SchoolSettingsTable
     }
+    Views: Omit<BaseViews, 'audit_events_view'> & {
+      audit_events_view: AuditEventsView
+    }
     Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
+      append_account_audit_event: {
+        Args: {
+          p_target_user_id: string
+          p_event_name: string
+          p_details?: Json
+        }
+        Returns: number
+      }
       save_academic_year: {
         Args: {
           p_academic_year_id?: string
