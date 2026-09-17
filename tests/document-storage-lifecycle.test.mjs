@@ -29,7 +29,10 @@ test('perubahan atau penghapusan dokumen mengantrekan file Storage lama', () => 
   assert.match(hardeningMigration, /old\.file_url is distinct from new\.file_url/)
 })
 
-test('portal aktif mengekspor DocumentsPage baru tanpa mengubah modul sekolah lain', () => {
-  assert.match(wrapper, /PaymentsPage, ReportsPage, TeachersPage/)
+test('portal aktif mengekspor Dokumen dan modul data besar dari implementasi aktifnya', () => {
+  assert.match(wrapper, /TeachersPage.*\.\/TeachersPage/)
+  assert.match(wrapper, /ReportsPage.*\.\/ReportsPage/)
+  assert.match(wrapper, /PaymentsPage.*\.\/PaymentsPage/)
   assert.match(wrapper, /DocumentsPage.*\.\/DocumentsPage/)
+  assert.doesNotMatch(wrapper, /SchoolModulesLegacy/)
 })
