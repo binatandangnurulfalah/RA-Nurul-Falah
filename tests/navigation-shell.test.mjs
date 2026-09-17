@@ -25,6 +25,7 @@ test('bottom navigation mengikuti kontrak role dan Scan berada di posisi tengah'
   assert.match(shell, /teacher: \['dashboard', 'attendance-data', 'attendance', 'students'\]/)
   assert.match(shell, /admin: \['dashboard', 'students', 'attendance', 'attendance-data'\]/)
   assert.match(shell, /parent: \['dashboard', 'children', 'reports', 'payments'\]/)
+  assert.match(shell, /label === 'Dashboard'\) return 'Beranda'/)
   assert.match(shell, /item\.id === 'attendance' \? 'scan-center-item' : ''/)
   assert.match(styles, /\.v2-bottom-nav button\.scan-center-item/)
   assert.match(styles, /transform:\s*translateY\(-12px\)/)
