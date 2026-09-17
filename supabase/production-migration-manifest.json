@@ -1,6 +1,6 @@
 {
   "project_ref": "mtfeuozwxwayzcjltaak",
-  "captured_at": "2026-09-17",
+  "captured_at": "2026-09-18",
   "production_migrations": [
     "20260916024441_setup_auth_profiles_and_roles.sql",
     "20260916025000_lock_signup_and_create_profiles.sql",
@@ -36,7 +36,9 @@
     "20260917095625_stage11_attendance_hardening.sql",
     "20260917125645_stage11_dashboard_summary.sql",
     "20260917130537_normalize_optional_rpc_ids.sql",
-    "20260917131531_refine_dashboard_attendance_semantics.sql"
+    "20260917131531_refine_dashboard_attendance_semantics.sql",
+    "20260918090000_stage11_10_academic_year_class_normalization.sql",
+    "20260918090500_stage11_10_current_year_guard.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
