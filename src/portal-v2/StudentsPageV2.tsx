@@ -6,7 +6,7 @@ import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDa
 import { ConfirmDialog, FormField, FormSection } from '../components/forms'
 import { Button, EmptyState, PageHeader } from '../components/ui'
 import { queryKeys } from '../data/queryKeys'
-import { studentLookupsOptions, studentPageOptions, type StudentAccount, type StudentClass, type StudentRow } from '../data/queries/students'
+import { studentLookupsOptions, studentPageOptions, type StudentAcademicYear, type StudentAccount, type StudentClass, type StudentRow } from '../data/queries/students'
 import { useDataFilters } from '../data/useDataFilters'
 import { userErrorMessage } from '../lib/error-utils'
 import { supabase } from '../lib/supabase'
@@ -17,6 +17,7 @@ import { Notice } from './PortalPages'
 type Account = StudentAccount
 type Student = StudentRow
 type SchoolClass = StudentClass
+type AcademicYear = StudentAcademicYear
 type Message = { tone: 'success' | 'error'; text: string }
 
 export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) {
@@ -32,6 +33,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   const total = pageQuery.data?.total ?? 0
   const parents = lookupQuery.data?.parents ?? []
   const classes = lookupQuery.data?.classes ?? []
+  const academicYears = lookupQuery.data?.academicYears ?? []
   const loading = pageQuery.isPending
   const [editing, setEditing] = useState<Student | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
@@ -117,7 +119,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       >
         <select aria-label="Filter kelompok" value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
           <option value="all">Semua kelompok</option>
-          {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.name}>{schoolClass.name}</option>)}
+          {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name} · {schoolClass.academic_year}</option>)}
         </select>
       </SearchFilterBar>
 
@@ -149,6 +151,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       student={editing === 'new' ? null : editing}
       parents={parents}
       classes={classes}
+      academicYears={academicYears}
       onClose={() => setEditing(null)}
       onDone={async () => {
         const wasNew = editing === 'new'
@@ -171,7 +174,17 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   </div>
 }
 
-function StudentModal({ student, parents, classes, onClose, onDone }: { student: Student | null; parents: Account[]; classes: SchoolClass[]; onClose: () => void; onDone: () => void }) {
+function StudentModal({ student, parents, classes, academicYears, onClose, onDone }: {
+  student: Student | null
+  parents: Account[]
+  classes: SchoolClass[]
+  academicYears: AcademicYear[]
+  onClose: () => void
+  onDone: () => void
+}) {
+  const currentYear = academicYears.find((item) => item.is_current) ?? academicYears[0]
+  const initialClass = student?.class_id ? classes.find((item) => item.id === student.class_id) : undefined
+  const initialAcademicYearId = student?.academic_year_id || initialClass?.academic_year_id || currentYear?.id || ''
   const [form, setForm] = useState({
     full_name: student?.full_name || '',
     nik: student?.nik || '',
@@ -180,8 +193,8 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
     gender: student?.gender || '',
     birth_place: student?.birth_place || '',
     birth_date: student?.birth_date || '',
-    class_name: student?.class_name || '',
-    academic_year: student?.academic_year || classes[0]?.academic_year || '2026/2027',
+    class_id: student?.class_id || '',
+    academic_year_id: initialAcademicYearId,
     active: student?.is_active ?? true,
     guardians: [] as string[],
   })
@@ -207,6 +220,8 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
     return () => { mounted = false }
   }, [student])
 
+  const classesForYear = classes.filter((item) => item.academic_year_id === form.academic_year_id)
+
   const toggleGuardian = (guardianId: string, checked: boolean) => {
     setForm((current) => ({
       ...current,
@@ -219,6 +234,17 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (guardianLoading || busyRef.current) return
+    const selectedYear = academicYears.find((item) => item.id === form.academic_year_id)
+    const selectedClass = classes.find((item) => item.id === form.class_id)
+    if (!selectedYear) {
+      setErrorText('Pilih tahun ajaran resmi terlebih dahulu.')
+      return
+    }
+    if (selectedClass && selectedClass.academic_year_id !== selectedYear.id) {
+      setErrorText('Kelas tidak sesuai dengan tahun ajaran yang dipilih.')
+      return
+    }
+
     busyRef.current = true
     setBusy(true)
     setErrorText('')
@@ -232,8 +258,8 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
       p_gender: form.gender || undefined,
       p_birth_place: form.birth_place.trim() || undefined,
       p_birth_date: form.birth_date || undefined,
-      p_class_name: form.class_name || undefined,
-      p_academic_year: form.academic_year.trim() || undefined,
+      p_class_name: selectedClass?.name,
+      p_academic_year: selectedYear.label,
       p_is_active: form.active,
       p_guardian_user_ids: form.guardians,
     })
@@ -242,6 +268,7 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
     setBusy(false)
     if (error) {
       if (error.code === '23505') setErrorText('NIK, NIS, atau NISN sudah digunakan oleh murid lain.')
+      else if (error.code === '23503') setErrorText('Kelas atau tahun ajaran tidak valid. Muat ulang halaman lalu coba lagi.')
       else setErrorText(error.message || 'Data murid gagal disimpan.')
       return
     }
@@ -260,9 +287,23 @@ function StudentModal({ student, parents, classes, onClose, onDone }: { student:
         <FormField label="Tanggal lahir"><input type="date" value={form.birth_date} onChange={(event) => setForm({ ...form, birth_date: event.target.value })} /></FormField>
       </FormSection>
 
-      <FormSection title="Akademik" description="Kelompok dan tahun ajaran tetap mengikuti data resmi sekolah.">
-        <FormField label="Kelompok"><select value={form.class_name} onChange={(event) => setForm({ ...form, class_name: event.target.value })}><option value="">Belum ditentukan</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.name}>{schoolClass.name}</option>)}</select></FormField>
-        <FormField label="Tahun ajaran"><input value={form.academic_year} onChange={(event) => setForm({ ...form, academic_year: event.target.value })} /></FormField>
+      <FormSection title="Akademik" description="Kelompok dan tahun ajaran dipilih dari data resmi sekolah; tidak ada input tahun bebas.">
+        <FormField label="Tahun ajaran" required>
+          <select required value={form.academic_year_id} onChange={(event) => {
+            const academicYearId = event.target.value
+            const selectedClass = classes.find((item) => item.id === form.class_id)
+            setForm({ ...form, academic_year_id: academicYearId, class_id: selectedClass?.academic_year_id === academicYearId ? form.class_id : '' })
+          }}>
+            <option value="">Pilih tahun ajaran</option>
+            {academicYears.map((year) => <option key={year.id} value={year.id}>{year.label}{year.is_current ? ' · Berjalan' : ''}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Kelompok">
+          <select value={form.class_id} onChange={(event) => setForm({ ...form, class_id: event.target.value })}>
+            <option value="">Belum ditentukan</option>
+            {classesForYear.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}
+          </select>
+        </FormField>
         <label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Murid aktif</span></label>
       </FormSection>
 
