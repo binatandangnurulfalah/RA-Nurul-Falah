@@ -1,0 +1,57 @@
+name: Supabase Security Integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  security-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - run: npm ci
+      - name: Materialize historical bootstrap migrations
+        run: ./scripts/prepare-supabase-integration.sh
+      - name: Start isolated Supabase stack
+        run: supabase start
+      - name: Serve Edge Functions
+        run: |
+          supabase functions serve --no-verify-jwt > /tmp/ra-nurul-falah-functions.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:54321/functions/v1/manage-attendance-record; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/ra-nurul-falah-functions.log
+          exit 1
+      - name: Test RLS, Storage, Auth, and Edge Functions
+        run: |
+          supabase status -o env > /tmp/ra-nurul-falah.env
+          set -a
+          source /tmp/ra-nurul-falah.env
+          set +a
+          SUPABASE_URL="$API_URL" \
+          SUPABASE_ANON_KEY="$ANON_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          npm run test:integration
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          cat /tmp/ra-nurul-falah-functions.log || true
+          supabase status || true
+      - name: Stop local stack
+        if: always()
+        run: supabase stop --no-backup
