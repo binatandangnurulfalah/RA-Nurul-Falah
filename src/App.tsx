@@ -298,9 +298,9 @@ function NewPasswordPage() {
 
   const strength = useMemo(() => {
     let score = 0
+    if (password.length >= 6) score++
+    if (password.length >= 8) score++
     if (password.length >= 10) score++
-    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++
-    if (/\d/.test(password)) score++
     return score
   }, [password])
 
@@ -338,7 +338,7 @@ function NewPasswordPage() {
   return (
     <AuthLayout title="Buat password baru" subtitle="Gunakan password baru yang aman dan mudah Anda ingat.">
       <form onSubmit={submit} className="form-stack">
-        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 10 karakter" />
+        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 6 karakter" />
         <div className="strength">
           <span className={strength >= 1 ? 'filled' : ''} />
           <span className={strength >= 2 ? 'filled' : ''} />
