@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { before, test } from 'node:test'
+import { after, before, test } from 'node:test'
 import { createClient } from '@supabase/supabase-js'
 
 const url = process.env.SUPABASE_URL
@@ -11,6 +11,9 @@ const password = 'AmanSekali123'
 const service = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 const actors = {}
 const fixture = {}
+const fixtureEmails = ['dashboard-admin@stage11.test', 'dashboard-teacher@stage11.test', 'dashboard-parent@stage11.test']
+const fixtureClassNames = ['Dashboard RPC A', 'Dashboard RPC B']
+const fixtureAnnouncementTitles = ['Info Semua Dashboard', 'Info Guru Dashboard']
 
 function dbFor(token) {
   return createClient(url, anonKey, {
@@ -42,11 +45,13 @@ before(async () => {
   ]).select('id,name')
   assert.ifError(classError)
   fixture.classA = classes.find((row) => row.name === 'Dashboard RPC A').id
+  fixture.classB = classes.find((row) => row.name === 'Dashboard RPC B').id
 
   const { data: teacher, error: teacherError } = await service.from('teacher_profiles').insert({
     full_name: 'Guru Dashboard RPC', teacher_user_id: actors.teacher.id,
   }).select('id').single()
   assert.ifError(teacherError)
+  fixture.teacherProfile = teacher.id
   assert.ifError((await service.from('teacher_class_assignments').insert({ class_id: fixture.classA, teacher_profile_id: teacher.id })).error)
 
   const { data: students, error: studentError } = await service.from('students').insert([
@@ -92,6 +97,30 @@ before(async () => {
   ])).error)
 })
 
+after(async () => {
+  const studentIds = [fixture.studentA, fixture.studentB].filter(Boolean)
+  const classIds = [fixture.classA, fixture.classB].filter(Boolean)
+
+  if (studentIds.length) {
+    assert.ifError((await service.from('attendance_records').delete().in('student_id', studentIds)).error)
+    assert.ifError((await service.from('report_cards').delete().in('student_id', studentIds)).error)
+    assert.ifError((await service.from('student_payments').delete().in('student_id', studentIds)).error)
+    assert.ifError((await service.from('student_guardians').delete().in('student_id', studentIds)).error)
+    assert.ifError((await service.from('students').delete().in('id', studentIds)).error)
+  }
+
+  if (classIds.length) assert.ifError((await service.from('teacher_class_assignments').delete().in('class_id', classIds)).error)
+  if (fixture.teacherProfile) assert.ifError((await service.from('teacher_profiles').delete().eq('id', fixture.teacherProfile)).error)
+  assert.ifError((await service.from('school_schedules').delete().in('class_name', fixtureClassNames)).error)
+  assert.ifError((await service.from('announcements').delete().in('title', fixtureAnnouncementTitles)).error)
+  assert.ifError((await service.from('school_classes').delete().in('name', fixtureClassNames)).error)
+
+  for (const actor of Object.values(actors)) {
+    if (actor?.id) assert.ifError((await service.auth.admin.deleteUser(actor.id)).error)
+  }
+  assert.ifError((await service.from('account_allowlist').delete().in('email', fixtureEmails)).error)
+})
+
 async function summaryFor(actor) {
   const { data, error } = await actor.db.rpc('dashboard_summary')
   assert.ifError(error)
@@ -106,6 +135,7 @@ test('dashboard_summary membatasi Guru ke kelas yang ditugaskan', async () => {
   assert.equal(summary.attendance_today, 1)
   assert.equal(summary.late_today, 0)
   assert.equal(summary.absent_today, 0)
+  assert.equal(summary.unrecorded_today, 0)
   assert.equal(summary.draft_reports, 1)
   assert.equal(summary.open_payments, 0)
   assert.equal(summary.today_schedule_count, 1)
@@ -119,6 +149,7 @@ test('dashboard_summary membatasi Wali ke anak terhubung dan tidak membuka draft
   assert.equal(summary.role, 'parent')
   assert.equal(summary.active_students, 1)
   assert.equal(summary.attendance_today, 1)
+  assert.equal(summary.unrecorded_today, 0)
   assert.equal(summary.draft_reports, 0)
   assert.equal(summary.open_payments, 1)
   assert.equal(summary.today_schedule_count, 1)
