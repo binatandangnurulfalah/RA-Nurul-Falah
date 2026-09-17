@@ -63,7 +63,7 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
       canManage
         ? supabase.from('students').select('id,full_name,nis,class_name').eq('is_active', true).order('full_name')
         : Promise.resolve({ data: [] as Student[], error: null }),
-      supabase.rpc('attendance_summary_for_date', { p_date: TODAY, p_student_id: parentView ? childSelection.selectedChildId || null : null }),
+      supabase.rpc('attendance_summary_for_date', { p_date: TODAY, p_student_id: parentView ? childSelection.selectedChildId || undefined : undefined }),
     ])
 
     const firstError = recordsResult.error || studentsResult.error || summaryResult.error
