@@ -1,0 +1,343 @@
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { Edit3, ExternalLink, FileText, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { type AppRole, supabase } from '../lib/supabase'
+import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { ActionMenu, Dialog } from './AppExperience'
+import { PaginationControls, useDebouncedValue, usePaginatedItems } from './DataExperience'
+
+type Message = { tone: 'success' | 'error'; text: string }
+type SchoolDocument = {
+  id: string
+  title: string
+  category: string
+  document_number: string | null
+  document_date: string | null
+  recipient: string | null
+  description: string | null
+  file_url: string | null
+  audience: 'all' | 'admin' | 'teacher' | 'parent'
+  is_published: boolean
+  created_at: string
+}
+type StorageCleanupRow = { id: string; object_path: string; attempts: number }
+type CleanupSummary = { processed: number; failed: number; error: string | null }
+
+const DOCUMENT_BUCKET = 'school-documents'
+const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
+const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
+
+function isExternalDocumentUrl(value?: string | null) {
+  return Boolean(value && /^https?:\/\//i.test(value))
+}
+
+function storedDocumentPath(value?: string | null) {
+  return value && !isExternalDocumentUrl(value) ? value : null
+}
+
+function documentMimeType(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  return DOCUMENT_MIME_BY_EXTENSION[extension] || null
+}
+
+function safeDocumentFileName(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
+  const withoutExtension = file.name.replace(/\.[^.]+$/, '').toLowerCase()
+  const baseName = withoutExtension.replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'dokumen'
+  return `${baseName}.${extension}`
+}
+
+async function enqueueStorageCleanup(objectPath: string, lastError?: string) {
+  const { error } = await supabase
+    .from('school_document_storage_cleanup')
+    .upsert(
+      { object_path: objectPath, attempts: lastError ? 1 : 0, last_error: lastError?.slice(0, 1000) || null },
+      { onConflict: 'object_path' },
+    )
+  return error
+}
+
+async function flushDocumentStorageCleanup(): Promise<CleanupSummary> {
+  const { data, error } = await supabase
+    .from('school_document_storage_cleanup')
+    .select('id,object_path,attempts')
+    .order('queued_at', { ascending: true })
+    .limit(25)
+
+  if (error) return { processed: 0, failed: 0, error: error.message }
+
+  const rows = (data as StorageCleanupRow[] | null) ?? []
+  let processed = 0
+  let failed = 0
+
+  for (const row of rows) {
+    const removal = await supabase.storage.from(DOCUMENT_BUCKET).remove([row.object_path])
+    if (removal.error) {
+      failed += 1
+      await supabase
+        .from('school_document_storage_cleanup')
+        .update({ attempts: row.attempts + 1, last_error: removal.error.message.slice(0, 1000) })
+        .eq('id', row.id)
+      continue
+    }
+
+    const queueDelete = await supabase.from('school_document_storage_cleanup').delete().eq('id', row.id)
+    if (queueDelete.error) {
+      failed += 1
+      continue
+    }
+    processed += 1
+  }
+
+  return { processed, failed, error: null }
+}
+
+async function removeUploadedFileOrQueue(objectPath: string) {
+  const removal = await supabase.storage.from(DOCUMENT_BUCKET).remove([objectPath])
+  if (!removal.error) return false
+  await enqueueStorageCleanup(objectPath, removal.error.message)
+  return true
+}
+
+function cleanupMessage(summary: CleanupSummary, successText: string) {
+  if (summary.error || summary.failed > 0) {
+    return `${successText} Sebagian file lama belum bisa dibersihkan dan sudah disimpan dalam antrean untuk dicoba lagi otomatis.`
+  }
+  return successText
+}
+
+export function DocumentsPage({ role }: { role: AppRole }) {
+  const canManage = role === 'admin'
+  const [rows, setRows] = useState<SchoolDocument[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [editing, setEditing] = useState<SchoolDocument | 'new' | null>(null)
+  const [deleting, setDeleting] = useState<SchoolDocument | null>(null)
+  const [message, setMessage] = useState<Message | null>(null)
+  const debouncedSearch = useDebouncedValue(search)
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('school_documents')
+      .select('*')
+      .order('document_date', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (error) setMessage({ tone: 'error', text: error.message })
+    setRows((data as SchoolDocument[] | null) ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void load()
+    if (canManage) {
+      void flushDocumentStorageCleanup().then((summary) => {
+        if (summary.error || summary.failed > 0) {
+          setMessage({ tone: 'error', text: 'Ada file lama yang belum dapat dibersihkan. Sistem akan mencoba lagi otomatis saat Admin membuka halaman Dokumen.' })
+        }
+      })
+    }
+  }, [canManage])
+
+  const filtered = useMemo(() => {
+    const query = debouncedSearch.trim().toLowerCase()
+    return rows.filter((row) => !query || `${row.title} ${row.category} ${row.document_number || ''} ${row.recipient || ''}`.toLowerCase().includes(query))
+  }, [rows, debouncedSearch])
+  const paged = usePaginatedItems(filtered, debouncedSearch)
+
+  const remove = async () => {
+    if (!deleting || !canManage) return
+    const { error } = await supabase.from('school_documents').delete().eq('id', deleting.id)
+    if (error) {
+      setMessage({ tone: 'error', text: error.message })
+      return
+    }
+
+    setDeleting(null)
+    const cleanup = await flushDocumentStorageCleanup()
+    setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil dihapus.') })
+    await load()
+  }
+
+  const openDocument = async (row: SchoolDocument) => {
+    if (!row.file_url) return
+    if (isExternalDocumentUrl(row.file_url)) {
+      window.open(row.file_url, '_blank', 'noopener,noreferrer')
+      return
+    }
+
+    const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrl(row.file_url, 300)
+    if (error || !data?.signedUrl) {
+      setMessage({ tone: 'error', text: 'Dokumen gagal dibuka. Silakan coba lagi.' })
+      return
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  return <div className="v2-stack">
+    <PageTitle eyebrow="ARSIP SEKOLAH" title="Dokumen & Surat" text={canManage ? 'Kelola surat, arsip dan unggah dokumen resmi sekolah.' : 'Dokumen resmi yang dibagikan kepada akun Anda.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Dokumen</button> : undefined} />
+    {message && <Notice {...message} />}
+    <section className="v2-panel">
+      <div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari judul, kategori, nomor surat..." /></label></div>
+      {loading ? <SkeletonRows /> : filtered.length ? <>
+        <div className="document-grid">{paged.items.map((row) => <article key={row.id}>
+          <span className="document-icon"><FileText /></span>
+          <div className="grow"><div className="school-meta"><span className={`v2-badge ${row.is_published ? 'green' : 'gray'}`}>{row.is_published ? 'Terbit' : 'Draft'}</span><span>{audienceLabel(row.audience)}</span>{row.document_date && <span>{dateText(row.document_date)}</span>}</div><h3>{row.title}</h3><p>{row.category}{row.document_number ? ` · ${row.document_number}` : ''}</p><small>{row.description || row.recipient || 'Tidak ada keterangan tambahan.'}</small></div>
+          <ActionMenu label={`Aksi dokumen ${row.title}`} items={[...(row.file_url ? [{ label: 'Buka dokumen', icon: ExternalLink, onSelect: () => void openDocument(row) }] : []), ...(canManage ? [{ label: 'Edit dokumen', icon: Edit3, onSelect: () => setEditing(row) }, { label: 'Hapus dokumen', icon: Trash2, danger: true, onSelect: () => setDeleting(row) }] : [])]} />
+        </article>)}</div>
+        <PaginationControls page={paged.page} total={paged.total} onPage={paged.setPage} />
+      </> : <EmptyCard text="Belum ada dokumen yang tersedia." />}
+    </section>
+    {editing && canManage && <DocumentModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => {
+      setEditing(null)
+      const cleanup = await flushDocumentStorageCleanup()
+      setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil disimpan.') })
+      await load()
+    }} />}
+    {deleting && <Confirm title="Hapus dokumen?" text={deleting.title} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+  </div>
+}
+
+function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | null; onClose: () => void; onDone: () => void }) {
+  const existingStoredPath = storedDocumentPath(value?.file_url)
+  const [form, setForm] = useState({
+    title: value?.title || '',
+    category: value?.category || 'Umum',
+    number: value?.document_number || '',
+    date: value?.document_date || '',
+    recipient: value?.recipient || '',
+    description: value?.description || '',
+    externalUrl: isExternalDocumentUrl(value?.file_url) ? value?.file_url || '' : '',
+    audience: value?.audience || 'all' as SchoolDocument['audience'],
+    published: value?.is_published ?? true,
+    removeStoredFile: false,
+  })
+  const [file, setFile] = useState<File | null>(null)
+  const [fileInputKey, setFileInputKey] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [errorText, setErrorText] = useState('')
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setErrorText('')
+
+    const externalUrl = form.externalUrl.trim()
+    if (externalUrl && !isExternalDocumentUrl(externalUrl)) {
+      setErrorText('Tautan eksternal harus diawali http:// atau https://.')
+      return
+    }
+    if (file && externalUrl) {
+      setErrorText('Pilih salah satu sumber dokumen: unggah file atau gunakan tautan eksternal.')
+      return
+    }
+
+    let contentType: string | null = null
+    if (file) {
+      if (file.size > DOCUMENT_MAX_BYTES) {
+        setErrorText('Ukuran file maksimal 10 MB.')
+        return
+      }
+      contentType = documentMimeType(file)
+      if (!contentType) {
+        setErrorText('Format file tidak didukung. Gunakan PDF, JPG, PNG, atau DOCX.')
+        return
+      }
+    }
+
+    setBusy(true)
+    let uploadedPath: string | null = null
+    let fileReference: string | null = externalUrl || (form.removeStoredFile ? null : existingStoredPath)
+
+    if (file && contentType) {
+      uploadedPath = `${new Date().getFullYear()}/${crypto.randomUUID()}-${safeDocumentFileName(file)}`
+      const upload = await supabase.storage.from(DOCUMENT_BUCKET).upload(uploadedPath, file, { upsert: false, contentType })
+      if (upload.error) {
+        setBusy(false)
+        setErrorText(upload.error.message)
+        return
+      }
+      fileReference = uploadedPath
+    }
+
+    const payload = {
+      title: form.title.trim(),
+      category: form.category.trim() || 'Umum',
+      document_number: form.number.trim() || null,
+      document_date: form.date || null,
+      recipient: form.recipient.trim() || null,
+      description: form.description.trim() || null,
+      file_url: fileReference,
+      audience: form.audience,
+      is_published: form.published,
+    }
+    const result = value
+      ? await supabase.from('school_documents').update(payload).eq('id', value.id)
+      : await supabase.from('school_documents').insert(payload)
+
+    if (result.error) {
+      let cleanupQueued = false
+      if (uploadedPath) cleanupQueued = await removeUploadedFileOrQueue(uploadedPath)
+      setBusy(false)
+      setErrorText(`${result.error.message}${cleanupQueued ? ' File unggahan baru masuk antrean pembersihan otomatis.' : ''}`)
+      return
+    }
+
+    setBusy(false)
+    onDone()
+  }
+
+  const currentFileText = file
+    ? file.name
+    : existingStoredPath && !form.removeStoredFile
+      ? `File tersimpan: ${existingStoredPath.split('/').pop() || existingStoredPath}`
+      : form.externalUrl
+        ? 'Menggunakan tautan eksternal.'
+        : 'PDF, JPG, PNG, atau DOCX · maksimal 10 MB'
+
+  return <Dialog title={value ? 'Edit Dokumen' : 'Tambah Dokumen'} onClose={onClose} wide>
+    <form className="v2-form v2-form-grid" onSubmit={submit}>
+      <label className="full">Judul dokumen<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
+      <label>Kategori<input required value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} placeholder="Surat Edaran / Formulir / Arsip" /></label>
+      <label>Nomor surat<input value={form.number} onChange={(event) => setForm({ ...form, number: event.target.value })} /></label>
+      <label>Tanggal dokumen<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
+      <label>Penerima / tujuan<input value={form.recipient} onChange={(event) => setForm({ ...form, recipient: event.target.value })} /></label>
+      <label>Ditampilkan kepada<select value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value as SchoolDocument['audience'] })}><option value="all">Guru & Wali</option><option value="teacher">Guru saja</option><option value="parent">Wali saja</option><option value="admin">Admin saja</option></select></label>
+      <label className="v2-toggle"><input type="checkbox" checked={form.published} onChange={(event) => setForm({ ...form, published: event.target.checked })} /><span>Publikasikan</span></label>
+      <label className="full v5-file-field"><Upload size={17} /> Unggah file<input key={fileInputKey} type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={(event) => {
+        const selected = event.target.files?.[0] || null
+        setFile(selected)
+        if (selected && form.externalUrl) setForm({ ...form, externalUrl: '' })
+      }} /><small>{currentFileText}</small></label>
+      {existingStoredPath && <label className="full v2-toggle"><input type="checkbox" checked={form.removeStoredFile} onChange={(event) => setForm({ ...form, removeStoredFile: event.target.checked })} /><span>Hapus file tersimpan jika tidak diganti dengan file atau tautan baru</span></label>}
+      <label className="full">Atau tautan eksternal<input type="url" value={form.externalUrl} onChange={(event) => {
+        const nextUrl = event.target.value
+        if (nextUrl && file) {
+          setFile(null)
+          setFileInputKey((key) => key + 1)
+        }
+        setForm({ ...form, externalUrl: nextUrl })
+      }} placeholder="https://... (opsional)" /><small>{existingStoredPath ? 'Kolom ini sengaja kosong untuk file Storage internal. Isi hanya jika ingin menggantinya dengan tautan eksternal.' : 'Gunakan untuk dokumen yang disimpan di luar aplikasi.'}</small></label>
+      <label className="full">Deskripsi<textarea rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+      {errorText && <p className="v2-field-error full">{errorText}</p>}
+      <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}>{busy ? 'Mengunggah & menyimpan...' : 'Simpan Dokumen'}</button></div>
+    </form>
+  </Dialog>
+}
+
+function Confirm({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
+  return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog>
+}
+
+function dateText(value: string) {
+  const date = new Date(`${value}T12:00:00+07:00`)
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
+}
+
+function audienceLabel(audience: SchoolDocument['audience']) {
+  return audience === 'all' ? 'Guru & Wali' : audience === 'teacher' ? 'Guru' : audience === 'parent' ? 'Wali' : 'Admin'
+}
