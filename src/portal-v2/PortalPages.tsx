@@ -1,21 +1,25 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
+  AlertTriangle,
+  Bell,
   CalendarDays,
   BookOpenCheck,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
   Edit3,
   GraduationCap,
   QrCode,
+  RefreshCw,
   Save,
-  Settings,
   ShieldCheck,
   UserRound,
   UsersRound,
 } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { Dialog, LoadError, useChildSelection } from './AppExperience'
+import '../dashboard-v11.css'
 
 type Student = {
   id: string
@@ -37,55 +41,84 @@ type SchoolSetting = {
   academic_year: string
 }
 
+type DashboardScheduleItem = {
+  id: string
+  class_name: string
+  activity: string
+  start_time: string
+  end_time: string
+  teacher_name: string | null
+}
+
+type DashboardAttendanceItem = {
+  id: string
+  student_id: string
+  student_name: string
+  status: string
+  check_in: string | null
+  check_out: string | null
+  event_time: string
+}
+
+type DashboardAnnouncementItem = {
+  id: string
+  title: string
+  created_at: string
+}
+
+type DashboardSummary = {
+  role: AppRole
+  generated_at: string
+  attendance_date: string
+  active_students: number
+  attendance_today: number
+  late_today: number
+  absent_today: number
+  active_accounts: number
+  draft_reports: number
+  open_payments: number
+  today_schedule_count: number
+  published_announcements: number
+  today_schedule: DashboardScheduleItem[]
+  recent_attendance: DashboardAttendanceItem[]
+  recent_announcements: DashboardAnnouncementItem[]
+}
+
 const JAKARTA = 'Asia/Jakarta'
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
 
 export function DashboardPage({ role, profile, go }: { role: AppRole; profile: UserProfile; go: (page: string) => void }) {
-  const [studentCount, setStudentCount] = useState(0)
-  const [attendanceCount, setAttendanceCount] = useState(0)
-  const [lateCount, setLateCount] = useState(0)
-  const [accountCount, setAccountCount] = useState(0)
   const childSelection = useChildSelection()
-  const [todayRecord, setTodayRecord] = useState<{ check_in: string | null; check_out: string | null; status: string } | null>(null)
-  const [draftReports, setDraftReports] = useState(0)
-  const [openPayments, setOpenPayments] = useState(0)
+  const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [summaryError, setSummaryError] = useState('')
+  const [reloadToken, setReloadToken] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [todayRecord, setTodayRecord] = useState<{ check_in: string | null; check_out: string | null; status: string } | null>(null)
 
   useEffect(() => {
     let mounted = true
     const load = async () => {
-      if (role === 'parent') {
-        if (mounted) setLoading(false)
-        return
-      }
-
-      const [studentsResult, attendanceResult, lateResult, accountsResult, reportsResult, paymentsResult] = await Promise.all([
-        supabase.from('students').select('id', { count: 'exact', head: true }).eq('is_active', true),
-        supabase.from('attendance_records').select('id', { count: 'exact', head: true }).eq('attendance_date', today()),
-        supabase.from('attendance_records').select('id', { count: 'exact', head: true }).eq('attendance_date', today()).eq('status', 'late'),
-        role === 'admin'
-          ? supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('is_active', true)
-          : Promise.resolve({ count: 0 }),
-        supabase.from('report_cards').select('id', { count: 'exact', head: true }).eq('is_published', false),
-        role === 'admin'
-          ? supabase.from('student_payments').select('id', { count: 'exact', head: true }).in('status', ['unpaid', 'partial'])
-          : Promise.resolve({ count: 0 }),
-      ])
+      setLoading(true)
+      setSummaryError('')
+      const { data, error } = await supabase.rpc('dashboard_summary')
       if (!mounted) return
-      setStudentCount(studentsResult.count ?? 0)
-      setAttendanceCount(attendanceResult.count ?? 0)
-      setLateCount(lateResult.count ?? 0)
-      setAccountCount(accountsResult.count ?? 0)
-      setDraftReports(reportsResult.count ?? 0)
-      setOpenPayments(paymentsResult.count ?? 0)
+      if (error) {
+        setSummary(null)
+        setSummaryError('Ringkasan dashboard belum dapat dimuat. Periksa koneksi lalu coba lagi.')
+      } else {
+        setSummary(data as unknown as DashboardSummary)
+      }
       setLoading(false)
     }
     void load()
     return () => { mounted = false }
-  }, [role])
+  }, [role, reloadToken])
 
   useEffect(() => {
-    if (role !== 'parent' || !childSelection.selectedChildId) return
+    if (role !== 'parent' || !childSelection.selectedChildId) {
+      setTodayRecord(null)
+      return
+    }
     let mounted = true
     setTodayRecord(null)
     void supabase.from('attendance_records').select('check_in,check_out,status').eq('student_id', childSelection.selectedChildId).eq('attendance_date', today()).maybeSingle().then(({ data }) => {
@@ -96,6 +129,7 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
 
   const greeting = new Intl.DateTimeFormat('id-ID', { timeZone: JAKARTA, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   const firstName = (profile.display_name || 'Pengguna').split(' ')[0]
+  const reload = () => setReloadToken((value) => value + 1)
 
   if (role === 'parent') {
     const children = childSelection.children as Student[]
@@ -103,20 +137,23 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
     return (
       <div className="v2-stack">
         <section className="v2-hero parent"><div><small>BERANDA WALI</small><h2>Assalamu'alaikum, {firstName}</h2><p>{greeting} · Pantau aktivitas anak dengan ringkas.</p></div><UserRound size={54} /></section>
+        {summaryError && <LoadError text={summaryError} onRetry={reload} />}
+        {childSelection.error && <LoadError text={childSelection.error} onRetry={childSelection.retry} />}
         {loading ? <SkeletonCards /> : child ? (
           <>
-            {childSelection.error && <LoadError text={childSelection.error} onRetry={childSelection.retry} />}
             <section className="v2-child-focus"><span>{initials(child.full_name)}</span><div><small>Anak terhubung</small><h3>{child.full_name}</h3><p>{child.class_name || 'Belum ada kelompok'} · {child.academic_year || 'Tahun ajaran belum diisi'}</p></div><button onClick={() => go('children')}><QrCode size={18} /> QR Anak</button></section>
-            <div className="v2-stat-grid three">
+            <div className="v2-stat-grid four">
               <StatCard icon={ClipboardCheck} label="Status Hari Ini" value={todayRecord?.check_in ? 'Sudah Absen' : 'Belum Absen'} meta={todayRecord?.status === 'late' ? 'Terlambat' : todayRecord?.check_in ? 'Tepat waktu' : 'Belum tercatat'} tone="green" />
               <StatCard icon={CheckCircle2} label="Jam Masuk" value={todayRecord?.check_in ? timeText(todayRecord.check_in) : '—'} meta="WIB" tone="blue" />
               <StatCard icon={CalendarDays} label="Jam Pulang" value={todayRecord?.check_out ? timeText(todayRecord.check_out) : '—'} meta="WIB" tone="gold" />
+              <StatCard icon={AlertTriangle} label="Tagihan Aktif" value={String(summary?.open_payments ?? 0)} meta="Anak terhubung" tone="purple" />
             </div>
+            <DashboardInfoGrid summary={summary} role={role} go={go} />
             <section className="v5-section"><header><div><small>AKSES CEPAT</small><h3>Kebutuhan utama</h3></div></header><QuickGrid items={[
               ['Rapor Anak', 'Lihat perkembangan terbaru', BookOpenCheck, () => go('reports')],
               ['Pembayaran', 'Pantau tagihan anak', ClipboardCheck, () => go('payments')],
               ['Data Absen', 'Riwayat kehadiran', CheckCircle2, () => go('attendance-data')],
-              ['Pengumuman', 'Informasi dari sekolah', CalendarDays, () => go('announcements')],
+              ['Pengumuman', 'Informasi dari sekolah', Bell, () => go('announcements')],
             ]} /></section>
           </>
         ) : <EmptyCard text="Belum ada anak yang terhubung ke akun ini." />}
@@ -124,25 +161,35 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
     )
   }
 
+  const studentCount = summary?.active_students ?? 0
+  const attendanceCount = summary?.attendance_today ?? 0
+  const lateCount = summary?.late_today ?? 0
+  const absentCount = summary?.absent_today ?? 0
+  const accountCount = summary?.active_accounts ?? 0
+  const draftReports = summary?.draft_reports ?? 0
+  const openPayments = summary?.open_payments ?? 0
+
   return (
     <div className="v2-stack">
       <section className={`v2-hero ${role}`}><div><small>{role === 'admin' ? 'PANEL ADMINISTRATOR' : 'DASHBOARD GURU'}</small><h2>Selamat datang, {firstName}</h2><p>{greeting} · {role === 'admin' ? 'Kelola operasional sekolah dari satu tempat.' : 'Kelola kegiatan belajar dan kehadiran murid.'}</p></div>{role === 'admin' ? <ShieldCheck size={54} /> : <GraduationCap size={54} />}</section>
+      {summaryError && <LoadError text={summaryError} onRetry={reload} />}
       {loading ? <SkeletonCards /> : <div className="v2-stat-grid four">
-        <StatCard icon={UsersRound} label="Murid Aktif" value={String(studentCount)} meta="Terdaftar" tone="green" />
+        <StatCard icon={UsersRound} label={role === 'teacher' ? 'Murid Dalam Scope' : 'Murid Aktif'} value={String(studentCount)} meta={role === 'teacher' ? 'Kelas yang ditugaskan' : 'Terdaftar'} tone="green" />
         <StatCard icon={ClipboardCheck} label="Hadir Hari Ini" value={String(attendanceCount)} meta={studentCount ? `${Math.round((attendanceCount / studentCount) * 100)}%` : '0%'} tone="blue" />
         <StatCard icon={CalendarDays} label="Terlambat" value={String(lateCount)} meta="Hari ini" tone="gold" />
-        <StatCard icon={role === 'admin' ? UsersRound : Settings} label={role === 'admin' ? 'Akun Aktif' : 'Belum Absen'} value={role === 'admin' ? String(accountCount) : String(Math.max(0, studentCount - attendanceCount))} meta={role === 'admin' ? 'Pengguna' : 'Perlu diperiksa'} tone="purple" />
+        <StatCard icon={role === 'admin' ? UsersRound : AlertTriangle} label={role === 'admin' ? 'Akun Aktif' : 'Belum Absen'} value={role === 'admin' ? String(accountCount) : String(absentCount)} meta={role === 'admin' ? 'Pengguna' : 'Perlu diperiksa'} tone="purple" />
       </div>}
-      <section className="v5-attention"><header><div><small>PERLU PERHATIAN</small><h3>Prioritas hari ini</h3></div></header><div>
-        <button onClick={() => go('attendance-data')}><strong>{Math.max(0, studentCount - attendanceCount)}</strong><span>Murid belum absen</span></button>
+      {!loading && <section className="v5-attention"><header><div><small>PERLU PERHATIAN</small><h3>Prioritas hari ini</h3></div><button className="v11-refresh" onClick={reload} aria-label="Muat ulang ringkasan"><RefreshCw size={16} /> Perbarui</button></header><div>
+        <button onClick={() => go('attendance-data')}><strong>{absentCount}</strong><span>Murid belum absen</span></button>
         {role === 'admin' && <button onClick={() => go('payments')}><strong>{openPayments}</strong><span>Tagihan belum selesai</span></button>}
         <button onClick={() => go('reports')}><strong>{draftReports}</strong><span>Rapor masih draft</span></button>
-      </div></section>
+      </div></section>}
+      {!loading && <DashboardInfoGrid summary={summary} role={role} go={go} />}
       <section className="v5-section"><header><div><small>AKSI CEPAT</small><h3>Mulai pekerjaan</h3></div></header><QuickGrid items={role === 'admin' ? [
         ['Scan QR', 'Catat masuk atau pulang', QrCode, () => go('attendance')],
         ['Tambah Murid', 'Kelola data murid', GraduationCap, () => go('students')],
         ['Isi Rapor', 'Catat perkembangan', BookOpenCheck, () => go('reports')],
-        ['Pengumuman', 'Bagikan informasi', CalendarDays, () => go('announcements')],
+        ['Pengumuman', 'Bagikan informasi', Bell, () => go('announcements')],
       ] : [
         ['Scan QR', 'Catat masuk atau pulang', QrCode, () => go('attendance')],
         ['Data Absen', 'Periksa kehadiran', ClipboardCheck, () => go('attendance-data')],
@@ -151,6 +198,36 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
       ]} /></section>
     </div>
   )
+}
+
+function DashboardInfoGrid({ summary, role, go }: { summary: DashboardSummary | null; role: AppRole; go: (page: string) => void }) {
+  const schedules = summary?.today_schedule ?? []
+  const attendance = summary?.recent_attendance ?? []
+  const announcements = summary?.recent_announcements ?? []
+
+  return (
+    <section className="v11-dashboard-grid" aria-label="Ringkasan kegiatan">
+      <article className="v2-panel v11-dashboard-panel">
+        <header><div><small>JADWAL HARI INI</small><h3>{summary?.today_schedule_count ?? 0} kegiatan</h3></div><button onClick={() => go('schedule')}>Lihat jadwal</button></header>
+        {schedules.length ? <div className="v11-timeline">{schedules.map((item) => <div key={item.id}><time>{item.start_time.slice(0, 5)}</time><span /><div><strong>{item.activity}</strong><small>{item.class_name}{item.teacher_name ? ` · ${item.teacher_name}` : ''}</small></div></div>)}</div> : <DashboardMiniEmpty icon={Clock3} text="Tidak ada jadwal aktif hari ini." />}
+      </article>
+      {role !== 'parent' ? <article className="v2-panel v11-dashboard-panel">
+        <header><div><small>ABSENSI TERBARU</small><h3>Aktivitas hari ini</h3></div><button onClick={() => go('attendance-data')}>Lihat semua</button></header>
+        {attendance.length ? <div className="v11-activity-list">{attendance.map((item) => <div key={item.id}><span>{initials(item.student_name)}</span><div><strong>{item.student_name}</strong><small>{attendanceEvent(item)}</small></div><b className={`v11-status ${item.status}`}>{statusText(item.status)}</b></div>)}</div> : <DashboardMiniEmpty icon={ClipboardCheck} text="Belum ada aktivitas absensi hari ini." />}
+      </article> : <article className="v2-panel v11-dashboard-panel">
+        <header><div><small>RINGKASAN KELUARGA</small><h3>{summary?.active_students ?? 0} anak terhubung</h3></div><button onClick={() => go('children')}>Data anak</button></header>
+        <div className="v11-parent-summary"><span><UsersRound size={22} /></span><div><strong>{summary?.open_payments ?? 0} tagihan aktif</strong><small>Ringkasan ini hanya menghitung data anak yang terhubung ke akun Wali.</small></div></div>
+      </article>}
+      <article className="v2-panel v11-dashboard-panel v11-announcements">
+        <header><div><small>PENGUMUMAN TERBARU</small><h3>{summary?.published_announcements ?? 0} informasi tersedia</h3></div><button onClick={() => go('announcements')}>Buka pengumuman</button></header>
+        {announcements.length ? <div className="v11-announcement-list">{announcements.map((item) => <button key={item.id} onClick={() => go('announcements')}><Bell size={17} /><span><strong>{item.title}</strong><small>{dateText(item.created_at)}</small></span></button>)}</div> : <DashboardMiniEmpty icon={Bell} text="Belum ada pengumuman yang dipublikasikan." />}
+      </article>
+    </section>
+  )
+}
+
+function DashboardMiniEmpty({ icon: Icon, text }: { icon: typeof UsersRound; text: string }) {
+  return <div className="v11-mini-empty"><Icon size={20} /><span>{text}</span></div>
 }
 
 export function ChildrenPage() {
@@ -208,3 +285,6 @@ function QuickGrid({ items }: { items: [string, string, typeof UsersRound, () =>
 function Info({ label, value }: { label: string; value: string }) { return <div className="v2-info"><small>{label}</small><strong>{value}</strong></div> }
 function initials(name?: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function timeText(value: string) { return new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: JAKARTA }) }
+function dateText(value: string) { return new Intl.DateTimeFormat('id-ID', { timeZone: JAKARTA, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function statusText(value: string) { return value === 'late' ? 'Terlambat' : value === 'present' ? 'Hadir' : value === 'sick' ? 'Sakit' : value === 'excused' ? 'Izin' : value === 'absent' ? 'Alpa' : value }
+function attendanceEvent(item: DashboardAttendanceItem) { if (item.check_out) return `Pulang ${timeText(item.check_out)} WIB`; if (item.check_in) return `Masuk ${timeText(item.check_in)} WIB`; return statusText(item.status) }
