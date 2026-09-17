@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: student, error: studentError } = await adminClient
       .from('students')
-      .select('id,full_name,class_name,class_id,is_active')
+      .select('id,full_name,class_name,is_active')
       .eq('qr_token', token)
       .maybeSingle()
 
