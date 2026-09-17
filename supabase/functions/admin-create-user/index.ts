@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
     const role = String(payload.role ?? '')
 
     if (!email || !email.includes('@')) return json({ error: 'Email tidak valid' }, 400)
-    if (password.length < 8) return json({ error: 'Password minimal 8 karakter' }, 400)
+    if (password.length < 6) return json({ error: 'Password minimal 6 karakter' }, 400)
     if (!['admin', 'teacher', 'parent'].includes(role)) return json({ error: 'Role tidak valid' }, 400)
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
