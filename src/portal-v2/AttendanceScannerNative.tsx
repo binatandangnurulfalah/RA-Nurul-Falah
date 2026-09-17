@@ -47,7 +47,6 @@ function isClearlyFrontCamera(label: string) {
 
 export function AttendanceScannerNative() {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
-  const [manual, setManual] = useState('')
   const [active, setActive] = useState(false)
   const [starting, setStarting] = useState(false)
   const [cameraLabel, setCameraLabel] = useState('')
@@ -110,7 +109,6 @@ export function AttendanceScannerNative() {
       }
       const statusText = data.status === 'late' ? 'Terlambat' : 'Tepat waktu'
       setFeedback({ tone: 'success', text: `${data.student.full_name} berhasil ${data.action === 'check_in' ? 'masuk' : 'pulang'} · ${data.time} WIB · ${statusText}` })
-      setManual('')
       navigator.vibrate?.(120)
       playSuccess()
       lastScanRef.current = { token: cleanToken, at: Date.now() }
@@ -271,7 +269,7 @@ export function AttendanceScannerNative() {
 
     const decoderReady = prepareDetector()
     if (decoderReady) {
-      setFeedback({ tone: 'info', text: 'Kamera belakang aktif. Arahkan QR murid ke kotak pemindai.' })
+      setFeedback({ tone: 'info', text: 'Kamera aktif. Arahkan QR murid ke kotak pemindai.' })
       scheduleDecode()
     } else {
       setFeedback({ tone: 'error', text: 'Pemindaian QR live belum didukung browser ini. Gunakan Chrome versi terbaru.' })
@@ -346,7 +344,7 @@ export function AttendanceScannerNative() {
 
   return (
     <div className="v2-stack native-scanner-page">
-      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Pindai QR murid untuk mencatat waktu masuk atau pulang." />
+      <PageTitle eyebrow="ABSENSI QR" title="Scan Kehadiran" text="Pindai QR murid dari kamera live untuk mencatat waktu masuk atau pulang." />
       <div className="v2-two-col scanner">
         <section className="v2-panel native-scanner-panel">
           <div className={`native-camera ${active ? 'active' : ''} ${frontCamera ? 'front-camera' : ''}`}>
@@ -380,14 +378,6 @@ export function AttendanceScannerNative() {
           </div>
 
           {!decoderAvailable && active && <p className="native-decoder-note">Pemindaian live memerlukan Chrome versi terbaru dengan dukungan BarcodeDetector.</p>}
-
-          <details className="v2-manual">
-            <summary>Masukkan kode QR secara manual</summary>
-            <form onSubmit={(event) => { event.preventDefault(); void record(manual) }}>
-              <input required value={manual} onChange={(event) => setManual(event.target.value)} placeholder="Tempel kode QR" />
-              <button className="v2-primary">Proses</button>
-            </form>
-          </details>
         </section>
 
         <section className="v2-panel">
