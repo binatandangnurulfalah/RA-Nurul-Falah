@@ -12,15 +12,15 @@ const pages = {
   payments: read('src/portal-v2/PaymentsPage.tsx'),
   documents: read('src/portal-v2/DocumentsPage.tsx'),
 }
+const studentsQuery = read('src/data/queries/students.ts')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 const scannerCss = read('src/scanner-native.css')
 const dataUi = read('src/data-ui.css')
 const mobileCss = read('src/mobile-v5.css')
 const schoolCss = read('src/school-modules.css')
-const dataExperience = read('src/portal-v2/DataExperience.tsx')
 const packageJson = JSON.parse(read('package.json'))
 
-test('seluruh halaman rollout 11.7 memakai reusable responsive data presentation', () => {
+test('seluruh halaman rollout 11.7 tetap memakai reusable responsive data presentation', () => {
   for (const [name, source] of Object.entries(pages)) {
     for (const primitive of ['DataTable', 'MobileDataCard', 'SearchFilterBar', 'PaginationControls']) {
       assert.match(source, new RegExp(primitive), `${name} belum memakai ${primitive}`)
@@ -34,12 +34,16 @@ test('seluruh halaman rollout 11.7 memakai reusable responsive data presentation
   assert.match(dataUi, /@media \(max-width: 760px\)/)
 })
 
-test('server-side pagination tetap dipertahankan pada semua data utama', () => {
-  for (const [name, source] of Object.entries(pages)) {
+test('server-side pagination tetap dipertahankan saat query lifecycle dipindahkan ke TanStack Query', () => {
+  const directPages = Object.entries(pages).filter(([name]) => name !== 'students')
+  for (const [name, source] of directPages) {
     assert.match(source, /getPageRange\(page, PAGE_SIZE\)/, `${name} tidak memakai page range server`)
     assert.match(source, /\.range\(range\.from, range\.to\)/, `${name} tidak memakai Supabase range`)
     assert.match(source, /count: 'exact'/, `${name} tidak meminta exact count`)
   }
+  assert.match(studentsQuery, /getPageRange\(params\.page, params\.pageSize\)/)
+  assert.match(studentsQuery, /\.range\(range\.from, range\.to\)/)
+  assert.match(studentsQuery, /count: 'exact'/)
 })
 
 test('kontrak backend penting tetap berada di server/Supabase', () => {
@@ -52,6 +56,7 @@ test('kontrak backend penting tetap berada di server/Supabase', () => {
   assert.match(pages.payments, /payment_summary/)
   assert.match(pages.documents, /createSignedUrl/)
   assert.match(pages.documents, /school_document_storage_cleanup/)
+  assert.match(studentsQuery, /supabase\.from\('students'\)/)
 })
 
 test('scanner terkunci LIVE CAMERA ONLY dan tetap mendukung switch/mirror kamera depan', () => {
@@ -77,9 +82,8 @@ test('CSS legacy rollout tidak kembali setelah consolidation 11.7.9', () => {
   assert.doesNotMatch(mobileCss, /\.v5-pagination/)
 })
 
-test('TanStack Query belum masuk sebelum Tahap 11.8', () => {
-  assert.match(dataExperience, /cachedQuery/)
-  assert.match(dataExperience, /invalidateQueryCache/)
-  assert.equal(packageJson.dependencies?.['@tanstack/react-query'], undefined)
-  assert.doesNotMatch(dataExperience, /@tanstack\/react-query/)
+test('Tahap 11.8 boleh menambahkan TanStack Query tanpa menyentuh scanner/backend security contract', () => {
+  assert.equal(packageJson.dependencies?.['@tanstack/react-query'], '5.102.8')
+  assert.match(pages.students, /useQuery/)
+  assert.doesNotMatch(scanner, /@tanstack\/react-query/)
 })
