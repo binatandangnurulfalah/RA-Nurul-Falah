@@ -185,7 +185,11 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
       setErrorText('Nominal pembayaran tidak valid.')
       return
     }
-    const status: Payment['status'] = form.waived ? 'waived' : paidAmount >= amount && amount > 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid'
+    if (paidAmount > amount) {
+      setErrorText('Nominal yang sudah dibayar tidak boleh melebihi total tagihan.')
+      return
+    }
+    const status: Payment['status'] = form.waived ? 'waived' : paidAmount === amount && amount > 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid'
     setBusy(true)
     setErrorText('')
     const payload = {
@@ -216,7 +220,7 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
       <label>Jenis pembayaran<input required value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} placeholder="SPP / Kegiatan / Seragam" /></label>
       <label>Periode<input value={form.period} onChange={(event) => setForm({ ...form, period: event.target.value })} placeholder="September 2026" /></label>
       <label>Total tagihan<input required type="number" min="0" step="1000" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label>
-      <label>Sudah dibayar<input required type="number" min="0" step="1000" value={form.paid} onChange={(event) => setForm({ ...form, paid: event.target.value })} /></label>
+      <label>Sudah dibayar<input required type="number" min="0" max={form.amount || undefined} step="1000" value={form.paid} onChange={(event) => setForm({ ...form, paid: event.target.value })} /></label>
       <label>Jatuh tempo<input type="date" value={form.due} onChange={(event) => setForm({ ...form, due: event.target.value })} /></label>
       <label>Tanggal pembayaran<input type="date" value={form.paid_at} onChange={(event) => setForm({ ...form, paid_at: event.target.value })} /></label>
       <label className="v2-toggle"><input type="checkbox" checked={form.waived} onChange={(event) => setForm({ ...form, waived: event.target.checked })} /><span>Dibebaskan dari tagihan</span></label>
