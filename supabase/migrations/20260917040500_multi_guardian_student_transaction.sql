@@ -14,6 +14,7 @@ create or replace function public.save_student_with_guardians(
 )
 returns public.students
 language plpgsql
+security invoker
 set search_path = 'public', 'pg_temp'
 as $$
 declare
@@ -112,11 +113,13 @@ begin
   end if;
 
   delete from public.student_guardians
-  where student_id = v_student.id;
+  where student_id = v_student.id
+    and not (guardian_user_id = any(v_guardian_ids));
 
   insert into public.student_guardians (student_id, guardian_user_id, relationship)
   select v_student.id, guardian_id, 'Wali'
-  from (select distinct guardian_id from unnest(v_guardian_ids) as guardian_id) guardian_ids;
+  from (select distinct guardian_id from unnest(v_guardian_ids) as guardian_id) guardian_ids
+  on conflict (student_id, guardian_user_id) do nothing;
 
   return v_student;
 end;
@@ -126,4 +129,4 @@ revoke all on function public.save_student_with_guardians(uuid,text,text,text,te
 grant execute on function public.save_student_with_guardians(uuid,text,text,text,text,text,text,date,text,text,boolean,uuid[]) to authenticated;
 
 comment on function public.save_student_with_guardians(uuid,text,text,text,text,text,text,date,text,text,boolean,uuid[]) is
-'Saves a student and replaces all linked guardians in one transaction. Uses invoker privileges so existing RLS policies remain authoritative.';
+'Saves a student and synchronizes all linked guardians in one transaction using invoker privileges so RLS remains authoritative.';
