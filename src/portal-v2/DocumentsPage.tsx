@@ -1,10 +1,13 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { Edit3, ExternalLink, FileText, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { Edit3, ExternalLink, FileText, Plus, Trash2, Upload } from 'lucide-react'
+import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatusBadge } from '../components/data'
+import { ConfirmDialog, FormDialog } from '../components/forms'
+import { Button, EmptyState, PageHeader } from '../components/ui'
 import { type AppRole, supabase } from '../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
-import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
-import { ActionMenu, Dialog } from './AppExperience'
+import { ActionMenu } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
+import { Notice } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
 type SchoolDocument = {
@@ -116,16 +119,20 @@ export function DocumentsPage({ role }: { role: AppRole }) {
   const canManage = role === 'admin'
   const [rows, setRows] = useState<SchoolDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [editing, setEditing] = useState<SchoolDocument | 'new' | null>(null)
   const [deleting, setDeleting] = useState<SchoolDocument | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const removingRef = useRef(false)
   const [message, setMessage] = useState<Message | null>(null)
   const debouncedSearch = useDebouncedValue(search)
 
   const load = async () => {
     setLoading(true)
+    setLoadError('')
     const range = getPageRange(page, PAGE_SIZE)
     let query = supabase
       .from('school_documents')
@@ -140,9 +147,14 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     }
 
     const { data, error, count } = await query
-    if (error) setMessage({ tone: 'error', text: error.message })
-    setRows((data as SchoolDocument[] | null) ?? [])
-    setTotal(count ?? 0)
+    if (error) {
+      setLoadError(error.message || 'Data dokumen gagal dimuat.')
+      setRows([])
+      setTotal(0)
+    } else {
+      setRows((data as SchoolDocument[] | null) ?? [])
+      setTotal(count ?? 0)
+    }
     setLoading(false)
   }
 
@@ -157,9 +169,20 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     })
   }, [canManage])
 
+  const resetFilters = () => setSearch('')
+
+  const closeDelete = () => {
+    if (removingRef.current) return
+    setDeleting(null)
+  }
+
   const remove = async () => {
-    if (!deleting || !canManage) return
+    if (!deleting || !canManage || removingRef.current) return
+    removingRef.current = true
+    setRemoving(true)
     const { error } = await supabase.from('school_documents').delete().eq('id', deleting.id)
+    removingRef.current = false
+    setRemoving(false)
     if (error) {
       setMessage({ tone: 'error', text: error.message })
       return
@@ -188,27 +211,97 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
+  const actionItems = (row: SchoolDocument) => [
+    ...(row.file_url ? [{ label: 'Buka dokumen', icon: ExternalLink, onSelect: () => void openDocument(row) }] : []),
+    ...(canManage ? [
+      { label: 'Edit dokumen', icon: Edit3, onSelect: () => setEditing(row) },
+      { label: 'Hapus dokumen', icon: Trash2, danger: true, onSelect: () => setDeleting(row) },
+    ] : []),
+  ]
+
+  const columns: DataTableColumn<SchoolDocument>[] = [
+    {
+      key: 'document',
+      header: 'Dokumen',
+      render: (row) => <div className="data-primary-cell"><span className="data-primary-cell__avatar"><FileText size={18} /></span><div className="data-primary-cell__copy"><strong>{row.title}</strong><small>{row.document_number || 'Tanpa nomor surat'}</small></div></div>,
+    },
+    { key: 'category', header: 'Kategori', render: (row) => row.category },
+    { key: 'date', header: 'Tanggal', render: (row) => row.document_date ? dateText(row.document_date) : '—' },
+    { key: 'audience', header: 'Audiens', render: (row) => audienceLabel(row.audience) },
+    { key: 'status', header: 'Status', render: (row) => <StatusBadge tone={row.is_published ? 'success' : 'neutral'}>{row.is_published ? 'Terbit' : 'Draft'}</StatusBadge> },
+    { key: 'actions', header: 'Aksi', align: 'right', render: (row) => <ActionMenu label={`Aksi dokumen ${row.title}`} items={actionItems(row)} /> },
+  ]
+
+  const hasFilters = Boolean(search.trim())
+  const emptyState = (
+    <EmptyState
+      icon={<FileText size={24} />}
+      title={hasFilters ? 'Tidak ada dokumen yang cocok' : 'Belum ada dokumen'}
+      description={hasFilters ? 'Ubah pencarian atau reset untuk melihat dokumen lainnya.' : canManage ? 'Dokumen dan surat sekolah akan tampil setelah ditambahkan.' : 'Dokumen yang dipublikasikan untuk akun Anda akan tampil di sini.'}
+      action={hasFilters
+        ? <Button variant="secondary" onClick={resetFilters}>Reset Pencarian</Button>
+        : canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Dokumen</Button> : undefined}
+    />
+  )
+
   return <div className="v2-stack">
-    <PageTitle eyebrow="ARSIP SEKOLAH" title="Dokumen & Surat" text={canManage ? 'Kelola surat, arsip dan unggah dokumen resmi sekolah.' : 'Dokumen resmi yang dibagikan kepada akun Anda.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Dokumen</button> : undefined} />
+    <PageHeader
+      eyebrow="ARSIP SEKOLAH"
+      title="Dokumen & Surat"
+      subtitle={canManage ? 'Kelola surat, arsip dan unggah dokumen resmi sekolah.' : 'Dokumen resmi yang dibagikan kepada akun Anda.'}
+      actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Dokumen</Button> : undefined}
+    />
     {message && <Notice {...message} />}
     <section className="v2-panel">
-      <div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari judul, kategori, nomor surat..." /></label></div>
-      {loading ? <SkeletonRows /> : rows.length ? <>
-        <div className="document-grid">{rows.map((row) => <article key={row.id}>
-          <span className="document-icon"><FileText /></span>
-          <div className="grow"><div className="school-meta"><span className={`v2-badge ${row.is_published ? 'green' : 'gray'}`}>{row.is_published ? 'Terbit' : 'Draft'}</span><span>{audienceLabel(row.audience)}</span>{row.document_date && <span>{dateText(row.document_date)}</span>}</div><h3>{row.title}</h3><p>{row.category}{row.document_number ? ` · ${row.document_number}` : ''}</p><small>{row.description || row.recipient || 'Tidak ada keterangan tambahan.'}</small></div>
-          <ActionMenu label={`Aksi dokumen ${row.title}`} items={[...(row.file_url ? [{ label: 'Buka dokumen', icon: ExternalLink, onSelect: () => void openDocument(row) }] : []), ...(canManage ? [{ label: 'Edit dokumen', icon: Edit3, onSelect: () => setEditing(row) }, { label: 'Hapus dokumen', icon: Trash2, danger: true, onSelect: () => setDeleting(row) }] : [])]} />
-        </article>)}</div>
-        <PaginationControls page={page} total={total} onPage={setPage} />
-      </> : <EmptyCard text="Belum ada dokumen yang sesuai pencarian." />}
+      <SearchFilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        placeholder="Cari judul, kategori, nomor surat..."
+        searchLabel="Cari dokumen dan surat"
+        onReset={resetFilters}
+      />
+
+      {loadError ? <ErrorState description={loadError} onRetry={() => void load()} /> : <>
+        <div className="desktop-data-view">
+          <DataTable rows={rows} columns={columns} getRowKey={(row) => row.id} loading={loading} empty={emptyState} caption="Daftar dokumen dan surat" />
+        </div>
+        <div className="mobile-data-view">
+          {loading ? <DataListSkeleton /> : rows.length ? <div className="mobile-data-list">{rows.map((row) => (
+            <MobileDataCard
+              key={row.id}
+              leading={<FileText size={18} />}
+              title={row.title}
+              subtitle={`${row.category}${row.document_number ? ` · ${row.document_number}` : ''}`}
+              badges={<StatusBadge tone={row.is_published ? 'success' : 'neutral'}>{row.is_published ? 'Terbit' : 'Draft'}</StatusBadge>}
+              fields={[
+                { label: 'Tanggal', value: row.document_date ? dateText(row.document_date) : '—' },
+                { label: 'Audiens', value: audienceLabel(row.audience) },
+                { label: 'Penerima', value: row.recipient || '—' },
+              ]}
+              actions={<ActionMenu label={`Aksi dokumen ${row.title}`} items={actionItems(row)} />}
+            />
+          ))}</div> : emptyState}
+        </div>
+        {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+      </>}
     </section>
+
     {editing && canManage && <DocumentModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
       const cleanup = await flushDocumentStorageCleanup()
       setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil disimpan.') })
       await load()
     }} />}
-    {deleting && <Confirm title="Hapus dokumen?" text={deleting.title} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    <ConfirmDialog
+      open={Boolean(deleting)}
+      title="Hapus dokumen?"
+      description={deleting ? `${deleting.title} akan dihapus. File Storage terkait tetap mengikuti antrean cleanup yang aman.` : ''}
+      confirmLabel="Ya, Hapus"
+      danger
+      busy={removing}
+      onClose={closeDelete}
+      onConfirm={() => void remove()}
+    />
   </div>
 }
 
@@ -229,10 +322,12 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
   const [file, setFile] = useState<File | null>(null)
   const [fileInputKey, setFileInputKey] = useState(0)
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busyRef.current) return
     setErrorText('')
 
     const externalUrl = form.externalUrl.trim()
@@ -258,6 +353,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
       }
     }
 
+    busyRef.current = true
     setBusy(true)
     let uploadedPath: string | null = null
     let fileReference: string | null = externalUrl || (form.removeStoredFile ? null : existingStoredPath)
@@ -266,6 +362,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
       uploadedPath = `${new Date().getFullYear()}/${crypto.randomUUID()}-${safeDocumentFileName(file)}`
       const upload = await supabase.storage.from(DOCUMENT_BUCKET).upload(uploadedPath, file, { upsert: false, contentType })
       if (upload.error) {
+        busyRef.current = false
         setBusy(false)
         setErrorText(upload.error.message)
         return
@@ -291,11 +388,13 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
     if (result.error) {
       let cleanupQueued = false
       if (uploadedPath) cleanupQueued = await removeUploadedFileOrQueue(uploadedPath)
+      busyRef.current = false
       setBusy(false)
       setErrorText(`${result.error.message}${cleanupQueued ? ' File unggahan baru masuk antrean pembersihan otomatis.' : ''}`)
       return
     }
 
+    busyRef.current = false
     setBusy(false)
     onDone()
   }
@@ -308,8 +407,16 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
         ? 'Menggunakan tautan eksternal.'
         : 'PDF, JPG, PNG, atau DOCX · maksimal 10 MB'
 
-  return <Dialog title={value ? 'Edit Dokumen' : 'Tambah Dokumen'} onClose={onClose} wide>
-    <form className="v2-form v2-form-grid" onSubmit={submit}>
+  return <FormDialog
+    open
+    title={value ? 'Edit Dokumen' : 'Tambah Dokumen'}
+    submitLabel="Simpan Dokumen"
+    busy={busy}
+    error={errorText}
+    onSubmit={submit}
+    onClose={onClose}
+  >
+    <div className="v2-form v2-form-grid">
       <label className="full">Judul dokumen<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
       <label>Kategori<input required value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} placeholder="Surat Edaran / Formulir / Arsip" /></label>
       <label>Nomor surat<input value={form.number} onChange={(event) => setForm({ ...form, number: event.target.value })} /></label>
@@ -332,14 +439,8 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
         setForm({ ...form, externalUrl: nextUrl })
       }} placeholder="https://... (opsional)" /><small>{existingStoredPath ? 'Kolom ini sengaja kosong untuk file Storage internal. Isi hanya jika ingin menggantinya dengan tautan eksternal.' : 'Gunakan untuk dokumen yang disimpan di luar aplikasi.'}</small></label>
       <label className="full">Deskripsi<textarea rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-      {errorText && <p className="v2-field-error full">{errorText}</p>}
-      <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}>{busy ? 'Mengunggah & menyimpan...' : 'Simpan Dokumen'}</button></div>
-    </form>
-  </Dialog>
-}
-
-function Confirm({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog>
+    </div>
+  </FormDialog>
 }
 
 function dateText(value: string) {
