@@ -1,107 +1,117 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
-import { validatePassword } from '../_shared/password-policy.ts'
+import "jsr:@supabase/functions-js@2.4.5/edge-runtime.d.ts";
+import { corsPreflight } from '../_shared/cors.ts'
+import { createPublicClient, requireAuthenticatedUser } from '../_shared/auth.ts'
+import { requireRole } from '../_shared/authorization.ts'
+import { jsonResponse } from '../_shared/response.ts'
+import { isUuid } from '../_shared/validation.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+function safeRedirect(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return undefined
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) return undefined
+    return url.toString()
+  } catch {
+    return undefined
+  }
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
+  const preflight = corsPreflight(req)
+  if (preflight) return preflight
+  if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) return json({ ok: false, error: 'Silakan login kembali.' }, 401)
+    const authenticated = await requireAuthenticatedUser(req)
+    if (!authenticated.ok) return authenticated.response
+    const context = authenticated.context
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const roleError = requireRole(context, ['admin'], 'Hanya Admin yang dapat mengelola akun.')
+    if (roleError) return roleError
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    })
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    const { data: authData, error: authError } = await userClient.auth.getUser()
-    if (authError || !authData.user) return json({ ok: false, error: 'Sesi tidak valid.' }, 401)
-
-    const { data: requester } = await admin
-      .from('user_profiles')
-      .select('role,is_active')
-      .eq('id', authData.user.id)
-      .maybeSingle()
-
-    if (!requester?.is_active || requester.role !== 'admin') {
-      return json({ ok: false, error: 'Hanya Admin yang dapat mengelola akun.' }, 403)
+    let body: Record<string, unknown>
+    try {
+      body = await req.json()
+    } catch {
+      return jsonResponse({ ok: false, error: 'Permintaan tidak valid.' }, 400)
     }
 
-    const body = await req.json()
     const action = String(body.action ?? '')
-    const userId = String(body.user_id ?? '')
-    if (!userId) return json({ ok: false, error: 'Akun tidak valid.' }, 400)
+    const userId = String(body.user_id ?? '').trim()
+    if (!isUuid(userId)) return jsonResponse({ ok: false, error: 'Akun tidak valid.' }, 400)
 
     if (action === 'delete') {
-      if (userId === authData.user.id) return json({ ok: false, error: 'Admin tidak dapat menghapus akun yang sedang digunakan.' }, 400)
-      const { data: targetData } = await admin.auth.admin.getUserById(userId)
+      if (userId === context.user.id) {
+        return jsonResponse({ ok: false, error: 'Admin tidak dapat menghapus akun yang sedang digunakan.' }, 400)
+      }
+
+      const { data: targetData } = await context.adminClient.auth.admin.getUserById(userId)
       const email = targetData?.user?.email?.toLowerCase() ?? null
-      const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
-      if (deleteError) return json({ ok: false, error: deleteError.message }, 400)
-      if (email) await admin.from('account_allowlist').delete().eq('email', email)
-      return json({ ok: true })
+      const { error: deleteError } = await context.adminClient.auth.admin.deleteUser(userId)
+      if (deleteError) return jsonResponse({ ok: false, error: 'Akun gagal dihapus.' }, 400)
+      if (email) await context.adminClient.from('account_allowlist').delete().eq('email', email)
+      return jsonResponse({ ok: true })
+    }
+
+    if (action === 'send_password_reset') {
+      const { data: targetData, error: targetError } = await context.adminClient.auth.admin.getUserById(userId)
+      const email = targetData?.user?.email?.toLowerCase()
+      if (targetError || !email) return jsonResponse({ ok: false, error: 'Email akun tidak ditemukan.' }, 404)
+
+      const redirectTo = safeRedirect(body.redirect_to)
+      const publicClient = createPublicClient()
+      const resetOptions = redirectTo ? { redirectTo } : undefined
+      const { error: resetError } = await publicClient.auth.resetPasswordForEmail(email, resetOptions)
+
+      if (!resetError) return jsonResponse({ ok: true, delivery: 'email' })
+
+      const { data: generated, error: linkError } = await context.adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+      })
+      const manualLink = generated?.properties?.action_link ?? null
+      if (linkError || !manualLink) {
+        return jsonResponse({ ok: false, error: 'Reset password tidak dapat dikirim. Konfigurasi email perlu diperiksa.' }, 503)
+      }
+      return jsonResponse({ ok: true, delivery: 'manual_link', manual_link: manualLink })
     }
 
     if (action === 'update') {
       const displayName = String(body.display_name ?? '').trim()
       const role = String(body.role ?? '')
       const isActive = Boolean(body.is_active)
-      const newPassword = String(body.new_password ?? '')
 
-      if (!displayName) return json({ ok: false, error: 'Nama pengguna wajib diisi.' }, 400)
-      if (!['admin', 'teacher', 'parent'].includes(role)) return json({ ok: false, error: 'Role tidak valid.' }, 400)
-      if (userId === authData.user.id && (!isActive || role !== 'admin')) {
-        return json({ ok: false, error: 'Admin tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.' }, 400)
-      }
-      if (newPassword) {
-        const passwordError = validatePassword(newPassword)
-        if (passwordError) return json({ ok: false, error: passwordError }, 400)
+      if (!displayName) return jsonResponse({ ok: false, error: 'Nama pengguna wajib diisi.' }, 400)
+      if (!['admin', 'teacher', 'parent'].includes(role)) return jsonResponse({ ok: false, error: 'Role tidak valid.' }, 400)
+      if (userId === context.user.id && (!isActive || role !== 'admin')) {
+        return jsonResponse({ ok: false, error: 'Admin tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.' }, 400)
       }
 
-      const authPatch: { user_metadata: { display_name: string }; password?: string } = {
+      const { error: authUpdateError } = await context.adminClient.auth.admin.updateUserById(userId, {
         user_metadata: { display_name: displayName },
-      }
-      if (newPassword) authPatch.password = newPassword
+      })
+      if (authUpdateError) return jsonResponse({ ok: false, error: 'Profil login gagal diperbarui.' }, 400)
 
-      const { error: authUpdateError } = await admin.auth.admin.updateUserById(userId, authPatch)
-      if (authUpdateError) return json({ ok: false, error: authUpdateError.message }, 400)
-
-      const { error: profileError } = await admin
+      const { error: profileError } = await context.adminClient
         .from('user_profiles')
         .update({ display_name: displayName, role, is_active: isActive })
         .eq('id', userId)
-      if (profileError) return json({ ok: false, error: profileError.message }, 400)
+      if (profileError) return jsonResponse({ ok: false, error: 'Profil pengguna gagal diperbarui.' }, 400)
 
-      const { data: targetData } = await admin.auth.admin.getUserById(userId)
+      const { data: targetData } = await context.adminClient.auth.admin.getUserById(userId)
       const email = targetData?.user?.email?.toLowerCase() ?? null
       if (email) {
-        await admin.from('account_allowlist').update({ display_name: displayName, role, is_active: isActive }).eq('email', email)
+        await context.adminClient
+          .from('account_allowlist')
+          .update({ display_name: displayName, role, is_active: isActive })
+          .eq('email', email)
       }
-      return json({ ok: true })
+      return jsonResponse({ ok: true })
     }
 
-    return json({ ok: false, error: 'Aksi tidak dikenali.' }, 400)
-  } catch (error) {
-    return json({ ok: false, error: error instanceof Error ? error.message : 'Terjadi kesalahan server.' }, 500)
+    return jsonResponse({ ok: false, error: 'Aksi tidak dikenali.' }, 400)
+  } catch {
+    return jsonResponse({ ok: false, error: 'Terjadi kesalahan server.' }, 500)
   }
 })

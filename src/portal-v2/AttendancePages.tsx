@@ -1,14 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import {
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  Edit3,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-} from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock3, Edit3, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
@@ -45,7 +36,7 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
-  const [todaySummary, setTodaySummary] = useState<AttendanceSummary>(EMPTY_SUMMARY)
+  const [summary, setSummary] = useState<AttendanceSummary>(EMPTY_SUMMARY)
   const [editing, setEditing] = useState<AttendanceRecord | 'new' | null>(null)
   const [deleting, setDeleting] = useState<AttendanceRecord | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
@@ -54,49 +45,44 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
   const load = async () => {
     setLoading(true)
     const range = getPageRange(page, PAGE_SIZE)
-    let recordQuery = supabase
+    let query = supabase
       .from('attendance_records_search')
       .select('id,student_id,attendance_date,check_in,check_out,status,created_at,student_full_name,student_class_name,student_nis', { count: 'exact' })
       .order('attendance_date', { ascending: false })
       .order('created_at', { ascending: false })
       .range(range.from, range.to)
 
-    if (parentView && childSelection.selectedChildId) recordQuery = recordQuery.eq('student_id', childSelection.selectedChildId)
-    if (dateFilter) recordQuery = recordQuery.eq('attendance_date', dateFilter)
-    if (statusFilter !== 'all') recordQuery = recordQuery.eq('status', statusFilter)
-
+    if (parentView && childSelection.selectedChildId) query = query.eq('student_id', childSelection.selectedChildId)
+    if (dateFilter) query = query.eq('attendance_date', dateFilter)
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter)
     const normalizedSearch = sanitizeSearch(debouncedSearch)
-    if (normalizedSearch) {
-      recordQuery = recordQuery.or(`student_full_name.ilike.%${normalizedSearch}%,student_nis.ilike.%${normalizedSearch}%,student_class_name.ilike.%${normalizedSearch}%`)
-    }
+    if (normalizedSearch) query = query.or(`student_full_name.ilike.%${normalizedSearch}%,student_nis.ilike.%${normalizedSearch}%,student_class_name.ilike.%${normalizedSearch}%`)
 
-    const summaryStudentId = parentView ? childSelection.selectedChildId || null : null
-    const [recordResult, studentResult, summaryResult] = await Promise.all([
-      recordQuery,
+    const [recordsResult, studentsResult, summaryResult] = await Promise.all([
+      query,
       canManage
         ? supabase.from('students').select('id,full_name,nis,class_name').eq('is_active', true).order('full_name')
         : Promise.resolve({ data: [] as Student[], error: null }),
-      supabase.rpc('attendance_summary_for_date', { p_date: TODAY, p_student_id: summaryStudentId }),
+      supabase.rpc('attendance_summary_for_date', { p_date: TODAY, p_student_id: parentView ? childSelection.selectedChildId || null : null }),
     ])
 
-    if (recordResult.error) setMessage({ tone: 'error', text: recordResult.error.message })
-    if ('error' in studentResult && studentResult.error) setMessage({ tone: 'error', text: studentResult.error.message })
-    if (summaryResult.error) setMessage({ tone: 'error', text: summaryResult.error.message })
-
-    setRecords((recordResult.data as AttendanceRecord[] | null) ?? [])
-    setTotal(recordResult.count ?? 0)
-    setStudents((studentResult.data as Student[] | null) ?? [])
-    const summary = (summaryResult.data as AttendanceSummary[] | null)?.[0]
-    setTodaySummary(summary ?? EMPTY_SUMMARY)
+    const firstError = recordsResult.error || studentsResult.error || summaryResult.error
+    if (firstError) setMessage({ tone: 'error', text: firstError.message })
+    setRecords((recordsResult.data as AttendanceRecord[] | null) ?? [])
+    setStudents((studentsResult.data as Student[] | null) ?? [])
+    setTotal(recordsResult.count ?? 0)
+    setSummary(((summaryResult.data as AttendanceSummary[] | null)?.[0]) ?? EMPTY_SUMMARY)
     setLoading(false)
   }
 
   useEffect(() => { void load() }, [canManage, page, dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
   useEffect(() => { setPage(1) }, [dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
 
-  const remove = async () => {
+  const remove = async (reason: string) => {
     if (!deleting || !canManage) return
-    const { data, error } = await supabase.functions.invoke('manage-attendance-record', { body: { action: 'delete', record_id: deleting.id } })
+    const { data, error } = await supabase.functions.invoke('manage-attendance-record', {
+      body: { action: 'delete', record_id: deleting.id, correction_reason: reason.trim() },
+    })
     if (error || !data?.ok) {
       setMessage({ tone: 'error', text: data?.error || 'Absensi gagal dihapus.' })
       return
@@ -115,21 +101,16 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
     />
     {message && <Notice {...message} />}
     <div className="v2-stat-grid three">
-      <SmallStat label="Absen Hari Ini" value={todaySummary.total_records} />
-      <SmallStat label="Sudah Pulang" value={todaySummary.checked_out_records} />
-      <SmallStat label="Terlambat" value={todaySummary.late_records} />
+      <SmallStat label="Absen Hari Ini" value={summary.total_records} />
+      <SmallStat label="Sudah Pulang" value={summary.checked_out_records} />
+      <SmallStat label="Terlambat" value={summary.late_records} />
     </div>
     <section className="v2-panel">
       <div className="v2-toolbar wrap">
-        <label><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={parentView ? 'Cari nama anak...' : 'Cari nama, NIS, kelompok...'} /></label>
-        <label className="date"><CalendarDays size={17} /><input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} /></label>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">Semua status</option>
-          <option value="present">Hadir</option>
-          <option value="late">Terlambat</option>
-          <option value="sick">Sakit</option>
-          <option value="excused">Izin</option>
-          <option value="absent">Tidak hadir</option>
+        <label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={parentView ? 'Cari nama anak...' : 'Cari nama, NIS, kelompok...'} /></label>
+        <label className="date"><CalendarDays size={17} /><input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="all">Semua status</option><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option>
         </select>
         <button className="v2-icon-button" title="Muat ulang" aria-label="Muat ulang data absensi" onClick={() => void load()}><RefreshCw size={17} /></button>
       </div>
@@ -149,12 +130,13 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
         <PaginationControls page={page} total={total} onPage={setPage} />
       </> : <EmptyCard text="Tidak ada data absensi yang sesuai filter." />}
     </section>
+
     {editing && canManage && <AttendanceModal value={editing === 'new' ? null : editing} students={students} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
       setMessage({ tone: 'success', text: 'Data absensi berhasil disimpan.' })
       await load()
     }} />}
-    {deleting && <ConfirmModal title="Hapus data absensi?" text={`${deleting.student_full_name || 'Murid'} · ${dateText(deleting.attendance_date)}`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    {deleting && <DeleteAttendanceDialog record={deleting} onClose={() => setDeleting(null)} onConfirm={(reason) => void remove(reason)} />}
   </div>
 }
 
@@ -165,6 +147,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
     check_in: value?.check_in ? timeTextRaw(value.check_in) : '',
     check_out: value?.check_out ? timeTextRaw(value.check_out) : '',
     status: value?.status || 'present',
+    correction_reason: '',
   })
   const [busy, setBusy] = useState(false)
   const [errorText, setErrorText] = useState('')
@@ -182,6 +165,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
         check_in: form.check_in || null,
         check_out: form.check_out || null,
         status: form.status,
+        correction_reason: value ? form.correction_reason.trim() : undefined,
       },
     })
     setBusy(false)
@@ -194,22 +178,30 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
 
   return <Dialog title={value ? 'Edit Data Absen' : 'Tambah Absen Manual'} eyebrow="KOREKSI ABSENSI" onClose={onClose} wide>
     <form className="v2-form v2-form-grid" onSubmit={submit}>
-      <label className="full">Murid<select required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })}>{students.map((s) => <option value={s.id} key={s.id}>{s.full_name} {s.class_name ? `· ${s.class_name}` : ''}</option>)}</select></label>
-      <label>Tanggal<input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-      <label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select></label>
-      <label>Jam masuk<input type="time" value={form.check_in} onChange={(e) => setForm({ ...form, check_in: e.target.value })} /></label>
-      <label>Jam pulang<input type="time" value={form.check_out} onChange={(e) => setForm({ ...form, check_out: e.target.value })} /></label>
+      <label className="full">Murid<select required value={form.student_id} onChange={(event) => setForm({ ...form, student_id: event.target.value })}>{students.map((student) => <option value={student.id} key={student.id}>{student.full_name} {student.class_name ? `· ${student.class_name}` : ''}</option>)}</select></label>
+      <label>Tanggal<input required type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
+      <label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option value="present">Hadir</option><option value="late">Terlambat</option><option value="sick">Sakit</option><option value="excused">Izin</option><option value="absent">Tidak hadir</option></select></label>
+      <label>Jam masuk<input type="time" value={form.check_in} onChange={(event) => setForm({ ...form, check_in: event.target.value })} /></label>
+      <label>Jam pulang<input type="time" value={form.check_out} onChange={(event) => setForm({ ...form, check_out: event.target.value })} /></label>
+      {value && <label className="full">Alasan koreksi<textarea required minLength={3} rows={3} value={form.correction_reason} onChange={(event) => setForm({ ...form, correction_reason: event.target.value })} placeholder="Contoh: Koreksi jam pulang berdasarkan catatan guru piket" /><small>Wajib untuk menjaga jejak audit.</small></label>}
       {errorText && <p className="v2-field-error full">{errorText}</p>}
-      <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}><CheckCircle2 size={17} /> {busy ? 'Menyimpan...' : 'Simpan Absensi'}</button></div>
+      <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy || Boolean(value && form.correction_reason.trim().length < 3)}><CheckCircle2 size={17} /> {busy ? 'Menyimpan...' : 'Simpan Absensi'}</button></div>
     </form>
   </Dialog>
 }
 
-function ConfirmModal({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog>
+function DeleteAttendanceDialog({ record, onClose, onConfirm }: { record: AttendanceRecord; onClose: () => void; onConfirm: (reason: string) => void }) {
+  const [reason, setReason] = useState('')
+  return <Dialog title="Hapus data absensi?" onClose={onClose} confirm>
+    <span className="v2-modal-icon danger"><Trash2 /></span>
+    <p>{record.student_full_name || 'Murid'} · {dateText(record.attendance_date)}</p>
+    <label className="v2-form">Alasan penghapusan<textarea required minLength={3} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Jelaskan alasan data absensi dihapus" /></label>
+    <div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>Ya, Hapus</button></div>
+  </Dialog>
 }
+
 function SmallStat({ label, value }: { label: string; value: number }) { return <article className="v2-stat mini green"><span><Clock3 size={20} /></span><div><small>{label}</small><strong>{value}</strong><p>Catatan</p></div></article> }
-function initials(name?: string | null) { return (name || 'Murid').split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() }
+function initials(name?: string | null) { return (name || 'Murid').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function dateText(value: string) { return new Date(`${value}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) }
 function timeText(value: string) { return new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: JAKARTA }) }
 function timeTextRaw(value: string) { return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: JAKARTA }).format(new Date(value)) }

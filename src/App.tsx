@@ -1,6 +1,7 @@
 import { lazy, Suspense, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
+import AdminMfaGate from './AdminMfaGate'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { validatePassword } from './lib/auth-utils.js'
 
@@ -38,6 +39,7 @@ async function fetchActiveProfile(userId: string): Promise<UserProfile | null> {
 }
 
 function App() {
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const isLocalPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
@@ -73,10 +75,25 @@ function App() {
 
     void loadProfile()
 
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setLoading(false)
+        navigate('/password-baru', { replace: true })
+        return
+      }
       void loadProfile()
     })
-    const verifyVisibleSession = () => { if (document.visibilityState !== 'visible') return; void supabase.auth.getUser().then(async ({ data, error }) => { if (!mounted || (!error && data.user)) return; await supabase.auth.signOut(); if (mounted) { setProfile(null); setLoading(false) } }) }
+    const verifyVisibleSession = () => {
+      if (document.visibilityState !== 'visible') return
+      void supabase.auth.getUser().then(async ({ data, error }) => {
+        if (!mounted || (!error && data.user)) return
+        await supabase.auth.signOut()
+        if (mounted) {
+          setProfile(null)
+          setLoading(false)
+        }
+      })
+    }
     document.addEventListener('visibilitychange', verifyVisibleSession)
 
     return () => {
@@ -84,7 +101,7 @@ function App() {
       listener.subscription.unsubscribe()
       document.removeEventListener('visibilitychange', verifyVisibleSession)
     }
-  }, [])
+  }, [navigate])
 
   if (previewRole) {
     return (
@@ -111,35 +128,35 @@ function App() {
   return (
     <Suspense fallback={<CenteredMessage text="Memuat portal..." />}>
       <Routes>
-      <Route path="/login" element={profile ? <RoleRedirect profile={profile} /> : <LoginPage />} />
-      <Route path="/lupa-password" element={<ForgotPasswordPage />} />
-      <Route path="/verifikasi-kode" element={<VerifyOtpPage />} />
-      <Route path="/password-baru" element={<NewPasswordPage />} />
-      <Route
-        path="/guru/*"
-        element={
-          <ProtectedRoute profile={profile} role="teacher">
-            <RolePortal profile={profile!} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/orang-tua/*"
-        element={
-          <ProtectedRoute profile={profile} role="parent">
-            <RolePortal profile={profile!} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/*"
-        element={
-          <ProtectedRoute profile={profile} role="admin">
-            <RolePortal profile={profile!} />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={profile ? <RoleRedirect profile={profile} /> : <Navigate to="/login" replace />} />
+        <Route path="/login" element={profile ? <RoleRedirect profile={profile} /> : <LoginPage />} />
+        <Route path="/lupa-password" element={<ForgotPasswordPage />} />
+        <Route path="/verifikasi-kode" element={<VerifyOtpPage />} />
+        <Route path="/password-baru" element={<NewPasswordPage />} />
+        <Route
+          path="/guru/*"
+          element={
+            <ProtectedRoute profile={profile} role="teacher">
+              <RolePortal profile={profile!} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orang-tua/*"
+          element={
+            <ProtectedRoute profile={profile} role="parent">
+              <RolePortal profile={profile!} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/*"
+          element={
+            <ProtectedRoute profile={profile} role="admin">
+              <RolePortal profile={profile!} />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={profile ? <RoleRedirect profile={profile} /> : <Navigate to="/login" replace />} />
       </Routes>
     </Suspense>
   )
@@ -148,6 +165,7 @@ function App() {
 function ProtectedRoute({ profile, role, children }: { profile: UserProfile | null; role: AppRole; children: ReactNode }) {
   if (!profile?.is_active) return <Navigate to="/login" replace />
   if (profile.role !== role) return <RoleRedirect profile={profile} />
+  if (role === 'admin') return <AdminMfaGate>{children}</AdminMfaGate>
   return <>{children}</>
 }
 
@@ -300,10 +318,11 @@ function NewPasswordPage() {
   const [error, setError] = useState('')
 
   const strength = useMemo(() => {
+    const groups = [/[a-z]/.test(password), /[A-Z]/.test(password), /\d/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length
     let score = 0
-    if (password.length >= 6) score++
-    if (password.length >= 8) score++
     if (password.length >= 10) score++
+    if (groups >= 3) score++
+    if (password.length >= 14 && groups >= 4) score++
     return score
   }, [password])
 
@@ -325,7 +344,7 @@ function NewPasswordPage() {
     setBusy(true)
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) {
-      setError('Password gagal diperbarui. Silakan ulangi proses lupa password.')
+      setError('Password gagal diperbarui. Gunakan password yang lebih kuat atau ulangi proses pemulihan.')
       setBusy(false)
       return
     }
@@ -341,13 +360,14 @@ function NewPasswordPage() {
   return (
     <AuthLayout title="Buat password baru" subtitle="Gunakan password baru yang aman dan mudah Anda ingat.">
       <form onSubmit={submit} className="form-stack">
-        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 6 karakter" />
+        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 10 karakter" />
         <div className="strength">
           <span className={strength >= 1 ? 'filled' : ''} />
           <span className={strength >= 2 ? 'filled' : ''} />
           <span className={strength >= 3 ? 'filled' : ''} />
         </div>
         <Field icon={<ShieldCheck size={18} />} label="Ulangi password baru" type="password" value={confirm} onChange={setConfirm} placeholder="Ketik ulang password" />
+        <p className="helper-text">Minimal 10 karakter dan gunakan sedikitnya 3 jenis karakter: huruf besar, huruf kecil, angka, atau simbol.</p>
         {error && <div className="alert error">{error}</div>}
         {message && <div className="alert success">{message}</div>}
         <button className="primary-button" disabled={busy || Boolean(message)}>
