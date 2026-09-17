@@ -45,6 +45,18 @@ jobs:
           set -a
           source /tmp/ra-nurul-falah.env
           set +a
+          AUTH_READY=false
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --output /dev/null "$API_URL/auth/v1/health"; then
+              AUTH_READY=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$AUTH_READY" != "true" ]; then
+            echo "Supabase Auth did not become ready before integration tests."
+            exit 1
+          fi
           SUPABASE_URL="$API_URL" \
           SUPABASE_ANON_KEY="$ANON_KEY" \
           SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
