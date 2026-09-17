@@ -1,114 +1,49 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { BadgeDollarSign, Edit3, Plus, Printer, ReceiptText, Trash2 } from 'lucide-react'
 import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { Button, EmptyState, PageHeader } from '../components/ui'
+import { queryKeys } from '../data/queryKeys'
+import { paymentMetaOptions, paymentPageOptions, type PaymentRow, type PaymentStudent, type PaymentSummary } from '../data/queries/payments'
+import { useDataFilters } from '../data/useDataFilters'
+import { userErrorMessage } from '../lib/error-utils'
 import { supabase } from '../lib/supabase'
-import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { ActionMenu, Dialog, useChildSelection } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 import { Notice } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
-type StudentLite = { id: string; full_name: string; class_name: string | null; academic_year: string | null; is_active?: boolean }
-type Payment = {
-  id: string
-  student_id: string
-  payment_type: string
-  period_label: string | null
-  amount: number | string
-  paid_amount: number | string
-  due_date: string | null
-  paid_at: string | null
-  status: 'unpaid' | 'partial' | 'paid' | 'waived'
-  notes: string | null
-  created_at: string
-  student_full_name: string
-  student_class_name: string | null
-}
-type PaymentSummary = { total_billed: number | string; total_paid: number | string; total_outstanding: number | string }
-
+type StudentLite = PaymentStudent
+type Payment = PaymentRow
 const EMPTY_SUMMARY: PaymentSummary = { total_billed: 0, total_paid: 0, total_outstanding: 0 }
 
 export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
+  const queryClient = useQueryClient()
   const canManage = role === 'admin'
   const childSelection = useChildSelection()
   const selectedChildId = role === 'parent' ? childSelection.selectedChildId : ''
-  const [students, setStudents] = useState<StudentLite[]>([])
-  const [rows, setRows] = useState<Payment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [summary, setSummary] = useState<PaymentSummary>(EMPTY_SUMMARY)
+  const filters = useDataFilters({ q: '' })
+  const search = filters.value('q')
+  const page = filters.page
+  const debouncedSearch = useDebouncedValue(search)
+  const pageQuery = useQuery(paymentPageOptions({ page, pageSize: PAGE_SIZE, search: debouncedSearch, studentId: selectedChildId }))
+  const metaQuery = useQuery(paymentMetaOptions({ canManage, studentId: selectedChildId }))
+  const rows = pageQuery.data?.rows ?? []
+  const total = pageQuery.data?.total ?? 0
+  const students = metaQuery.data?.students ?? []
+  const summary = metaQuery.data?.summary ?? EMPTY_SUMMARY
+  const loading = pageQuery.isPending
   const [editing, setEditing] = useState<Payment | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Payment | null>(null)
   const [removing, setRemoving] = useState(false)
   const removingRef = useRef(false)
   const [receipt, setReceipt] = useState<Payment | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
-  const debouncedSearch = useDebouncedValue(search)
 
-  const loadRows = async () => {
-    setLoading(true)
-    setLoadError('')
-    const range = getPageRange(page, PAGE_SIZE)
-    let query = supabase
-      .from('student_payments_search')
-      .select('id,student_id,payment_type,period_label,amount,paid_amount,due_date,paid_at,status,notes,created_at,student_full_name,student_class_name', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(range.from, range.to)
-
-    if (selectedChildId) query = query.eq('student_id', selectedChildId)
-    const normalizedSearch = sanitizeSearch(debouncedSearch)
-    if (normalizedSearch) {
-      query = query.or(`student_full_name.ilike.%${normalizedSearch}%,student_class_name.ilike.%${normalizedSearch}%,payment_type.ilike.%${normalizedSearch}%,period_label.ilike.%${normalizedSearch}%`)
-    }
-
-    const { data, error, count } = await query
-    if (error) {
-      setLoadError(error.message || 'Data pembayaran gagal dimuat.')
-      setRows([])
-      setTotal(0)
-    } else {
-      setRows((data as Payment[] | null) ?? [])
-      setTotal(count ?? 0)
-    }
-    setLoading(false)
-  }
-
-  const loadSummary = async () => {
-    const { data, error } = await supabase.rpc('payment_summary', { p_student_id: selectedChildId || undefined })
-    if (error) {
-      setMessage({ tone: 'error', text: error.message })
-      setSummary(EMPTY_SUMMARY)
-      return
-    }
-    const nextSummary = (data as PaymentSummary[] | null)?.[0]
-    setSummary(nextSummary ?? EMPTY_SUMMARY)
-  }
-
-  const loadStudents = async () => {
-    if (!canManage) {
-      setStudents([])
-      return
-    }
-    const { data, error } = await supabase.from('students').select('id,full_name,class_name,academic_year,is_active').eq('is_active', true).order('full_name')
-    if (error) setMessage({ tone: 'error', text: error.message })
-    setStudents((data as StudentLite[] | null) ?? [])
-  }
-
-  useEffect(() => { void loadRows() }, [page, debouncedSearch, selectedChildId])
-  useEffect(() => { setPage(1) }, [debouncedSearch, selectedChildId])
-  useEffect(() => { void loadSummary() }, [selectedChildId])
-  useEffect(() => { void loadStudents() }, [canManage])
-
-  const refreshAfterMutation = async () => {
-    await Promise.all([loadRows(), loadSummary()])
-  }
-
-  const resetFilters = () => setSearch('')
+  const setSearch = (value: string) => filters.update({ q: value }, { resetPage: true })
+  const resetFilters = () => filters.reset('q')
+  const refreshAfterMutation = async () => queryClient.invalidateQueries({ queryKey: queryKeys.payments.all })
 
   const closeDelete = () => {
     if (removingRef.current) return
@@ -130,12 +65,8 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
     const shouldGoBack = rows.length === 1 && page > 1
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Data pembayaran berhasil dihapus.' })
-    if (shouldGoBack) {
-      setPage((current) => Math.max(1, current - 1))
-      await loadSummary()
-    } else {
-      await refreshAfterMutation()
-    }
+    await refreshAfterMutation()
+    if (shouldGoBack) filters.setPage(page - 1)
   }
 
   const actionItems = (row: Payment) => [
@@ -180,6 +111,7 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
       actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Tagihan</Button> : undefined}
     />
     {message && <Notice {...message} />}
+    {metaQuery.isError && <Notice tone="error" text={userErrorMessage(metaQuery.error, 'Ringkasan pembayaran gagal dimuat.')} />}
     <div className="data-stat-grid">
       <StatCard icon={<BadgeDollarSign size={20} />} label="Total Tagihan" value={currency(Number(summary.total_billed))} supportingText="Seluruh nominal tagihan" tone="warning" />
       <StatCard icon={<BadgeDollarSign size={20} />} label="Sudah Dibayar" value={currency(Number(summary.total_paid))} supportingText="Pembayaran diterima" tone="success" />
@@ -194,7 +126,7 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
         onReset={resetFilters}
       />
 
-      {loadError ? <ErrorState description={loadError} onRetry={() => void loadRows()} /> : <>
+      {pageQuery.isError ? <ErrorState description={userErrorMessage(pageQuery.error, 'Data pembayaran gagal dimuat.')} onRetry={() => void pageQuery.refetch()} /> : <>
         <div className="desktop-data-view">
           <DataTable rows={rows} columns={columns} getRowKey={(row) => row.id} loading={loading} empty={emptyState} caption="Daftar pembayaran murid" />
         </div>
@@ -216,7 +148,7 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
             />
           ))}</div> : emptyState}
         </div>
-        {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+        {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={filters.setPage} /> : null}
       </>}
     </section>
 
@@ -309,7 +241,7 @@ function PaymentModal({ value, students, onClose, onDone }: { value: Payment | n
     busy={busy}
     error={errorText}
     onSubmit={submit}
-    onClose={onClose}
+    onClose={() => { if (!busyRef.current) onClose() }}
   >
     <div className="v2-form v2-form-grid">
       <label>Murid<select required value={form.student_id} onChange={(event) => setForm({ ...form, student_id: event.target.value })}>{students.map((student) => <option key={student.id} value={student.id}>{student.full_name} {student.class_name ? `· ${student.class_name}` : ''}</option>)}</select></label>

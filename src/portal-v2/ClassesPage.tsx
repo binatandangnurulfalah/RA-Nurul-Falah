@@ -1,9 +1,10 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Edit3, GraduationCap, Plus, Save, Trash2 } from 'lucide-react'
+import { queryKeys } from '../data/queryKeys'
 import { supabase } from '../lib/supabase'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 import { ActionMenu, Dialog } from './AppExperience'
-import { invalidateQueryCache } from './DataExperience'
 
 type SchoolClass = {
   id: string
@@ -21,6 +22,7 @@ type TeacherOption = { id: string; full_name: string; teacher_user_id: string | 
 type Message = { tone: 'success' | 'error'; text: string }
 
 export function ClassesPage() {
+  const queryClient = useQueryClient()
   const [classes, setClasses] = useState<SchoolClass[]>([])
   const [teachers, setTeachers] = useState<TeacherOption[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -61,6 +63,10 @@ export function ClassesPage() {
 
   useEffect(() => { void load() }, [])
 
+  const invalidateClassConsumers = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.students.all })
+  }
+
   const remove = async () => {
     if (!deleting) return
     if ((counts[deleting.name] || 0) > 0) {
@@ -75,7 +81,7 @@ export function ClassesPage() {
       return
     }
 
-    invalidateQueryCache('students:classes')
+    await invalidateClassConsumers()
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Kelas berhasil dihapus.' })
     await load()
@@ -119,7 +125,7 @@ export function ClassesPage() {
       teachers={teachers}
       onClose={() => setEditing(null)}
       onDone={async () => {
-        invalidateQueryCache('students:classes')
+        await invalidateClassConsumers()
         setEditing(null)
         setMessage({ tone: 'success', text: 'Data kelas dan penugasan Guru berhasil disimpan.' })
         await load()
@@ -150,10 +156,13 @@ function ClassModal({ value, teachers, onClose, onDone }: {
     active: value?.is_active ?? true,
   })
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setErrorText('')
 
@@ -165,6 +174,7 @@ function ClassModal({ value, teachers, onClose, onDone }: {
       p_teacher_profile_ids: form.teacher_profile_ids,
     })
 
+    busyRef.current = false
     setBusy(false)
     if (error) {
       const text = error.code === '23505'
@@ -181,7 +191,7 @@ function ClassModal({ value, teachers, onClose, onDone }: {
     onDone()
   }
 
-  return <Dialog title={value ? 'Edit Kelas' : 'Tambah Kelas'} eyebrow="FORMULIR" onClose={onClose}>
+  return <Dialog title={value ? 'Edit Kelas' : 'Tambah Kelas'} eyebrow="FORMULIR" onClose={() => { if (!busyRef.current) onClose() }}>
     <form className="v2-form" onSubmit={submit}>
       <label>Nama kelas<input required minLength={2} maxLength={80} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Kelompok A" /></label>
       <fieldset className="v5-teacher-picker">

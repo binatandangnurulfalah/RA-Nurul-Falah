@@ -17,21 +17,6 @@ export function usePaginatedItems<T>(items: T[], resetKey: string, pageSize = PA
   return { ...result, setPage }
 }
 
-type CacheEntry<T> = { value: T; expiresAt: number }
-const queryCache = new Map<string, CacheEntry<unknown>>()
-
-export async function cachedQuery<T>(key: string, loader: () => Promise<T>, ttl = 30_000): Promise<T> {
-  const cached = queryCache.get(key) as CacheEntry<T> | undefined
-  if (cached && cached.expiresAt > Date.now()) return cached.value
-  const value = await loader()
-  queryCache.set(key, { value, expiresAt: Date.now() + ttl })
-  return value
-}
-
-export function invalidateQueryCache(prefix = '') {
-  for (const key of queryCache.keys()) if (!prefix || key.startsWith(prefix)) queryCache.delete(key)
-}
-
 export function PaginationControls({ page, total, pageSize = PAGE_SIZE, onPage }: { page: number; total: number; pageSize?: number; onPage: (page: number) => void }) {
   const safePage = normalizePage(page, total, pageSize)
   return <Pagination currentPage={safePage} pageSize={pageSize} totalItems={total} onPageChange={onPage} />

@@ -8,7 +8,9 @@ const mobile = read('src/mobile-v5.css')
 const schoolModules = read('src/school-modules.css')
 const dataExperience = read('src/portal-v2/DataExperience.tsx')
 const payments = read('src/portal-v2/PaymentsPage.tsx')
+const paymentsQuery = read('src/data/queries/payments.ts')
 const documents = read('src/portal-v2/DocumentsPage.tsx')
+const documentsQuery = read('src/data/queries/documents.ts')
 
 test('pagination presentation memiliki satu jalur reusable Data UI', () => {
   assert.match(dataExperience, /import \{ Pagination \} from '\.\.\/components\/data\/Pagination'/)
@@ -45,11 +47,12 @@ test('mobile action menu memakai canonical design tokens, bukan alias token yang
 })
 
 test('CSS consolidation tidak mengubah query, storage, atau pagination contract halaman data', () => {
-  assert.match(payments, /student_payments_search/)
-  assert.match(payments, /payment_summary/)
+  assert.match(paymentsQuery, /student_payments_search/)
+  assert.match(paymentsQuery, /payment_summary/)
   assert.match(payments, /PaginationControls/)
   assert.match(documents, /school-documents/)
   assert.match(documents, /createSignedUrl/)
   assert.match(documents, /school_document_storage_cleanup/)
+  assert.match(documentsQuery, /\.range\(range\.from, range\.to\)/)
   assert.match(documents, /PaginationControls/)
 })

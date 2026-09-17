@@ -1,17 +1,20 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Edit3, KeyRound, Plus, Trash2, UserRound, UsersRound } from 'lucide-react'
 import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { Button, Dialog, EmptyState, PageHeader } from '../components/ui'
-import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
-import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
+import { queryKeys } from '../data/queryKeys'
+import { accountPageOptions, accountStatsOptions, type AccountRow, type AccountStats } from '../data/queries/accounts'
+import { useDataFilters } from '../data/useDataFilters'
+import { userErrorMessage } from '../lib/error-utils'
+import { type AppRole, supabase } from '../lib/supabase'
 import { ActionMenu } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 import { Notice } from './PortalPages'
 
-type Account = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
+type Account = AccountRow
 type Message = { tone: 'success' | 'error'; text: string }
-type AccountStats = { total: number; teachers: number; parents: number }
 type CreateResult = { manualLink: string | null }
 
 function authRedirectUrl() {
@@ -19,14 +22,18 @@ function authRedirectUrl() {
 }
 
 export function AccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState<'all' | AppRole>('all')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [stats, setStats] = useState<AccountStats>({ total: 0, teachers: 0, parents: 0 })
+  const queryClient = useQueryClient()
+  const filters = useDataFilters({ q: '', role: 'all' })
+  const search = filters.value('q')
+  const roleFilter = (filters.value('role') || 'all') as 'all' | AppRole
+  const page = filters.page
+  const debouncedSearch = useDebouncedValue(search)
+  const pageQuery = useQuery(accountPageOptions({ page, pageSize: PAGE_SIZE, search: debouncedSearch, roleFilter }))
+  const statsQuery = useQuery(accountStatsOptions())
+  const accounts = pageQuery.data?.rows ?? []
+  const total = pageQuery.data?.total ?? 0
+  const stats: AccountStats = statsQuery.data ?? { total: 0, teachers: 0, parents: 0 }
+  const loading = pageQuery.isPending
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
@@ -36,51 +43,11 @@ export function AccountsPage() {
   const resetRef = useRef(false)
   const [oneTimeLink, setOneTimeLink] = useState<string | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
-  const debouncedSearch = useDebouncedValue(search)
 
-  const load = async () => {
-    setLoading(true)
-    setLoadError('')
-    const range = getPageRange(page, PAGE_SIZE)
-    let accountQuery = supabase
-      .from('user_profiles')
-      .select('id,role,display_name,is_active,created_at', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(range.from, range.to)
-
-    if (roleFilter !== 'all') accountQuery = accountQuery.eq('role', roleFilter)
-    const normalizedSearch = sanitizeSearch(debouncedSearch)
-    if (normalizedSearch) accountQuery = accountQuery.ilike('display_name', `%${normalizedSearch}%`)
-
-    const [accountResult, allCount, teacherCount, parentCount] = await Promise.all([
-      accountQuery,
-      supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
-      supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'parent'),
-    ])
-
-    if (accountResult.error) {
-      setLoadError(accountResult.error.message || 'Data akun gagal dimuat.')
-      setAccounts([])
-      setTotal(0)
-    } else {
-      setAccounts((accountResult.data as Account[] | null) ?? [])
-      setTotal(accountResult.count ?? 0)
-    }
-
-    const statsError = allCount.error || teacherCount.error || parentCount.error
-    if (statsError) setMessage({ tone: 'error', text: statsError.message })
-    setStats({ total: allCount.count ?? 0, teachers: teacherCount.count ?? 0, parents: parentCount.count ?? 0 })
-    setLoading(false)
-  }
-
-  useEffect(() => { void load() }, [page, roleFilter, debouncedSearch])
-  useEffect(() => { setPage(1) }, [roleFilter, debouncedSearch])
-
-  const resetFilters = () => {
-    setSearch('')
-    setRoleFilter('all')
-  }
+  const setSearch = (value: string) => filters.update({ q: value }, { resetPage: true })
+  const setRoleFilter = (value: 'all' | AppRole) => filters.update({ role: value }, { resetPage: true })
+  const resetFilters = () => filters.reset('q', 'role')
+  const refreshAccounts = async () => queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
 
   const closeDelete = () => {
     if (removingRef.current) return
@@ -100,9 +67,11 @@ export function AccountsPage() {
       setMessage({ tone: 'error', text: data?.error || 'Akun gagal dihapus.' })
       return
     }
+    const shouldGoBack = accounts.length === 1 && page > 1
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Akun berhasil dihapus.' })
-    await load()
+    await refreshAccounts()
+    if (shouldGoBack) filters.setPage(page - 1)
   }
 
   const sendPasswordReset = async (account: Account) => {
@@ -169,6 +138,7 @@ export function AccountsPage() {
       actions={<Button onClick={() => setCreateOpen(true)}><Plus size={17} /> Tambah Akun</Button>}
     />
     {message && <Notice {...message} />}
+    {statsQuery.isError && <Notice tone="error" text={userErrorMessage(statsQuery.error, 'Ringkasan akun gagal dimuat.')} />}
     <div className="data-stat-grid">
       <StatCard icon={<UsersRound size={20} />} label="Semua Akun" value={stats.total} supportingText="Pengguna terdaftar" tone="success" />
       <StatCard icon={<UserRound size={20} />} label="Guru" value={stats.teachers} supportingText="Akun tenaga pendidik" tone="info" />
@@ -191,7 +161,7 @@ export function AccountsPage() {
         </select>
       </SearchFilterBar>
 
-      {loadError ? <ErrorState description={loadError} onRetry={() => void load()} /> : <>
+      {pageQuery.isError ? <ErrorState description={userErrorMessage(pageQuery.error, 'Data akun gagal dimuat.')} onRetry={() => void pageQuery.refetch()} /> : <>
         <div className="desktop-data-view">
           <DataTable rows={accounts} columns={columns} getRowKey={(account) => account.id} loading={loading} empty={emptyState} caption="Daftar akun pengguna" />
         </div>
@@ -211,7 +181,7 @@ export function AccountsPage() {
             />
           ))}</div> : emptyState}
         </div>
-        {!loading && accounts.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+        {!loading && accounts.length ? <PaginationControls page={page} total={total} onPage={filters.setPage} /> : null}
       </>}
     </section>
 
@@ -225,7 +195,7 @@ export function AccountsPage() {
         } else {
           setMessage({ tone: 'success', text: 'Akun dibuat dan instruksi membuat password telah dikirim ke email pengguna.' })
         }
-        await load()
+        await refreshAccounts()
       }}
     />}
 
@@ -235,7 +205,7 @@ export function AccountsPage() {
       onDone={async () => {
         setEditing(null)
         setMessage({ tone: 'success', text: 'Akun berhasil diperbarui.' })
-        await load()
+        await refreshAccounts()
       }}
     />}
 
@@ -292,7 +262,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
     busy={busy}
     error={errorText}
     onSubmit={submit}
-    onClose={onClose}
+    onClose={() => { if (!busyRef.current) onClose() }}
   >
     <div className="v2-form">
       <label>Nama lengkap<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
@@ -341,7 +311,7 @@ function EditAccountModal({ account, onClose, onDone }: { account: Account; onCl
     busy={busy}
     error={errorText}
     onSubmit={submit}
-    onClose={onClose}
+    onClose={() => { if (!busyRef.current) onClose() }}
   >
     <div className="v2-form">
       <label>Nama lengkap<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>

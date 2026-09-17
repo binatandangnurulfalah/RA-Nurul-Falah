@@ -9,7 +9,9 @@ const dataUi = read('src/data-ui.css')
 const main = read('src/main.tsx')
 const dataExperience = read('src/portal-v2/DataExperience.tsx')
 const students = read('src/portal-v2/StudentsPageV2.tsx')
+const studentsQuery = read('src/data/queries/students.ts')
 const teachers = read('src/portal-v2/TeachersPage.tsx')
+const teachersQuery = read('src/data/queries/teachers.ts')
 
 const reusableDataComponents = [
   'DataTable',
@@ -41,26 +43,25 @@ test('stylesheet reusable data dimuat dan menyediakan desktop/mobile presentatio
   assert.match(dataUi, /\.data-pagination/)
 })
 
-test('pilot Data Murid memakai reusable UI tanpa memindahkan authorization ke frontend', () => {
+test('Data Murid memakai reusable UI tanpa memindahkan authorization ke frontend', () => {
   for (const component of ['PageHeader', 'DataTable', 'MobileDataCard', 'SearchFilterBar', 'StatusBadge', 'ConfirmDialog']) {
     assert.match(students, new RegExp(component))
   }
-  assert.match(students, /supabase\.from\('students'\)/)
+  assert.match(studentsQuery, /supabase\.from\('students'\)/)
   assert.match(students, /save_student_with_guardians/)
   assert.match(students, /PaginationControls/)
 })
 
-test('pilot Data Guru memakai reusable UI dan tetap server-side pagination', () => {
+test('Data Guru memakai reusable UI dan tetap server-side pagination', () => {
   for (const component of ['PageHeader', 'StatCard', 'DataTable', 'MobileDataCard', 'SearchFilterBar', 'StatusBadge', 'ConfirmDialog']) {
     assert.match(teachers, new RegExp(component))
   }
-  assert.match(teachers, /teacher_profiles_search/)
-  assert.match(teachers, /\.range\(range\.from, range\.to\)/)
+  assert.match(teachersQuery, /teacher_profiles_search/)
+  assert.match(teachersQuery, /\.range\(range\.from, range\.to\)/)
   assert.match(teachers, /PaginationControls/)
 })
 
-test('11.7 tidak mengganti cache layer lama sebelum Tahap 11.8', () => {
-  assert.match(dataExperience, /cachedQuery/)
-  assert.match(dataExperience, /invalidateQueryCache/)
-  assert.doesNotMatch(dataExperience, /@tanstack\/react-query/)
+test('PaginationControls tetap menjadi adapter reusable presentation', () => {
+  assert.match(dataExperience, /Pagination/)
+  assert.match(dataExperience, /PaginationControls/)
 })

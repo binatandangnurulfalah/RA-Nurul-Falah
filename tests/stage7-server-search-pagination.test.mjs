@@ -4,12 +4,13 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
 
-const [attendance, accounts, teachers, reports, payments, documents, modules, migration, manifestText] = await Promise.all([
-  read('../src/portal-v2/AttendancePages.tsx'),
-  read('../src/portal-v2/AccountsPage.tsx'),
-  read('../src/portal-v2/TeachersPage.tsx'),
+const [attendance, accounts, teachers, reports, payments, documents, documentPage, modules, migration, manifestText] = await Promise.all([
+  read('../src/data/queries/attendance.ts'),
+  read('../src/data/queries/accounts.ts'),
+  read('../src/data/queries/teachers.ts'),
   read('../src/portal-v2/ReportsPage.tsx'),
-  read('../src/portal-v2/PaymentsPage.tsx'),
+  read('../src/data/queries/payments.ts'),
+  read('../src/data/queries/documents.ts'),
   read('../src/portal-v2/DocumentsPage.tsx'),
   read('../src/portal-v2/SchoolModules.tsx'),
   read('../supabase/migrations/20260917071352_stage7_server_search_pagination.sql'),
@@ -21,7 +22,7 @@ function assertServerPage(source, tableOrView) {
   assert.ok(source.includes(`.from('${tableOrView}')`), `expected ${tableOrView}`)
   assert.ok(source.includes("{ count: 'exact' }"), 'expected exact count')
   assert.ok(source.includes('.range(range.from, range.to)'), 'expected range pagination')
-  assert.ok(source.includes('sanitizeSearch(debouncedSearch)'), 'expected sanitized server search')
+  assert.ok(source.includes('sanitizeSearch('), 'expected sanitized server search')
 }
 
 test('absensi mencari di server sebelum range pagination', () => {
@@ -53,8 +54,8 @@ test('pembayaran memakai view pencarian, pagination dan summary server-side', ()
 
 test('dokumen memakai pencarian dan pagination server-side tanpa merusak lifecycle Storage', () => {
   assertServerPage(documents, 'school_documents')
-  assert.ok(documents.includes('flushDocumentStorageCleanup'))
-  assert.ok(documents.includes('createSignedUrl'))
+  assert.ok(documentPage.includes('flushDocumentStorageCleanup'))
+  assert.ok(documentPage.includes('createSignedUrl'))
   assert.ok(!documents.includes('usePaginatedItems'))
 })
 
