@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const migration = await readFile(new URL('../supabase/migrations/20260917125500_stage11_dashboard_summary.sql', import.meta.url), 'utf8')
+const migration = await readFile(new URL('../supabase/migrations/20260917125645_stage11_dashboard_summary.sql', import.meta.url), 'utf8')
+const rpcNormalization = await readFile(new URL('../supabase/migrations/20260917130537_normalize_optional_rpc_ids.sql', import.meta.url), 'utf8')
 const dashboard = await readFile(new URL('../src/portal-v2/PortalPages.tsx', import.meta.url), 'utf8')
 const styles = await readFile(new URL('../src/dashboard-v11.css', import.meta.url), 'utf8')
 const types = await readFile(new URL('../src/lib/database.types.ts', import.meta.url), 'utf8')
@@ -42,6 +43,13 @@ test('generated types mengenali dashboard_summary dan metadata audit absensi', (
   assert.match(types, /check_out_by: string \| null/)
   assert.match(types, /correction_reason: string \| null/)
   assert.match(types, /last_corrected_by: string \| null/)
+})
+
+test('create-edit RPC memakai id opsional sesuai semantik database', () => {
+  assert.match(rpcNormalization, /p_class_id uuid default null/i)
+  assert.match(rpcNormalization, /p_student_id uuid default null/i)
+  assert.match(types, /p_class_id\?: string/)
+  assert.match(types, /p_student_id\?: string/)
 })
 
 test('dashboard layout tetap responsive dan ramah sentuh', () => {
