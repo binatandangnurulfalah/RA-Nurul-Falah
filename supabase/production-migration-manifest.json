@@ -27,7 +27,8 @@
     "20260917040446_harden_multi_guardian_student_rpc.sql",
     "20260917050213_document_storage_cleanup_queue.sql",
     "20260917050525_harden_document_storage_cleanup_trigger.sql",
-    "20260917053404_save_class_with_assignments_transaction.sql"
+    "20260917053404_save_class_with_assignments_transaction.sql",
+    "20260917071352_stage7_server_search_pagination.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
