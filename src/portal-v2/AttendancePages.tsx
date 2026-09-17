@@ -1,103 +1,57 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock3, Edit3, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { Button, EmptyState, PageHeader } from '../components/ui'
+import { queryKeys } from '../data/queryKeys'
+import { attendanceMetaOptions, attendancePageOptions, type AttendanceRecordRow, type AttendanceStudent, type AttendanceSummary } from '../data/queries/attendance'
+import { useDataFilters } from '../data/useDataFilters'
+import { userErrorMessage } from '../lib/error-utils'
 import { supabase } from '../lib/supabase'
-import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { ActionMenu, useChildSelection } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 import { Notice } from './PortalPages'
 
-type AttendanceRecord = {
-  id: string
-  student_id: string
-  attendance_date: string
-  check_in: string | null
-  check_out: string | null
-  status: string
-  created_at: string
-  student_full_name: string
-  student_class_name: string | null
-  student_nis: string | null
-}
-type Student = { id: string; full_name: string; nis: string | null; class_name: string | null }
+type AttendanceRecord = AttendanceRecordRow
+type Student = AttendanceStudent
 type Message = { tone: 'success' | 'error'; text: string }
-type AttendanceSummary = { total_records: number; checked_out_records: number; late_records: number }
 
 const JAKARTA = 'Asia/Jakarta'
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
 const EMPTY_SUMMARY: AttendanceSummary = { total_records: 0, checked_out_records: 0, late_records: 0 }
 
 export function AttendanceDataManager({ canManage, parentView }: { canManage: boolean; parentView: boolean }) {
+  const queryClient = useQueryClient()
   const childSelection = useChildSelection()
-  const [records, setRecords] = useState<AttendanceRecord[]>([])
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [search, setSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [summary, setSummary] = useState<AttendanceSummary>(EMPTY_SUMMARY)
+  const childId = parentView ? childSelection.selectedChildId : ''
+  const filters = useDataFilters({ q: '', date: '', status: 'all' })
+  const search = filters.value('q')
+  const dateFilter = filters.value('date')
+  const statusFilter = filters.value('status') || 'all'
+  const page = filters.page
+  const debouncedSearch = useDebouncedValue(search)
+  const pageQuery = useQuery(attendancePageOptions({ page, pageSize: PAGE_SIZE, search: debouncedSearch, dateFilter, statusFilter, parentView, childId }))
+  const metaQuery = useQuery(attendanceMetaOptions({ canManage, parentView, childId }))
+  const records = pageQuery.data?.rows ?? []
+  const total = pageQuery.data?.total ?? 0
+  const students = metaQuery.data?.students ?? []
+  const summary = metaQuery.data?.summary ?? EMPTY_SUMMARY
+  const loading = pageQuery.isPending
   const [editing, setEditing] = useState<AttendanceRecord | 'new' | null>(null)
   const [deleting, setDeleting] = useState<AttendanceRecord | null>(null)
   const [deleteReason, setDeleteReason] = useState('')
   const [removing, setRemoving] = useState(false)
   const removingRef = useRef(false)
   const [message, setMessage] = useState<Message | null>(null)
-  const debouncedSearch = useDebouncedValue(search)
 
-  const load = async () => {
-    setLoading(true)
-    setLoadError('')
-    const range = getPageRange(page, PAGE_SIZE)
-    let query = supabase
-      .from('attendance_records_search')
-      .select('id,student_id,attendance_date,check_in,check_out,status,created_at,student_full_name,student_class_name,student_nis', { count: 'exact' })
-      .order('attendance_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .range(range.from, range.to)
+  const setSearch = (value: string) => filters.update({ q: value }, { resetPage: true })
+  const setDateFilter = (value: string) => filters.update({ date: value }, { resetPage: true })
+  const setStatusFilter = (value: string) => filters.update({ status: value }, { resetPage: true })
+  const resetFilters = () => filters.reset('q', 'date', 'status')
 
-    if (parentView && childSelection.selectedChildId) query = query.eq('student_id', childSelection.selectedChildId)
-    if (dateFilter) query = query.eq('attendance_date', dateFilter)
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter)
-    const normalizedSearch = sanitizeSearch(debouncedSearch)
-    if (normalizedSearch) query = query.or(`student_full_name.ilike.%${normalizedSearch}%,student_nis.ilike.%${normalizedSearch}%,student_class_name.ilike.%${normalizedSearch}%`)
-
-    const [recordsResult, studentsResult, summaryResult] = await Promise.all([
-      query,
-      canManage
-        ? supabase.from('students').select('id,full_name,nis,class_name').eq('is_active', true).order('full_name')
-        : Promise.resolve({ data: [] as Student[], error: null }),
-      supabase.rpc('attendance_summary_for_date', { p_date: TODAY, p_student_id: parentView ? childSelection.selectedChildId || undefined : undefined }),
-    ])
-
-    if (recordsResult.error) {
-      setLoadError(recordsResult.error.message || 'Data absensi gagal dimuat.')
-      setRecords([])
-      setTotal(0)
-    } else {
-      setRecords((recordsResult.data as AttendanceRecord[] | null) ?? [])
-      setTotal(recordsResult.count ?? 0)
-    }
-
-    if (studentsResult.error || summaryResult.error) {
-      setMessage({ tone: 'error', text: studentsResult.error?.message || summaryResult.error?.message || 'Data pendukung absensi gagal dimuat.' })
-    }
-    setStudents((studentsResult.data as Student[] | null) ?? [])
-    setSummary(((summaryResult.data as AttendanceSummary[] | null)?.[0]) ?? EMPTY_SUMMARY)
-    setLoading(false)
-  }
-
-  useEffect(() => { void load() }, [canManage, page, dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
-  useEffect(() => { setPage(1) }, [dateFilter, statusFilter, parentView, childSelection.selectedChildId, debouncedSearch])
-
-  const resetFilters = () => {
-    setSearch('')
-    setDateFilter('')
-    setStatusFilter('all')
+  const refresh = async () => {
+    await Promise.all([pageQuery.refetch(), metaQuery.refetch()])
   }
 
   const startDelete = (record: AttendanceRecord) => {
@@ -124,10 +78,12 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
       setMessage({ tone: 'error', text: data?.error || 'Absensi gagal dihapus.' })
       return
     }
+    const shouldGoBack = records.length === 1 && page > 1
     setDeleting(null)
     setDeleteReason('')
     setMessage({ tone: 'success', text: 'Data absensi berhasil dihapus.' })
-    await load()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all })
+    if (shouldGoBack) filters.setPage(page - 1)
   }
 
   const actionItems = (record: AttendanceRecord) => [
@@ -169,6 +125,7 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
       actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Manual</Button> : undefined}
     />
     {message && <Notice {...message} />}
+    {metaQuery.isError && <Notice tone="error" text={userErrorMessage(metaQuery.error, 'Data pendukung absensi gagal dimuat.')} />}
     <div className="data-stat-grid">
       <StatCard icon={<Clock3 size={20} />} label="Absen Hari Ini" value={summary.total_records} supportingText="Catatan kehadiran" tone="success" />
       <StatCard icon={<CheckCircle2 size={20} />} label="Sudah Pulang" value={summary.checked_out_records} supportingText="Check-out tercatat" tone="info" />
@@ -192,10 +149,10 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
           <option value="excused">Izin</option>
           <option value="absent">Tidak hadir</option>
         </select>
-        <Button variant="secondary" onClick={() => void load()} disabled={loading} aria-label="Muat ulang data absensi"><RefreshCw size={16} /> Muat Ulang</Button>
+        <Button variant="secondary" onClick={() => void refresh()} disabled={pageQuery.isFetching || metaQuery.isFetching} aria-label="Muat ulang data absensi"><RefreshCw size={16} /> Muat Ulang</Button>
       </SearchFilterBar>
 
-      {loadError ? <ErrorState description={loadError} onRetry={() => void load()} /> : <>
+      {pageQuery.isError ? <ErrorState description={userErrorMessage(pageQuery.error, 'Data absensi gagal dimuat.')} onRetry={() => void pageQuery.refetch()} /> : <>
         <div className="desktop-data-view">
           <DataTable rows={records} columns={columns} getRowKey={(record) => record.id} loading={loading} empty={emptyState} caption="Daftar data absensi" />
         </div>
@@ -216,14 +173,14 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
             />
           ))}</div> : emptyState}
         </div>
-        {!loading && records.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
+        {!loading && records.length ? <PaginationControls page={page} total={total} onPage={filters.setPage} /> : null}
       </>}
     </section>
 
     {editing && canManage && <AttendanceModal value={editing === 'new' ? null : editing} students={students} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
       setMessage({ tone: 'success', text: 'Data absensi berhasil disimpan.' })
-      await load()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all })
     }} />}
     <ConfirmDialog
       open={Boolean(deleting)}
@@ -291,7 +248,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
     busy={busy}
     error={errorText}
     onSubmit={submit}
-    onClose={onClose}
+    onClose={() => { if (!busyRef.current) onClose() }}
   >
     <div className="v2-form v2-form-grid">
       <label className="full">Murid<select required value={form.student_id} onChange={(event) => setForm({ ...form, student_id: event.target.value })}>{students.map((student) => <option value={student.id} key={student.id}>{student.full_name} {student.class_name ? `· ${student.class_name}` : ''}</option>)}</select></label>
