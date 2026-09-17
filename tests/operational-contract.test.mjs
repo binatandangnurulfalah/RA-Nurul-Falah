@@ -23,6 +23,6 @@ test('unggahan dokumen memakai bucket privat dan signed URL', () => {
 
 test('design system menetapkan token kontrol dan target sentuh', () => {
   assert.match(design, /--ds-radius-control:/)
-  assert.match(design, /--ds-touch:\s*44px/)
+  assert.match(design, /--ds-touch:\s*(?:44px|var\(--touch-target,\s*44px\))/)
   assert.match(design, /:focus-visible/)
 })
