@@ -14,6 +14,7 @@ const queryKeys = read('src/data/queryKeys.ts')
 const createUser = read('supabase/functions/admin-create-user/index.ts')
 const manageUser = read('supabase/functions/admin-manage-user/index.ts')
 const manageAttendance = read('supabase/functions/manage-attendance-record/index.ts')
+const authorization = read('supabase/functions/_shared/authorization.ts')
 
 const auditedTables = [
   'attendance_records', 'students', 'teacher_profiles', 'school_classes',
@@ -45,6 +46,12 @@ test('attendance correction tetap melalui Edge Function dengan alasan wajib', ()
   assert.match(manageAttendance, /Alasan koreksi wajib diisi minimal 3 karakter/)
   assert.match(manageAttendance, /last_corrected_by/)
   assert.match(manageAttendance, /last_corrected_at/)
+})
+
+test('authorization attendance memakai class_id canonical, bukan nama kelas lintas tahun', () => {
+  assert.match(authorization, /\.select\('class_id'\)/)
+  assert.match(authorization, /teacherCanAccessClass\(context, student\.class_id\)/)
+  assert.doesNotMatch(authorization, /\.select\('class_name'\)/)
 })
 
 test('audit migration mencakup seluruh domain 11.11 dan identitas record generik', () => {
