@@ -1,7 +1,6 @@
 import { lazy, Suspense, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
-import AdminMfaGate from './AdminMfaGate'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { validatePassword } from './lib/auth-utils.js'
 
@@ -165,7 +164,6 @@ function App() {
 function ProtectedRoute({ profile, role, children }: { profile: UserProfile | null; role: AppRole; children: ReactNode }) {
   if (!profile?.is_active) return <Navigate to="/login" replace />
   if (profile.role !== role) return <RoleRedirect profile={profile} />
-  if (role === 'admin') return <AdminMfaGate>{children}</AdminMfaGate>
   return <>{children}</>
 }
 
