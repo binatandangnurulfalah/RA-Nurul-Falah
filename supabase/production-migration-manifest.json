@@ -30,7 +30,9 @@
     "20260917053404_save_class_with_assignments_transaction.sql",
     "20260917071352_stage7_server_search_pagination.sql",
     "20260917074753_stage8_announcement_payment_audit.sql",
-    "20260917075517_stage8_harden_audit_permissions.sql"
+    "20260917075517_stage8_harden_audit_permissions.sql",
+    "20260917081637_stage9_cleanup_updated_at_triggers.sql",
+    "20260917085747_stage9_remove_duplicate_updated_at_trigger.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",

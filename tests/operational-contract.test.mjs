@@ -2,15 +2,16 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const modules = await readFile(new URL('../src/portal-v2/SchoolModulesLegacy.tsx', import.meta.url), 'utf8')
+const reports = await readFile(new URL('../src/portal-v2/ReportsPage.tsx', import.meta.url), 'utf8')
+const payments = await readFile(new URL('../src/portal-v2/PaymentsPage.tsx', import.meta.url), 'utf8')
 const documents = await readFile(new URL('../src/portal-v2/DocumentsPage.tsx', import.meta.url), 'utf8')
 const storageBucketMigration = await readFile(new URL('../supabase/migrations/20260917032201_school_documents_storage_bucket.sql', import.meta.url), 'utf8')
 const storagePoliciesMigration = await readFile(new URL('../supabase/migrations/20260917032213_school_documents_storage_policies.sql', import.meta.url), 'utf8')
 const design = await readFile(new URL('../src/design-system.css', import.meta.url), 'utf8')
 
 test('rapor dan kuitansi menyediakan cetak PDF', () => {
-  assert.match(modules, /Cetak \/ Simpan PDF/)
-  assert.match(modules, /PaymentReceipt/)
+  assert.match(reports, /Cetak \/ Simpan PDF/)
+  assert.match(payments, /PaymentReceipt/)
 })
 
 test('unggahan dokumen memakai bucket privat dan signed URL', () => {

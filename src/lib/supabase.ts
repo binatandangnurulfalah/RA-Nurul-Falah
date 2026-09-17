@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database, Enums, Tables } from './database.types'
 
-export const supabaseUrl = 'https://mtfeuozwxwayzcjltaak.supabase.co'
-export const supabasePublishableKey = 'sb_publishable_0ncosNLuIzGjrMCFjXB8kQ_FalVfKJ8'
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mtfeuozwxwayzcjltaak.supabase.co'
+export const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_0ncosNLuIzGjrMCFjXB8kQ_FalVfKJ8'
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+export const supabase = createClient<Database>(supabaseUrl, supabasePublishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -11,16 +12,5 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   },
 })
 
-export type AppRole = 'admin' | 'teacher' | 'parent'
-
-export type UserProfile = {
-  id: string
-  role: AppRole
-  display_name: string | null
-  phone?: string | null
-  address?: string | null
-  bio?: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+export type AppRole = Enums<'app_role'>
+export type UserProfile = Tables<'user_profiles'>
