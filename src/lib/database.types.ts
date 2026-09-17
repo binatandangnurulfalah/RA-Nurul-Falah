@@ -855,11 +855,11 @@ export type Database = {
       }
       save_class_with_assignments: {
         Args: {
-          p_academic_year: string
-          p_class_id: string
-          p_is_active: boolean
-          p_name: string
-          p_teacher_profile_ids: string[]
+          p_academic_year?: string
+          p_class_id?: string
+          p_is_active?: boolean
+          p_name?: string
+          p_teacher_profile_ids?: string[]
         }
         Returns: string
       }
@@ -869,14 +869,14 @@ export type Database = {
           p_birth_date?: string
           p_birth_place?: string
           p_class_name?: string
-          p_full_name: string
+          p_full_name?: string
           p_gender?: string
           p_guardian_user_ids?: string[]
           p_is_active?: boolean
           p_nik?: string
           p_nis?: string
           p_nisn?: string
-          p_student_id: string
+          p_student_id?: string
         }
         Returns: {
           academic_year: string | null
@@ -952,8 +952,8 @@ export type Tables<
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    schema: keyof DatabaseWithoutInternals
+  }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
@@ -980,8 +980,8 @@ export type TablesInsert<
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    schema: keyof DatabaseWithoutInternals
+  }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
@@ -1005,8 +1005,8 @@ export type TablesUpdate<
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    schema: keyof DatabaseWithoutInternals
+  }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
@@ -1030,8 +1030,8 @@ export type Enums<
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    schema: keyof DatabaseWithoutInternals
+  }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -1047,8 +1047,8 @@ export type CompositeTypes<
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    schema: keyof DatabaseWithoutInternals
+  }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
