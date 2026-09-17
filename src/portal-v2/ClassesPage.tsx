@@ -158,7 +158,7 @@ function ClassModal({ value, teachers, onClose, onDone }: {
     setErrorText('')
 
     const { error } = await supabase.rpc('save_class_with_assignments', {
-      p_class_id: value?.id ?? null,
+      p_class_id: value?.id,
       p_name: form.name.trim(),
       p_academic_year: form.academic_year.trim(),
       p_is_active: form.active,
