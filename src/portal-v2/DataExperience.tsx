@@ -1,5 +1,5 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Pagination } from '../components/data/Pagination'
 import { normalizePage, paginateItems } from '../lib/data-utils.js'
 
 export const PAGE_SIZE = 20
@@ -33,12 +33,6 @@ export function invalidateQueryCache(prefix = '') {
 }
 
 export function PaginationControls({ page, total, pageSize = PAGE_SIZE, onPage }: { page: number; total: number; pageSize?: number; onPage: (page: number) => void }) {
-  const pages = Math.max(1, Math.ceil(total / pageSize))
   const safePage = normalizePage(page, total, pageSize)
-  if (total <= pageSize) return null
-  return <nav className="v5-pagination" aria-label="Navigasi halaman data">
-    <button type="button" onClick={() => onPage(safePage - 1)} disabled={safePage <= 1} aria-label="Halaman sebelumnya"><ChevronLeft size={17} /> Sebelumnya</button>
-    <span>Halaman <strong>{safePage}</strong> dari {pages} · {total} data</span>
-    <button type="button" onClick={() => onPage(safePage + 1)} disabled={safePage >= pages} aria-label="Halaman berikutnya">Berikutnya <ChevronRight size={17} /></button>
-  </nav>
+  return <Pagination currentPage={safePage} pageSize={pageSize} totalItems={total} onPageChange={onPage} />
 }

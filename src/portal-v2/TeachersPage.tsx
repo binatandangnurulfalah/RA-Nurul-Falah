@@ -1,10 +1,13 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { CheckCircle2, ContactRound, Edit3, Plus, Search, Trash2, UserRound } from 'lucide-react'
+import { CheckCircle2, ContactRound, Edit3, Plus, Trash2, UserRound } from 'lucide-react'
+import { DataListSkeleton, DataTable, type DataTableColumn, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
+import { ConfirmDialog } from '../components/forms'
+import { Button, EmptyState, PageHeader } from '../components/ui'
 import { supabase, type UserProfile } from '../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { ActionMenu, Dialog } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
-import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { Notice } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
 type TeacherAccount = Pick<UserProfile, 'id' | 'display_name' | 'phone' | 'is_active'>
@@ -38,6 +41,7 @@ export function TeachersPage() {
   const [total, setTotal] = useState(0)
   const [editing, setEditing] = useState<TeacherProfile | 'new' | null>(null)
   const [deleting, setDeleting] = useState<TeacherProfile | null>(null)
+  const [removing, setRemoving] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
   const debouncedSearch = useDebouncedValue(search)
 
@@ -93,14 +97,17 @@ export function TeachersPage() {
   }
 
   const remove = async () => {
-    if (!deleting) return
+    if (!deleting || removing) return
+    setRemoving(true)
     const { error } = await supabase.from('teacher_profiles').delete().eq('id', deleting.id)
     if (error) {
+      setRemoving(false)
       setMessage({ tone: 'error', text: error.message })
       return
     }
 
     const shouldGoBack = rows.length === 1 && page > 1
+    setRemoving(false)
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Data Guru berhasil dihapus. Akun login, jika ada, tetap aktif.' })
     if (shouldGoBack) {
@@ -116,41 +123,95 @@ export function TeachersPage() {
     return !linkedAccountIds.has(account.id)
   })
 
+  const actionItems = (row: TeacherProfile) => [
+    { label: 'Edit data Guru', icon: Edit3, onSelect: () => setEditing(row) },
+    { label: 'Hapus data Guru', icon: Trash2, danger: true, onSelect: () => setDeleting(row) },
+  ]
+
+  const identityText = (row: TeacherProfile) => row.nuptk ? `NUPTK ${row.nuptk}` : row.employee_no ? `No. Pegawai ${row.employee_no}` : row.nik ? `NIK ${row.nik}` : 'Belum dilengkapi'
+
+  const columns: DataTableColumn<TeacherProfile>[] = [
+    {
+      key: 'teacher',
+      header: 'Guru',
+      render: (row) => <div className="data-primary-cell"><span className="data-primary-cell__avatar">{initials(row.full_name)}</span><div className="data-primary-cell__copy"><strong>{row.full_name}</strong><small>{identityText(row)}</small></div></div>,
+    },
+    { key: 'position', header: 'Jabatan', render: (row) => row.position || 'Guru' },
+    { key: 'employment', header: 'Kepegawaian', render: (row) => row.employment_status || 'Belum diisi' },
+    { key: 'account', header: 'Akun', render: (row) => <StatusBadge tone={row.teacher_user_id ? 'info' : 'warning'}>{row.teacher_user_id ? 'Terhubung' : 'Belum terhubung'}</StatusBadge> },
+    { key: 'actions', header: 'Aksi', align: 'right', render: (row) => <ActionMenu label={`Aksi untuk Guru ${row.full_name}`} items={actionItems(row)} /> },
+  ]
+
+  const hasSearch = Boolean(search.trim())
+  const emptyState = (
+    <EmptyState
+      icon={<UserRound size={24} />}
+      title={hasSearch ? 'Tidak ada Guru yang cocok' : 'Belum ada data Guru'}
+      description={hasSearch ? 'Ubah kata pencarian atau reset pencarian untuk melihat data lainnya.' : 'Data Guru akan muncul setelah ditambahkan ke sistem.'}
+      action={hasSearch
+        ? <Button variant="secondary" onClick={() => setSearch('')}>Reset Pencarian</Button>
+        : <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Guru</Button>}
+    />
+  )
+
   return <div className="v2-stack">
-    <PageTitle eyebrow="TENAGA PENDIDIK" title="Data Guru" text="Kelola data Guru. Akun login dapat dihubungkan nanti setelah email tersedia." action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Guru</button>} />
+    <PageHeader
+      eyebrow="TENAGA PENDIDIK"
+      title="Data Guru"
+      subtitle="Kelola data Guru. Akun login dapat dihubungkan nanti setelah email tersedia."
+      actions={<Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Guru</Button>}
+    />
     {message && <Notice {...message} />}
-    <div className="v2-stat-grid three">
-      <MiniStat icon={<ContactRound size={20} />} label="Total Guru" value={stats.total} tone="green" />
-      <MiniStat icon={<CheckCircle2 size={20} />} label="Terhubung Akun" value={stats.linked} tone="blue" />
-      <MiniStat icon={<UserRound size={20} />} label="Tanpa Akun" value={stats.unlinked} tone="gold" />
+    <div className="data-stat-grid">
+      <StatCard icon={<ContactRound size={20} />} label="Total Guru" value={stats.total} supportingText="Data tercatat" tone="success" />
+      <StatCard icon={<CheckCircle2 size={20} />} label="Terhubung Akun" value={stats.linked} supportingText="Akun login aktif/tersedia" tone="info" />
+      <StatCard icon={<UserRound size={20} />} label="Tanpa Akun" value={stats.unlinked} supportingText="Belum dihubungkan" tone="warning" />
     </div>
     <section className="v2-panel">
-      <div className="v2-toolbar"><label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama, NIK, NUPTK, nomor pegawai..." /></label></div>
-      {loading ? <SkeletonRows /> : rows.length ? <>
-        <div className="school-card-grid">
-          {rows.map((row) => <article className="school-person" key={row.id}>
-            <span className="v2-avatar">{initials(row.full_name)}</span>
-            <div className="grow">
-              <div className="school-meta"><span className="v2-badge green">Aktif</span>{row.teacher_user_id ? <span className="v2-badge blue">Punya akun</span> : <span className="v2-badge gold">Belum punya akun</span>}</div>
-              <h3>{row.full_name}</h3>
-              <p>{row.position || 'Guru'} · {row.employment_status || 'Status kepegawaian belum diisi'}</p>
-              <small>{row.nuptk ? `NUPTK ${row.nuptk}` : row.employee_no ? `No. Pegawai ${row.employee_no}` : row.nik ? `NIK ${row.nik}` : 'Identitas profesional belum dilengkapi'}</small>
-            </div>
-            <ActionMenu label={`Aksi untuk Guru ${row.full_name}`} items={[
-              { label: 'Edit data Guru', icon: Edit3, onSelect: () => setEditing(row) },
-              { label: 'Hapus data Guru', icon: Trash2, danger: true, onSelect: () => setDeleting(row) },
-            ]} />
-          </article>)}
-        </div>
-        <PaginationControls page={page} total={total} onPage={setPage} />
-      </> : <EmptyCard text="Belum ada data Guru yang sesuai pencarian." />}
+      <SearchFilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        placeholder="Cari nama, NIK, NUPTK atau nomor pegawai"
+        searchLabel="Cari Guru"
+        onReset={() => setSearch('')}
+      />
+
+      <div className="desktop-data-view">
+        <DataTable rows={rows} columns={columns} getRowKey={(row) => row.id} loading={loading} empty={emptyState} caption="Daftar Guru" />
+      </div>
+      <div className="mobile-data-view">
+        {loading ? <DataListSkeleton /> : rows.length ? <div className="mobile-data-list">{rows.map((row) => (
+          <MobileDataCard
+            key={row.id}
+            leading={initials(row.full_name)}
+            title={row.full_name}
+            subtitle={`${row.position || 'Guru'} · ${row.employment_status || 'Status kepegawaian belum diisi'}`}
+            badges={<StatusBadge tone={row.teacher_user_id ? 'info' : 'warning'}>{row.teacher_user_id ? 'Punya akun' : 'Belum punya akun'}</StatusBadge>}
+            fields={[
+              { label: 'Identitas', value: identityText(row) },
+              { label: 'Pendidikan', value: row.education || 'Belum diisi' },
+            ]}
+            actions={<ActionMenu label={`Aksi untuk Guru ${row.full_name}`} items={actionItems(row)} />}
+          />
+        ))}</div> : emptyState}
+      </div>
+      {!loading && rows.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
     </section>
     {editing && <TeacherModal row={editing === 'new' ? null : editing} available={availableAccounts} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
       setMessage({ tone: 'success', text: 'Data Guru berhasil disimpan.' })
       await refreshAfterMutation()
     }} />}
-    {deleting && <Confirm title="Hapus data Guru?" text={`Data profesional ${deleting.full_name} akan dihapus, tetapi akun login yang terhubung tidak dihapus.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    <ConfirmDialog
+      open={Boolean(deleting)}
+      title="Hapus data Guru?"
+      description={deleting ? `Data profesional ${deleting.full_name} akan dihapus, tetapi akun login yang terhubung tidak dihapus.` : ''}
+      confirmLabel="Ya, Hapus"
+      danger
+      busy={removing}
+      onClose={() => setDeleting(null)}
+      onConfirm={() => void remove()}
+    />
   </div>
 }
 
@@ -222,14 +283,6 @@ function TeacherModal({ row, available, onClose, onDone }: { row: TeacherProfile
       <div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-primary" disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Data Guru'}</button></div>
     </form>
   </Dialog>
-}
-
-function Confirm({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm><span className="v2-modal-icon danger"><Trash2 /></span><p>{text}</p><div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div></Dialog>
-}
-
-function MiniStat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
-  return <article className={`v2-stat mini ${tone}`}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><p>Data tercatat</p></div></article>
 }
 
 function initials(name?: string | null) {

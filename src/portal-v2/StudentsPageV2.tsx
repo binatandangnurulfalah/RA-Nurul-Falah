@@ -1,11 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { Edit3, Plus, QrCode, Save, Search, Trash2 } from 'lucide-react'
+import { Edit3, Plus, QrCode, Save, Trash2, UsersRound } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { DataListSkeleton, DataTable, type DataTableColumn, MobileDataCard, SearchFilterBar, StatusBadge } from '../components/data'
+import { ConfirmDialog } from '../components/forms'
+import { Button, EmptyState, PageHeader } from '../components/ui'
 import { supabase, type UserProfile } from '../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../lib/data-utils.js'
 import { ActionMenu, Dialog } from './AppExperience'
 import { cachedQuery, invalidateQueryCache, PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
-import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
+import { Notice } from './PortalPages'
 
 type Account = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
 type Student = {
@@ -36,6 +39,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   const [total, setTotal] = useState(0)
   const [editing, setEditing] = useState<Student | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
+  const [removing, setRemoving] = useState(false)
   const [qrStudent, setQrStudent] = useState<Student | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const debouncedSearch = useDebouncedValue(search)
@@ -67,50 +71,100 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   useEffect(() => { void load() }, [page, debouncedSearch, classFilter])
   useEffect(() => { setPage(1) }, [debouncedSearch, classFilter])
 
+  const resetFilters = () => {
+    setSearch('')
+    setClassFilter('all')
+  }
+
   const remove = async () => {
-    if (!deleting || role !== 'admin') return
+    if (!deleting || role !== 'admin' || removing) return
+    setRemoving(true)
     const { error } = await supabase.from('students').delete().eq('id', deleting.id)
-    if (error) { setMessage({ tone: 'error', text: error.message }); return }
+    if (error) {
+      setRemoving(false)
+      setMessage({ tone: 'error', text: error.message })
+      return
+    }
     invalidateQueryCache('students:')
+    setRemoving(false)
     setDeleting(null)
     setMessage({ tone: 'success', text: 'Data murid berhasil dihapus.' })
     await load()
   }
 
+  const actionItems = (student: Student) => [
+    { label: 'Tampilkan QR', icon: QrCode, onSelect: () => setQrStudent(student) },
+    { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) },
+    ...(role === 'admin' ? [{ label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) }] : []),
+  ]
+
+  const columns: DataTableColumn<Student>[] = [
+    {
+      key: 'student',
+      header: 'Murid',
+      render: (student) => <div className="data-primary-cell"><span className="data-primary-cell__avatar">{initials(student.full_name)}</span><div className="data-primary-cell__copy"><strong>{student.full_name}</strong><small>{student.nisn ? `NISN ${student.nisn}` : student.nis ? `NIS ${student.nis}` : student.nik ? `NIK ${student.nik}` : 'Identitas belum diisi'}</small></div></div>,
+    },
+    { key: 'class', header: 'Kelompok', render: (student) => student.class_name || 'Belum ditentukan' },
+    { key: 'year', header: 'Tahun Ajaran', render: (student) => student.academic_year || '—' },
+    { key: 'status', header: 'Status', render: (student) => <StatusBadge tone={student.is_active ? 'success' : 'neutral'}>{student.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge> },
+    { key: 'actions', header: 'Aksi', align: 'right', render: (student) => <ActionMenu label={`Aksi untuk ${student.full_name}`} items={actionItems(student)} /> },
+  ]
+
+  const hasFilters = Boolean(search.trim()) || classFilter !== 'all'
+  const emptyState = (
+    <EmptyState
+      icon={<UsersRound size={24} />}
+      title={hasFilters ? 'Tidak ada murid yang cocok' : 'Belum ada data murid'}
+      description={hasFilters ? 'Ubah kata pencarian atau reset filter untuk melihat data lainnya.' : 'Data murid akan muncul setelah ditambahkan ke sistem.'}
+      action={hasFilters
+        ? <Button variant="secondary" onClick={resetFilters}>Reset Filter</Button>
+        : <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button>}
+    />
+  )
+
   return <div className="v2-stack">
-    <PageTitle
+    <PageHeader
       eyebrow="AKADEMIK"
       title="Data Murid"
-      text={role === 'admin' ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Tambah, edit, hubungkan satu atau beberapa wali, dan tampilkan QR murid.'}
-      action={<button className="v2-primary" onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</button>}
+      subtitle={role === 'admin' ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Tambah, edit, hubungkan satu atau beberapa wali, dan tampilkan QR murid.'}
+      actions={<Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button>}
     />
     {message && <Notice {...message} />}
     <section className="v2-panel">
-      <div className="v2-toolbar">
-        <label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama, NIK, NIS, atau NISN..." /></label>
-        <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+      <SearchFilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        placeholder="Cari nama, NIS, NISN atau NIK"
+        searchLabel="Cari murid"
+        activeFilterCount={classFilter === 'all' ? 0 : 1}
+        onReset={resetFilters}
+      >
+        <select aria-label="Filter kelompok" value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
           <option value="all">Semua kelompok</option>
           {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.name}>{schoolClass.name}</option>)}
         </select>
+      </SearchFilterBar>
+
+      <div className="desktop-data-view">
+        <DataTable rows={students} columns={columns} getRowKey={(student) => student.id} loading={loading} empty={emptyState} caption="Daftar murid" />
       </div>
-      {loading ? <SkeletonRows /> : students.length ? <>
-        <div className="v2-card-grid">
-          {students.map((student) => <article className="v2-person-card" key={student.id}>
-            <span>{initials(student.full_name)}</span>
-            <div>
-              <h3>{student.full_name}</h3>
-              <p>{student.class_name || 'Belum ada kelompok'}</p>
-              <small>{student.nisn ? `NISN ${student.nisn}` : student.nik ? `NIK ${student.nik}` : 'Identitas belum diisi'} · {student.is_active ? 'Aktif' : 'Nonaktif'}</small>
-            </div>
-            <ActionMenu label={`Aksi untuk ${student.full_name}`} items={[
-              { label: 'Tampilkan QR', icon: QrCode, onSelect: () => setQrStudent(student) },
-              { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) },
-              ...(role === 'admin' ? [{ label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) }] : []),
-            ]} />
-          </article>)}
-        </div>
-        <PaginationControls page={page} total={total} onPage={setPage} />
-      </> : <EmptyCard text="Tidak ada murid yang sesuai pencarian." />}
+      <div className="mobile-data-view">
+        {loading ? <DataListSkeleton /> : students.length ? <div className="mobile-data-list">{students.map((student) => (
+          <MobileDataCard
+            key={student.id}
+            leading={initials(student.full_name)}
+            title={student.full_name}
+            subtitle={student.class_name || 'Belum ada kelompok'}
+            badges={<StatusBadge tone={student.is_active ? 'success' : 'neutral'}>{student.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge>}
+            fields={[
+              { label: student.nisn ? 'NISN' : student.nis ? 'NIS' : 'NIK', value: student.nisn || student.nis || student.nik || 'Belum diisi' },
+              { label: 'Tahun ajaran', value: student.academic_year || '—' },
+            ]}
+            actions={<ActionMenu label={`Aksi untuk ${student.full_name}`} items={actionItems(student)} />}
+          />
+        ))}</div> : emptyState}
+      </div>
+      {!loading && students.length ? <PaginationControls page={page} total={total} onPage={setPage} /> : null}
     </section>
 
     {editing && <StudentModal
@@ -126,7 +180,16 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
         await load()
       }}
     />}
-    {deleting && <ConfirmModal title="Hapus data murid?" text={`${deleting.full_name} beserta riwayat absensi dan hubungan walinya akan terhapus.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
+    <ConfirmDialog
+      open={Boolean(deleting)}
+      title="Hapus data murid?"
+      description={deleting ? `${deleting.full_name} beserta riwayat absensi dan hubungan walinya akan terhapus.` : ''}
+      confirmLabel="Ya, Hapus"
+      danger
+      busy={removing}
+      onClose={() => setDeleting(null)}
+      onConfirm={() => void remove()}
+    />
     {qrStudent && <StudentQrModal student={qrStudent} onClose={() => setQrStudent(null)} />}
   </div>
 }
@@ -242,14 +305,6 @@ function StudentQrModal({ student, onClose }: { student: Student; onClose: () =>
     <div className="v2-qr"><QRCodeSVG value={`RA-NF:${student.qr_token}`} size={230} level="H" includeMargin /></div>
     <small>QR digunakan untuk absensi masuk dan pulang.</small>
     <button className="v2-primary full-button" onClick={() => window.print()}><QrCode size={17} /> Cetak QR</button>
-  </Dialog>
-}
-
-function ConfirmModal({ title, text, onClose, onConfirm }: { title: string; text: string; onClose: () => void; onConfirm: () => void }) {
-  return <Dialog title={title} onClose={onClose} confirm>
-    <span className="v2-modal-icon danger"><Trash2 /></span>
-    <p>{text}</p>
-    <div className="v2-form-actions"><button className="v2-secondary" onClick={onClose}>Batal</button><button className="v2-danger" onClick={onConfirm}>Ya, Hapus</button></div>
   </Dialog>
 }
 
