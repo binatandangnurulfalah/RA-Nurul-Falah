@@ -152,7 +152,7 @@ export default function ParentVerificationPage() {
       </button>)}</div> : <EmptyState icon={<CheckCircle2 size={24} />} title="Tidak ada pengajuan pada status ini" description="Antrean akan muncul ketika Orang Tua/Wali mengirim data baru atau perubahan." />}
     </section>
 
-    {selected && <Dialog title={typeLabel(selected.request_type)} eyebrow="VERIFIKASI DATA" onClose={() => { if (!busy) setSelected(null) }} wide>
+    {selected && !reviewMode && <Dialog title={typeLabel(selected.request_type)} eyebrow="VERIFIKASI DATA" onClose={() => { if (!busy) setSelected(null) }} wide>
       <div className="verification-detail">
         <header><div><small>Orang Tua / Wali</small><h3>{selected.parent_display_name}</h3><p>Diajukan {new Date(selected.submitted_at).toLocaleString('id-ID')}</p></div><StatusBadge tone={statusTone(selected.status)}>{statusLabel(selected.status)}</StatusBadge></header>
 
