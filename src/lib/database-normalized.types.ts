@@ -128,6 +128,31 @@ type SchoolSettingsTable = PatchTable<
   }]
 >
 
+type SchoolDocumentsTable = PatchTable<
+  BaseTables['school_documents'],
+  {
+    storage_path: string | null
+    external_url: string | null
+    original_file_name: string | null
+    mime_type: string | null
+    file_size_bytes: number | null
+  },
+  {
+    storage_path?: string | null
+    external_url?: string | null
+    original_file_name?: string | null
+    mime_type?: string | null
+    file_size_bytes?: number | null
+  },
+  {
+    storage_path?: string | null
+    external_url?: string | null
+    original_file_name?: string | null
+    mime_type?: string | null
+    file_size_bytes?: number | null
+  }
+>
+
 type AuditEventsTable = Omit<BaseTables['audit_events'], 'Row' | 'Insert' | 'Update'> & {
   Row: Omit<BaseTables['audit_events']['Row'], 'record_id'> & {
     record_id: string | null
@@ -159,10 +184,11 @@ type AuditEventsView = Omit<BaseViews['audit_events_view'], 'Row'> & {
 
 export type Database = Omit<GeneratedDatabase, 'public'> & {
   public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views' | 'Functions'> & {
-    Tables: Omit<BaseTables, 'audit_events' | 'school_classes' | 'students' | 'school_schedules' | 'school_settings'> & {
+    Tables: Omit<BaseTables, 'audit_events' | 'school_classes' | 'school_documents' | 'students' | 'school_schedules' | 'school_settings'> & {
       academic_years: AcademicYearsTable
       audit_events: AuditEventsTable
       school_classes: SchoolClassesTable
+      school_documents: SchoolDocumentsTable
       students: StudentsTable
       school_schedules: SchoolSchedulesTable
       school_settings: SchoolSettingsTable
@@ -171,6 +197,10 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       audit_events_view: AuditEventsView
     }
     Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
+      enqueue_school_document_storage_cleanup: {
+        Args: { p_object_path: string }
+        Returns: string
+      }
       append_account_audit_event: {
         Args: {
           p_target_user_id: string
