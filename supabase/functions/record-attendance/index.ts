@@ -3,9 +3,10 @@ import { corsPreflight } from '../_shared/cors.ts'
 import { requireAuthenticatedUser } from '../_shared/auth.ts'
 import { requireRole, teacherCanAccessStudent } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
+import { observeEdgeFunction } from '../_shared/observability.ts'
 import { isUuid } from '../_shared/validation.ts'
 
-Deno.serve(async (req: Request) => {
+Deno.serve(observeEdgeFunction('record-attendance', async (req: Request) => {
   const preflight = corsPreflight(req)
   if (preflight) return preflight
   if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
@@ -131,7 +132,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return jsonResponse({ ok: false, error: 'Absensi masuk dan pulang hari ini sudah lengkap.' }, 409)
-  } catch {
-    return jsonResponse({ ok: false, error: 'Terjadi kesalahan server.' }, 500)
+  } catch (error) {
+    throw error
   }
-})
+}))
