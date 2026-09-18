@@ -8,6 +8,7 @@ import { queryKeys } from '../data/queryKeys'
 import { documentPageOptions, type SchoolDocumentRow } from '../data/queries/documents'
 import { useDataFilters } from '../data/useDataFilters'
 import { userErrorMessage } from '../lib/error-utils'
+import { invokeObservedFunction, reportDatabaseMutationFailure, reportStorageFailure } from '../lib/observed-services'
 import { type AppRole, supabase } from '../lib/supabase'
 import { ActionMenu } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
@@ -54,9 +55,7 @@ function safeDocumentFileName(file: File) {
 }
 
 async function processDocumentStorageCleanup(objectPath?: string): Promise<CleanupSummary> {
-  const { data, error } = await supabase.functions.invoke('process-document-storage-cleanup', {
-    body: objectPath ? { object_path: objectPath } : {},
-  })
+  const { data, error } = await invokeObservedFunction('process-document-storage-cleanup', objectPath ? { object_path: objectPath } : {})
   if (error || !data?.ok) {
     return { processed: 0, failed: 0, skipped: 0, pending: 0, error: data?.error || error?.message || 'Cleanup dokumen gagal diproses.' }
   }
@@ -73,7 +72,10 @@ async function queueUploadedOrphan(objectPath: string) {
   const { error } = await supabase.rpc('enqueue_school_document_storage_cleanup', {
     p_object_path: objectPath,
   })
-  if (error) return false
+  if (error) {
+    reportDatabaseMutationFailure('queue_document_storage_cleanup', error)
+    return false
+  }
   void processDocumentStorageCleanup()
   return true
 }
@@ -128,7 +130,8 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     removingRef.current = false
     setRemoving(false)
     if (error) {
-      setMessage({ tone: 'error', text: error.message })
+      reportDatabaseMutationFailure('delete_school_document', error)
+      setMessage({ tone: 'error', text: 'Dokumen gagal dihapus. Silakan coba lagi.')
       return
     }
 
@@ -152,6 +155,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
 
     const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrl(storagePath, 300)
     if (error || !data?.signedUrl) {
+      reportStorageFailure('create_signed_document_url', error ?? new Error('Signed URL tidak tersedia.'))
       setMessage({ tone: 'error', text: 'Dokumen gagal dibuka. Silakan coba lagi.' })
       return
     }
@@ -314,6 +318,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
       uploadedPath = `${new Date().getFullYear()}/${crypto.randomUUID()}-${safeDocumentFileName(file)}`
       const upload = await supabase.storage.from(DOCUMENT_BUCKET).upload(uploadedPath, file, { upsert: false, contentType })
       if (upload.error) {
+        reportStorageFailure('upload_school_document', upload.error)
         busyRef.current = false
         setBusy(false)
         setErrorText(upload.error.message)
@@ -357,6 +362,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
       : await supabase.from('school_documents').insert(payload)
 
     if (result.error) {
+      reportDatabaseMutationFailure(value ? 'update_school_document' : 'create_school_document', result.error)
       let cleanupQueued = false
       if (uploadedPath) cleanupQueued = await queueUploadedOrphan(uploadedPath)
       busyRef.current = false
