@@ -334,9 +334,6 @@ function OneTimeLinkDialog({ link, onClose }: { link: string; onClose: () => voi
   </Dialog>
 }
 
-function initials(name?: string | null) {
-  return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
-}
 
 function roleLabel(role: AppRole) {
   return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Wali Murid'
