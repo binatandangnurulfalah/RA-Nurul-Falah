@@ -1,6 +1,7 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BadgeCheck,
+  Camera,
   Check,
   Edit3,
   KeyRound,
@@ -9,9 +10,11 @@ import {
   Phone,
   Save,
   ShieldCheck,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
+import { ProfileAvatar } from '../components/ProfileAvatar'
 import { supabase, type UserProfile } from '../lib/supabase'
 import { validatePassword } from '../lib/auth-utils.js'
 import { Notice, PageTitle } from './PortalPages'
@@ -40,6 +43,8 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [passwordBusy, setPasswordBusy] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
@@ -113,6 +118,81 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     setMessage({ tone: 'success', text: 'Profil berhasil diperbarui.' })
   }
 
+  const uploadAvatar = async (file: File) => {
+    setMessage(null)
+
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+    if (!allowedTypes.has(file.type)) {
+      setMessage({ tone: 'error', text: 'Format foto harus JPG, PNG, atau WebP.' })
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage({ tone: 'error', text: 'Ukuran foto maksimal 2 MB.' })
+      return
+    }
+
+    const path = `${profile.id}/avatar`
+    setAvatarBusy(true)
+
+    const { error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+        cacheControl: '3600',
+      })
+
+    if (uploadError) {
+      setAvatarBusy(false)
+      setMessage({ tone: 'error', text: uploadError.message || 'Foto profil gagal diupload.' })
+      return
+    }
+
+    const { data, error } = await supabase.rpc('update_my_avatar', { p_avatar_path: path })
+    if (error) {
+      await supabase.storage.from('profile-photos').remove([path])
+      setAvatarBusy(false)
+      setMessage({ tone: 'error', text: error.message || 'Foto terupload, tetapi profil gagal diperbarui.' })
+      return
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as UserProfile | null
+    setAvatarBusy(false)
+    if (!row) {
+      setMessage({ tone: 'error', text: 'Foto tersimpan, tetapi profil terbaru tidak dapat dimuat.' })
+      return
+    }
+
+    onProfileChange(row)
+    setMessage({ tone: 'success', text: profile.avatar_path ? 'Foto profil berhasil diganti.' : 'Foto profil berhasil ditambahkan.' })
+  }
+
+  const removeAvatar = async () => {
+    if (!profile.avatar_path || avatarBusy) return
+    setMessage(null)
+    setAvatarBusy(true)
+
+    const oldPath = profile.avatar_path
+    const { data, error } = await supabase.rpc('update_my_avatar', { p_avatar_path: null })
+    if (error) {
+      setAvatarBusy(false)
+      setMessage({ tone: 'error', text: error.message || 'Foto profil gagal dihapus.' })
+      return
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as UserProfile | null
+    if (row) onProfileChange(row)
+
+    const { error: removeError } = await supabase.storage.from('profile-photos').remove([oldPath])
+    setAvatarBusy(false)
+    setMessage({
+      tone: removeError ? 'error' : 'success',
+      text: removeError
+        ? 'Foto sudah dilepas dari profil, tetapi file lama belum dapat dibersihkan.'
+        : 'Foto profil berhasil dihapus.',
+    })
+  }
+
   const savePassword = async (event: FormEvent) => {
     event.preventDefault()
     setMessage(null)
@@ -160,11 +240,40 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
       {message && <Notice {...message} />}
 
       <section className={`profile-v3-hero role-${profile.role}`}>
-        <div className="profile-v3-avatar">{initials(profile.display_name)}</div>
+        <div className="profile-v3-avatar-wrap">
+          <ProfileAvatar profile={profile} className="profile-v3-avatar" />
+          <button
+            type="button"
+            className="profile-v3-avatar-camera"
+            aria-label={profile.avatar_path ? 'Ganti foto profil' : 'Tambah foto profil'}
+            disabled={avatarBusy}
+            onClick={() => avatarInputRef.current?.click()}
+          >
+            <Camera size={15} />
+          </button>
+          <input
+            ref={avatarInputRef}
+            className="profile-v3-avatar-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.currentTarget.value = ''
+              if (file) void uploadAvatar(file)
+            }}
+          />
+        </div>
         <div className="profile-v3-identity">
           <span><BadgeCheck size={15} /> {roleLabel(profile.role)}</span>
           <h2>{profile.display_name || 'Pengguna'}</h2>
           <p><Mail size={14} /> {email || 'Email akun aktif'}</p>
+          <div className="profile-v3-photo-actions">
+            <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
+              <Camera size={14} /> {avatarBusy ? 'Memproses...' : profile.avatar_path ? 'Ganti Foto' : 'Pilih Foto'}
+            </button>
+            {profile.avatar_path && <button type="button" className="danger" disabled={avatarBusy} onClick={() => void removeAvatar()}><Trash2 size={14} /> Hapus</button>}
+            <small>JPG, PNG, atau WebP · maksimal 2 MB</small>
+          </div>
         </div>
         <div className="profile-v3-score">
           <strong>{completeness}%</strong>
