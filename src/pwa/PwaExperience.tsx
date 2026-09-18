@@ -94,7 +94,7 @@ export function PwaExperience() {
           <span className="pwa-status-icon"><WifiOff size={19} /></span>
           <div>
             <strong>Anda sedang offline</strong>
-            <p>Sesi tetap dipertahankan. Data yang sudah tampil dapat dibaca, tetapi perubahan tidak diantrikan sampai koneksi kembali.</p>
+            <p>Sesi tetap dipertahankan. Data yang sudah tampil dapat dibaca. Sinkronisasi dan penyimpanan memerlukan internet.</p>
           </div>
         </section>
       )}
