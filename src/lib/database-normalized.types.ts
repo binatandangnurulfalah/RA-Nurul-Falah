@@ -116,9 +116,9 @@ type SchoolSchedulesTable = PatchTable<
 
 type SchoolSettingsTable = PatchTable<
   BaseTables['school_settings'],
-  { academic_year_id: string },
-  { academic_year_id: string },
-  { academic_year_id?: string },
+  { academic_year_id: string; single_teacher_class_mode: boolean },
+  { academic_year_id: string; single_teacher_class_mode?: boolean },
+  { academic_year_id?: string; single_teacher_class_mode?: boolean },
   [{
     foreignKeyName: 'school_settings_academic_year_id_fkey'
     columns: ['academic_year_id']
@@ -261,6 +261,7 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
     }
     Functions: Omit<BaseFunctions,
       | 'save_school_settings'
+      | 'save_school_settings_with_policy'
       | 'save_student_charge'
       | 'record_payment_transaction'
       | 'void_payment_transaction'
@@ -280,6 +281,18 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
           p_email: string | null
           p_late_cutoff: string
           p_academic_year_id: string
+        }
+        Returns: boolean
+      }
+      save_school_settings_with_policy: {
+        Args: {
+          p_school_name: string
+          p_address: string | null
+          p_phone: string | null
+          p_email: string | null
+          p_late_cutoff: string
+          p_academic_year_id: string
+          p_single_teacher_class_mode: boolean
         }
         Returns: boolean
       }

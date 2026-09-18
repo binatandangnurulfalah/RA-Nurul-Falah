@@ -120,6 +120,36 @@ test('master data murid, relasi wali, dan jadwal hanya dapat ditulis Admin', asy
   assert.ifError(unchangedStudentError)
   assert.equal(unchangedStudent.full_name, 'Murid A')
 
+  const teacherOwnCreate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_full_name: 'Murid Dibuat Guru',
+    p_class_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ifError(teacherOwnCreate.error)
+  assert.equal(teacherOwnCreate.data.class_id, fixture.classA)
+
+  const teacherOwnUpdate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_student_id: teacherOwnCreate.data.id,
+    p_full_name: 'Murid Diperbarui Guru',
+    p_class_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ifError(teacherOwnUpdate.error)
+  assert.equal(teacherOwnUpdate.data.full_name, 'Murid Diperbarui Guru')
+
+  const teacherCrossCreate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_full_name: 'Murid Lintas Kelas Ditolak',
+    p_class_name: 'Kelas B',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ok(teacherCrossCreate.error)
+  assert.equal(teacherCrossCreate.error.code, '42501')
+
+  assert.ifError((await actors.admin.db.from('students').delete().eq('id', teacherOwnCreate.data.id)).error)
+
   const teacherRpc = await actors.teacherA.db.rpc('save_student_with_guardians', {
     p_student_id: fixture.studentA,
     p_full_name: 'Murid A',
@@ -187,6 +217,57 @@ test('master data murid, relasi wali, dan jadwal hanya dapat ditulis Admin', asy
   assert.equal(teacherScheduleDelete.data.length, 0)
 
   assert.ifError((await actors.admin.db.from('school_schedules').delete().eq('id', schedule.id)).error)
+})
+
+test('mode 1 Guru = 1 Kelas menolak penugasan yang bertabrakan', async () => {
+  const { data: settings, error: settingsError } = await actors.admin.db
+    .from('school_settings')
+    .select('school_name,address,phone,email,late_cutoff,academic_year_id,single_teacher_class_mode')
+    .eq('id', 1)
+    .single()
+  assert.ifError(settingsError)
+
+  const enableMode = await actors.admin.db.rpc('save_school_settings_with_policy', {
+    p_school_name: settings.school_name,
+    p_address: settings.address,
+    p_phone: settings.phone,
+    p_email: settings.email,
+    p_late_cutoff: settings.late_cutoff,
+    p_academic_year_id: settings.academic_year_id,
+    p_single_teacher_class_mode: true,
+  })
+  assert.ifError(enableMode.error)
+
+  const twoTeachersOneClass = await actors.admin.db.rpc('save_class_with_assignments', {
+    p_class_id: fixture.classA,
+    p_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_is_active: true,
+    p_teacher_profile_ids: [fixture.teacherA, fixture.teacherB],
+  })
+  assert.ok(twoTeachersOneClass.error)
+  assert.equal(twoTeachersOneClass.error.code, '23514')
+
+  const oneTeacherTwoClasses = await actors.admin.db.rpc('save_class_with_assignments', {
+    p_class_id: fixture.classB,
+    p_name: 'Kelas B',
+    p_academic_year: fixture.academicYearLabelA,
+    p_is_active: true,
+    p_teacher_profile_ids: [fixture.teacherA],
+  })
+  assert.ok(oneTeacherTwoClasses.error)
+  assert.equal(oneTeacherTwoClasses.error.code, '23514')
+
+  const disableMode = await actors.admin.db.rpc('save_school_settings_with_policy', {
+    p_school_name: settings.school_name,
+    p_address: settings.address,
+    p_phone: settings.phone,
+    p_email: settings.email,
+    p_late_cutoff: settings.late_cutoff,
+    p_academic_year_id: settings.academic_year_id,
+    p_single_teacher_class_mode: false,
+  })
+  assert.ifError(disableMode.error)
 })
 
 test('Auth tetap tertutup dan manajemen akun hanya untuk Admin', async () => {

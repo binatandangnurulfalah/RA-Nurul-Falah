@@ -595,6 +595,7 @@ export type Database = {
           late_cutoff: string
           phone: string | null
           school_name: string
+          single_teacher_class_mode: boolean
           timezone: string
           updated_at: string
           updated_by: string | null
@@ -608,6 +609,7 @@ export type Database = {
           late_cutoff?: string
           phone?: string | null
           school_name?: string
+          single_teacher_class_mode?: boolean
           timezone?: string
           updated_at?: string
           updated_by?: string | null
@@ -621,6 +623,7 @@ export type Database = {
           late_cutoff?: string
           phone?: string | null
           school_name?: string
+          single_teacher_class_mode?: boolean
           timezone?: string
           updated_at?: string
           updated_by?: string | null
@@ -1155,6 +1158,18 @@ export type Database = {
           p_late_cutoff: string
           p_phone: string
           p_school_name: string
+        }
+        Returns: boolean
+      }
+      save_school_settings_with_policy: {
+        Args: {
+          p_academic_year_id: string
+          p_address: string
+          p_email: string
+          p_late_cutoff: string
+          p_phone: string
+          p_school_name: string
+          p_single_teacher_class_mode: boolean
         }
         Returns: boolean
       }

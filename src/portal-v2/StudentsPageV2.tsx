@@ -23,6 +23,7 @@ type Message = { tone: 'success' | 'error'; text: string }
 export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) {
   const queryClient = useQueryClient()
   const canManage = role === 'admin'
+  const canEditStudents = role === 'admin' || role === 'teacher'
   const filters = useDataFilters({ q: '', class: 'all' })
   const search = filters.value('q')
   const classFilter = filters.value('class') || 'all'
@@ -72,8 +73,10 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
 
   const actionItems = (student: Student) => [
     { label: 'Tampilkan QR', icon: QrCode, onSelect: () => setQrStudent(student) },
-    ...(canManage ? [
+    ...(canEditStudents ? [
       { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) },
+    ] : []),
+    ...(canManage ? [
       { label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) },
     ] : []),
   ]
@@ -98,7 +101,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       description={hasFilters ? 'Ubah kata pencarian atau reset filter untuk melihat data lainnya.' : 'Data murid akan muncul setelah ditambahkan ke sistem.'}
       action={hasFilters
         ? <Button variant="secondary" onClick={resetFilters}>Reset Filter</Button>
-        : canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
+        : canEditStudents ? <Button disabled={role === 'teacher' && !classes.length} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
   )
 
@@ -106,10 +109,13 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
     <PageHeader
       eyebrow="AKADEMIK"
       title="Data Murid"
-      subtitle={canManage ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Lihat murid pada kelas yang ditugaskan dan tampilkan QR untuk kebutuhan absensi.'}
-      actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
+      subtitle={canManage ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Lihat murid pada kelas yang ditugaskan, tambah atau edit data murid kelas Anda, dan tampilkan QR untuk kebutuhan absensi.'}
+      actions={canEditStudents ? <Button disabled={role === 'teacher' && !classes.length} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
     {message && <Notice {...message} />}
+    {role === 'teacher' && !lookupQuery.isPending && !lookupQuery.isError && classes.length === 0 && (
+      <Notice tone="error" text="Anda belum ditugaskan ke kelas. Minta Admin menentukan kelas Guru terlebih dahulu sebelum menambah murid." />
+    )}
     {lookupQuery.isError && <Notice tone="error" text={userErrorMessage(lookupQuery.error, 'Data pendukung murid gagal dimuat.')} />}
     <section className="v2-panel">
       <SearchFilterBar
@@ -150,7 +156,8 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       </>}
     </section>
 
-    {editing && canManage && <StudentModal
+    {editing && canEditStudents && <StudentModal
+      role={role}
       student={editing === 'new' ? null : editing}
       parents={parents}
       classes={classes}
@@ -159,7 +166,12 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       onDone={async () => {
         const wasNew = editing === 'new'
         setEditing(null)
-        setMessage({ tone: 'success', text: wasNew ? 'Murid berhasil ditambahkan.' : 'Data murid dan wali berhasil diperbarui.' })
+        setMessage({
+          tone: 'success',
+          text: wasNew
+            ? 'Murid berhasil ditambahkan.'
+            : canManage ? 'Data murid dan wali berhasil diperbarui.' : 'Data murid berhasil diperbarui.',
+        })
         await queryClient.invalidateQueries({ queryKey: queryKeys.students.all })
       }}
     />}
@@ -177,7 +189,8 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   </div>
 }
 
-function StudentModal({ student, parents, classes, academicYears, onClose, onDone }: {
+function StudentModal({ role, student, parents, classes, academicYears, onClose, onDone }: {
+  role: 'admin' | 'teacher'
   student: Student | null
   parents: Account[]
   classes: SchoolClass[]
@@ -185,8 +198,12 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
   onClose: () => void
   onDone: () => void
 }) {
+  const canManageGuardians = role === 'admin'
   const currentYear = academicYears.find((item) => item.is_current) ?? academicYears[0]
-  const initialClass = student?.class_id ? classes.find((item) => item.id === student.class_id) : undefined
+  const teacherDefaultClass = role === 'teacher'
+    ? classes.find((item) => item.academic_year_id === currentYear?.id) ?? classes[0]
+    : undefined
+  const initialClass = student?.class_id ? classes.find((item) => item.id === student.class_id) : teacherDefaultClass
   const initialAcademicYearId = student?.academic_year_id || initialClass?.academic_year_id || currentYear?.id || ''
   const [form, setForm] = useState({
     full_name: student?.full_name || '',
@@ -196,18 +213,18 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
     gender: student?.gender || '',
     birth_place: student?.birth_place || '',
     birth_date: student?.birth_date || '',
-    class_id: student?.class_id || '',
+    class_id: student?.class_id || initialClass?.id || '',
     academic_year_id: initialAcademicYearId,
     active: student?.is_active ?? true,
     guardians: [] as string[],
   })
-  const [guardianLoading, setGuardianLoading] = useState(Boolean(student))
+  const [guardianLoading, setGuardianLoading] = useState(Boolean(student && canManageGuardians))
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [errorText, setErrorText] = useState('')
 
   useEffect(() => {
-    if (!student) return
+    if (!student || !canManageGuardians) return
     let mounted = true
     setGuardianLoading(true)
     void supabase
@@ -221,7 +238,7 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
         setGuardianLoading(false)
       })
     return () => { mounted = false }
-  }, [student])
+  }, [student, canManageGuardians])
 
   const classesForYear = classes.filter((item) => item.academic_year_id === form.academic_year_id)
 
@@ -241,6 +258,10 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
     const selectedClass = classes.find((item) => item.id === form.class_id)
     if (!selectedYear) {
       setErrorText('Pilih tahun ajaran resmi terlebih dahulu.')
+      return
+    }
+    if (role === 'teacher' && !selectedClass) {
+      setErrorText('Pilih kelas yang ditugaskan kepada Anda terlebih dahulu.')
       return
     }
     if (selectedClass && selectedClass.academic_year_id !== selectedYear.id) {
@@ -264,7 +285,7 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
       p_class_name: selectedClass?.name,
       p_academic_year: selectedYear.label,
       p_is_active: form.active,
-      p_guardian_user_ids: form.guardians,
+      p_guardian_user_ids: canManageGuardians ? form.guardians : [],
     })
 
     busyRef.current = false
@@ -272,6 +293,7 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
     if (error) {
       if (error.code === '23505') setErrorText('NIK, NIS, atau NISN sudah digunakan oleh murid lain.')
       else if (error.code === '23503') setErrorText('Kelas atau tahun ajaran tidak valid. Muat ulang halaman lalu coba lagi.')
+      else if (error.code === '42501') setErrorText(error.message || 'Anda tidak memiliki izin untuk menyimpan murid pada kelas tersebut.')
       else setErrorText(error.message || 'Data murid gagal disimpan.')
       return
     }
@@ -301,28 +323,30 @@ function StudentModal({ student, parents, classes, academicYears, onClose, onDon
             {academicYears.map((year) => <option key={year.id} value={year.id}>{year.label}{year.is_current ? ' · Berjalan' : ''}</option>)}
           </select>
         </FormField>
-        <FormField label="Kelompok">
-          <select value={form.class_id} onChange={(event) => setForm({ ...form, class_id: event.target.value })}>
-            <option value="">Belum ditentukan</option>
+        <FormField label="Kelompok" required={role === 'teacher'}>
+          <select required={role === 'teacher'} value={form.class_id} onChange={(event) => setForm({ ...form, class_id: event.target.value })}>
+            <option value="">{role === 'teacher' ? 'Pilih kelas yang ditugaskan' : 'Belum ditentukan'}</option>
             {classesForYear.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}
           </select>
         </FormField>
         <label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Murid aktif</span></label>
       </FormSection>
 
-      <fieldset className="full v5-teacher-picker">
-        <legend>Wali murid terhubung</legend>
-        {guardianLoading ? <p>Memuat data wali...</p> : parents.length ? parents.map((parent) => <label key={parent.id}>
-          <input type="checkbox" checked={form.guardians.includes(parent.id)} onChange={(event) => toggleGuardian(parent.id, event.target.checked)} />
-          <span>{parent.display_name || 'Wali murid'}<small>{form.guardians.includes(parent.id) ? 'Terhubung ke murid' : 'Belum terhubung'}</small></span>
-        </label>) : <p>Belum ada akun Orang Tua/Wali aktif. Data murid tetap dapat disimpan tanpa akun wali.</p>}
-      </fieldset>
-      <p className="full helper-text">Satu murid dapat dihubungkan ke beberapa akun wali. Perubahan data murid dan daftar wali disimpan sekaligus dalam satu transaksi.</p>
+      {canManageGuardians ? <>
+        <fieldset className="full v5-teacher-picker">
+          <legend>Wali murid terhubung</legend>
+          {guardianLoading ? <p>Memuat data wali...</p> : parents.length ? parents.map((parent) => <label key={parent.id}>
+            <input type="checkbox" checked={form.guardians.includes(parent.id)} onChange={(event) => toggleGuardian(parent.id, event.target.checked)} />
+            <span>{parent.display_name || 'Wali murid'}<small>{form.guardians.includes(parent.id) ? 'Terhubung ke murid' : 'Belum terhubung'}</small></span>
+          </label>) : <p>Belum ada akun Orang Tua/Wali aktif. Data murid tetap dapat disimpan tanpa akun wali.</p>}
+        </fieldset>
+        <p className="full helper-text">Satu murid dapat dihubungkan ke beberapa akun wali. Perubahan data murid dan daftar wali disimpan sekaligus dalam satu transaksi.</p>
+      </> : <p className="full helper-text">Guru dapat mengelola data murid pada kelas yang ditugaskan. Pengaitan akun Orang Tua/Wali tetap dikelola oleh Admin dan tidak diubah dari formulir Guru.</p>}
 
       {errorText && <p className="v2-field-error full">{errorText}</p>}
       <div className="v2-form-actions full">
         <button type="button" className="v2-secondary" disabled={busy} onClick={onClose}>Batal</button>
-        <button className="v2-primary" disabled={busy || guardianLoading}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Murid'}</button>
+        <button className="v2-primary" disabled={busy || guardianLoading || (role === 'teacher' && !form.class_id)}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Murid'}</button>
       </div>
     </form>
   </Dialog>

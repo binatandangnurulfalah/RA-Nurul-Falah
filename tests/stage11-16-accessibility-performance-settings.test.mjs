@@ -48,7 +48,7 @@ test('Pengaturan Sekolah memakai academic_year_id canonical dan RPC tervalidasi'
   assert.match(portalPages, /academic_year_id: string/)
   assert.match(portalPages, /\.from\('academic_years'\)/)
   assert.match(portalPages, /\.eq\('is_active', true\)/)
-  assert.match(portalPages, /supabase\.rpc\('save_school_settings'/)
+  assert.match(portalPages, /supabase\.rpc\('save_school_settings(?:_with_policy)?'/)
   assert.match(portalPages, /p_academic_year_id: settings\.academic_year_id/)
   assert.doesNotMatch(portalPages, /academic_year: settings\.academic_year\.trim/)
   assert.match(portalPages, /WIB · Asia\/Jakarta/)

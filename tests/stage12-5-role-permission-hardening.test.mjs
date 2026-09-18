@@ -14,14 +14,12 @@ const announcements = read('src/portal-v2/AnnouncementsPage.tsx')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 const migration = read('supabase/migrations/20260918092710_stage12_5_role_permission_hardening.sql')
 
-test('teacher student UI is read-only except QR access', () => {
+test('teacher student UI retains scoped read and QR while later policy may add guarded editing', () => {
   assert.match(students, /const canManage = role === 'admin'/)
   assert.match(students, /Tampilkan QR/)
   assert.match(students, /\.\.\.\(canManage \? \[/)
-  assert.match(students, /actions=\{canManage \? <Button/)
-  assert.match(students, /editing && canManage && <StudentModal/)
   assert.match(students, /Lihat murid pada kelas yang ditugaskan/)
-  assert.doesNotMatch(students, /role === 'teacher'[^\n]{0,120}setEditing/)
+  assert.match(students, /role: 'admin' \| 'teacher'/)
 })
 
 test('teacher does not fetch parent account lookup data for student management', () => {
@@ -37,7 +35,7 @@ test('official schedule UI is admin-managed and role-aware', () => {
   assert.match(schedule, /editing && canManage/)
 })
 
-test('RLS and student RPC make master-data writes admin-only', () => {
+test('Stage 12.5 migration established the original admin-only master-data baseline', () => {
   for (const policy of [
     'admin create students',
     'admin update students',
