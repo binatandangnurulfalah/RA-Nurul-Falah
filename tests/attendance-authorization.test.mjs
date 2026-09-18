@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -30,7 +30,9 @@ test('koreksi manual menyimpan actor dan alasan', () => {
   assert.match(manage, /source: 'manual'/)
 })
 
-test('legacy delete attendance sudah tidak menjadi source aktif', () => {
-  const legacyUrl = new URL('../supabase/functions/delete-attendance-record/index.ts', import.meta.url)
-  assert.equal(existsSync(legacyUrl), false)
+test('legacy delete attendance hanya tersisa sebagai tombstone 410', () => {
+  const legacy = read('supabase/functions/delete-attendance-record/index.ts')
+  assert.match(legacy, /status:\s*410/)
+  assert.match(legacy, /sudah dipensiunkan/)
+  assert.doesNotMatch(legacy, /createClient|service_role|\.delete\(|from\(['"]attendance_records/)
 })
