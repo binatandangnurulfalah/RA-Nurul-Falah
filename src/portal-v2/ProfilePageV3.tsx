@@ -41,6 +41,7 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
   const [busy, setBusy] = useState(false)
   const [passwordBusy, setPasswordBusy] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
@@ -116,6 +117,11 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     event.preventDefault()
     setMessage(null)
 
+    if (!currentPassword) {
+      setMessage({ tone: 'error', text: 'Masukkan password saat ini untuk mengonfirmasi perubahan.' })
+      return
+    }
+
     const passwordError = validatePassword(password)
     if (passwordError) {
       setMessage({ tone: 'error', text: passwordError })
@@ -127,17 +133,19 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     }
 
     setPasswordBusy(true)
-    const { error } = await supabase.auth.updateUser({ password })
+    const { error } = await supabase.auth.updateUser({ password, currentPassword })
     setPasswordBusy(false)
 
     if (error) {
-      setMessage({ tone: 'error', text: error.message })
+      setMessage({ tone: 'error', text: 'Password tidak dapat diperbarui. Periksa password saat ini dan coba lagi.' })
       return
     }
 
+    await supabase.auth.signOut({ scope: 'others' })
+    setCurrentPassword('')
     setPassword('')
     setConfirmPassword('')
-    setMessage({ tone: 'success', text: 'Password berhasil diperbarui.' })
+    setMessage({ tone: 'success', text: 'Password berhasil diperbarui. Sesi di perangkat lain telah diakhiri.' })
   }
 
   return (
@@ -215,13 +223,16 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
           </div>
           <div className="profile-v3-security-note"><ShieldCheck size={18} /><div><strong>Akun terlindungi</strong><small>Password minimal 10 karakter, berisi huruf besar, huruf kecil, dan angka.</small></div></div>
           <form className="v2-form" onSubmit={savePassword}>
+            <label>Password saat ini
+              <input type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Konfirmasi password saat ini" />
+            </label>
             <label>Password baru
               <input type="password" minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 10 karakter" />
             </label>
             <label>Ulangi password
               <input type="password" minLength={10} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             </label>
-            <button className="v2-primary" disabled={passwordBusy || !password}><KeyRound size={17} /> {passwordBusy ? 'Memperbarui...' : 'Ubah Password'}</button>
+            <button className="v2-primary" disabled={passwordBusy || !currentPassword || !password}><KeyRound size={17} /> {passwordBusy ? 'Memperbarui...' : 'Ubah Password'}</button>
           </form>
         </section>
       </div>
