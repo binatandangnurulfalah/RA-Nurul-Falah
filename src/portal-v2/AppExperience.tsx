@@ -93,13 +93,16 @@ export function Dialog({ title, eyebrow = 'RA NURUL FALAH', onClose, wide = fals
   const titleId = useId()
   const panelRef = useRef<HTMLElement>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     returnFocusRef.current = document.activeElement as HTMLElement
     const panel = panelRef.current
     const focusable = () => Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]') || [])
     focusable()[0]?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
+      if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); return }
       if (event.key !== 'Tab') return
       const items = focusable(); if (!items.length) return
       const first = items[0]; const last = items[items.length - 1]
@@ -108,6 +111,6 @@ export function Dialog({ title, eyebrow = 'RA NURUL FALAH', onClose, wide = fals
     }
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey); returnFocusRef.current?.focus() }
-  }, [onClose])
+  }, [])
   return <div className="v2-modal-layer"><button className="v2-backdrop" aria-label="Tutup dialog" onClick={onClose} /><section ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`v2-modal ${wide ? 'wide' : ''} ${confirm ? 'confirm' : ''}`}><header><div><small>{eyebrow}</small><h2 id={titleId}>{title}</h2></div><button type="button" className="v2-close" aria-label="Tutup dialog" onClick={onClose}><X size={19} /></button></header>{children}</section></div>
 }
