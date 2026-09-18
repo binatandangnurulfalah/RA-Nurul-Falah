@@ -245,7 +245,7 @@ type AuditEventsView = Omit<BaseViews['audit_events_view'], 'Row'> & {
 
 export type Database = Omit<GeneratedDatabase, 'public'> & {
   public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views' | 'Functions'> & {
-    Tables: Omit<BaseTables, 'audit_events' | 'school_classes' | 'school_documents' | 'student_payments' | 'students' | 'school_schedules' | 'school_settings'> & {
+    Tables: Omit<BaseTables, 'academic_years' | 'audit_events' | 'school_classes' | 'school_documents' | 'student_payments' | 'payment_transactions' | 'students' | 'school_schedules' | 'school_settings'> & {
       academic_years: AcademicYearsTable
       audit_events: AuditEventsTable
       school_classes: SchoolClassesTable
