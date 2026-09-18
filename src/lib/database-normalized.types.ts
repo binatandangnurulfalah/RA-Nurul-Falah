@@ -260,6 +260,17 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       audit_events_view: AuditEventsView
     }
     Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
+      save_school_settings: {
+        Args: {
+          p_school_name: string
+          p_address: string | null
+          p_phone: string | null
+          p_email: string | null
+          p_late_cutoff: string
+          p_academic_year_id: string
+        }
+        Returns: boolean
+      }
       save_student_charge: {
         Args: {
           p_payment_id: string | null

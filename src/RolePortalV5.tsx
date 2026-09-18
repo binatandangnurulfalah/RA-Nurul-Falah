@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -145,6 +145,9 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
   const location = useLocation()
   const [currentProfile, setCurrentProfile] = useState(profile)
   const [moreOpen, setMoreOpen] = useState(false)
+  const contentRef = useRef<HTMLElement | null>(null)
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null)
+  const sheetRef = useRef<HTMLElement | null>(null)
   const unreadAnnouncementsQuery = useQuery(announcementUnreadCountOptions({ role: currentProfile.role, currentUserId: currentProfile.id }))
   const announcementCount = unreadAnnouncementsQuery.data ?? 0
   useAnnouncementRealtime(currentProfile.id)
@@ -189,15 +192,52 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [location.pathname])
+    document.title = `${active.label} · RA Nurul Falah`
+    window.requestAnimationFrame(() => {
+      contentRef.current?.focus({ preventScroll: true })
+    })
+  }, [active.label, location.pathname])
 
   useEffect(() => {
     if (!moreOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMoreOpen(false)
+
+    const dialog = sheetRef.current
+    const opener = moreButtonRef.current
+    const focusable = () => Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    )
+
+    window.requestAnimationFrame(() => focusable()[0]?.focus())
+
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMoreOpen(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const items = focusable()
+      if (!items.length) return
+      const first = items[0]
+      const last = items[items.length - 1]
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
+
+    window.addEventListener('keydown', handleKeydown)
+    return () => {
+      window.removeEventListener('keydown', handleKeydown)
+      opener?.focus()
+    }
   }, [moreOpen])
 
   const go = (id: string) => {
@@ -212,6 +252,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
 
   return (
     <div className="v2-shell">
+      <a className="skip-link" href="#main-content">Lewati ke konten utama</a>
       <aside className="v2-sidebar">
         <div className="v2-brand"><img className="v2-brand-logo" src={`${import.meta.env.BASE_URL}logo-ra-nurul-falah.png`} alt="Logo RA Nurul Falah" /><div><strong>Nurul Falah</strong><small>Sistem Informasi Sekolah</small></div></div>
         <nav className="v2-side-nav" aria-label="Navigasi desktop">
@@ -234,14 +275,14 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
       <div className="v2-main">
         <header className="v2-topbar">
           <img className="v2-mobile-logo" src={`${import.meta.env.BASE_URL}logo-ra-nurul-falah.png`} alt="" />
-          <div className="v2-top-title"><h1>{active.label}</h1><small>{roleLabel(currentProfile.role)}</small></div>
+          <div className="v2-top-title"><h1 id="portal-page-title">{active.label}</h1><small>{roleLabel(currentProfile.role)}</small></div>
           <div className="v2-top-actions">
             <button className="v2-bell" onClick={() => go('announcements')} aria-label="Buka pengumuman" aria-current={active.id === 'announcements' ? 'page' : undefined}><Bell size={20} />{announcementCount > 0 && <i>{Math.min(announcementCount, 9)}</i>}</button>
             <button className={`v2-top-profile ${active.id === 'profile' ? 'active' : ''}`} onClick={() => go('profile')} aria-label="Buka profil" aria-current={active.id === 'profile' ? 'page' : undefined}><span>{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button>
           </div>
         </header>
 
-        <main className="v2-content">
+        <main id="main-content" ref={contentRef} className="v2-content" tabIndex={-1} aria-labelledby="portal-page-title">
           {currentProfile.role === 'parent' && <GlobalChildSwitcher />}
           <Suspense fallback={<PageLoading />}><PageRouter role={currentProfile.role} page={active.id} profile={currentProfile} setProfile={setCurrentProfile} go={go} /></Suspense>
         </main>
@@ -259,10 +300,10 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
             <small>{mobileLabel(item.label)}</small>
           </button>
         ))}
-        <button className={moreIsActive || moreOpen ? 'active' : ''} aria-expanded={moreOpen} aria-controls="mobile-more-menu" onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
+        <button ref={moreButtonRef} className={moreIsActive || moreOpen ? 'active' : ''} aria-expanded={moreOpen} aria-controls="mobile-more-menu" aria-haspopup="dialog" onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
       </nav>
 
-      {moreOpen && <div className="v2-sheet-layer"><button className="v2-sheet-backdrop" aria-label="Tutup" onClick={() => setMoreOpen(false)} /><section id="mobile-more-menu" className="v2-sheet" role="dialog" aria-modal="true" aria-label="Menu lainnya"><div className="v2-sheet-handle" /><header><div><small>NAVIGASI</small><h3>Menu lainnya</h3></div><button onClick={() => setMoreOpen(false)} aria-label="Tutup menu"><X size={19} /></button></header><div className="v5-sheet-scroll">{groupedSecondary.map((group) => <section className="v5-menu-group" key={group.label}><h4>{group.label}</h4><div className="v2-sheet-grid">{group.items.map((item) => <button key={item.id} className={active.id === item.id ? 'active' : ''} aria-current={active.id === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><small>Buka halaman</small></div></button>)}</div></section>)}<section className="v5-menu-group"><h4>Sesi</h4><div className="v2-sheet-grid"><button className="danger" onClick={() => void logout()}><span><LogOut size={21} /></span><div><strong>Keluar</strong><small>Akhiri sesi akun</small></div></button></div></section></div></section></div>}
+      {moreOpen && <div className="v2-sheet-layer"><button className="v2-sheet-backdrop" aria-label="Tutup" onClick={() => setMoreOpen(false)} /><section ref={sheetRef} id="mobile-more-menu" className="v2-sheet" role="dialog" aria-modal="true" aria-label="Menu lainnya"><div className="v2-sheet-handle" /><header><div><small>NAVIGASI</small><h3>Menu lainnya</h3></div><button onClick={() => setMoreOpen(false)} aria-label="Tutup menu"><X size={19} /></button></header><div className="v5-sheet-scroll">{groupedSecondary.map((group) => <section className="v5-menu-group" key={group.label}><h4>{group.label}</h4><div className="v2-sheet-grid">{group.items.map((item) => <button key={item.id} className={active.id === item.id ? 'active' : ''} aria-current={active.id === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><small>Buka halaman</small></div></button>)}</div></section>)}<section className="v5-menu-group"><h4>Sesi</h4><div className="v2-sheet-grid"><button className="danger" onClick={() => void logout()}><span><LogOut size={21} /></span><div><strong>Keluar</strong><small>Akhiri sesi akun</small></div></button></div></section></div></section></div>}
     </div>
   )
 }

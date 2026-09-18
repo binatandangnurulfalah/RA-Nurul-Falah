@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/verify-pwa-build.mjs",
+    "build": "tsc -b && vite build && node scripts/verify-pwa-build.mjs && node scripts/verify-performance-build.mjs",
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
     "test:integration": "node --test --test-concurrency=1 tests/integration/*.integration.mjs",

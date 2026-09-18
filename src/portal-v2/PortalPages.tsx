@@ -41,7 +41,17 @@ type SchoolSetting = {
   timezone: string
   late_cutoff: string
   academic_year: string
+  academic_year_id: string
 }
+
+type AcademicYearOption = {
+  id: string
+  label: string
+  is_current: boolean
+  is_active: boolean
+}
+
+const SCHOOL_TIMEZONE = { value: 'Asia/Jakarta', label: 'WIB · Asia/Jakarta' } as const
 
 const JAKARTA = 'Asia/Jakarta'
 
@@ -182,35 +192,141 @@ export function ChildrenPage() {
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<SchoolSetting | null>(null)
+  const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([])
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   const load = async () => {
-    const { data } = await supabase.from('school_settings').select('*').eq('id', 1).single()
-    setSettings(data as SchoolSetting | null)
+    setLoading(true)
+    setLoadError('')
+
+    const [settingsResult, yearsResult] = await Promise.all([
+      supabase
+        .from('school_settings')
+        .select('id,school_name,address,phone,email,timezone,late_cutoff,academic_year,academic_year_id')
+        .eq('id', 1)
+        .single(),
+      supabase
+        .from('academic_years')
+        .select('id,label,is_current,is_active')
+        .eq('is_active', true)
+        .order('is_current', { ascending: false })
+        .order('start_date', { ascending: false }),
+    ])
+
+    setLoading(false)
+
+    const error = settingsResult.error || yearsResult.error
+    if (error) {
+      setLoadError('Pengaturan sekolah belum dapat dimuat. Periksa koneksi lalu coba lagi.')
+      return
+    }
+
+    setSettings(settingsResult.data as SchoolSetting)
+    setAcademicYears((yearsResult.data as AcademicYearOption[] | null) ?? [])
   }
+
   useEffect(() => { void load() }, [])
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); if (!settings) return
-    setBusy(true); setMessage(null)
-    const { data: userData } = await supabase.auth.getUser()
-    const { error } = await supabase.from('school_settings').update({ school_name: settings.school_name.trim(), address: settings.address?.trim() || null, phone: settings.phone?.trim() || null, email: settings.email?.trim() || null, timezone: settings.timezone.trim() || 'Asia/Jakarta', late_cutoff: settings.late_cutoff, academic_year: settings.academic_year.trim(), updated_by: userData.user?.id || null }).eq('id', 1)
+    event.preventDefault()
+    if (!settings || busy) return
+
+    if (!academicYears.some((year) => year.id === settings.academic_year_id)) {
+      setMessage({ tone: 'error', text: 'Pilih tahun ajaran aktif yang tersedia.' })
+      return
+    }
+
+    setBusy(true)
+    setMessage(null)
+
+    const { error } = await supabase.rpc('save_school_settings', {
+      p_school_name: settings.school_name.trim(),
+      p_address: settings.address?.trim() || null,
+      p_phone: settings.phone?.trim() || null,
+      p_email: settings.email?.trim() || null,
+      p_late_cutoff: settings.late_cutoff,
+      p_academic_year_id: settings.academic_year_id,
+    })
+
     setBusy(false)
-    if (error) { setMessage({ tone: 'error', text: error.message }); return }
-    setEditing(false); setMessage({ tone: 'success', text: 'Pengaturan sekolah berhasil diperbarui.' }); await load()
+    if (error) {
+      setMessage({ tone: 'error', text: error.message })
+      return
+    }
+
+    setEditing(false)
+    setMessage({ tone: 'success', text: 'Pengaturan sekolah berhasil diperbarui.' })
+    await load()
   }
 
-  if (!settings) return <div className="v2-stack"><PageTitle eyebrow="KONFIGURASI" title="Pengaturan Sekolah" text="Memuat konfigurasi..." /><SkeletonRows /></div>
-  return <div className="v2-stack"><PageTitle eyebrow="KONFIGURASI" title="Pengaturan Sekolah" text="Nilai ini digunakan langsung oleh sistem, termasuk batas terlambat absensi." action={!editing ? <button className="v2-primary" onClick={() => setEditing(true)}><Edit3 size={17} /> Edit Pengaturan</button> : undefined} />{message && <Notice {...message} />}<section className="v2-panel">{editing ? <form className="v2-form v2-form-grid" onSubmit={save}><label>Nama sekolah<input value={settings.school_name} onChange={(e) => setSettings({ ...settings, school_name: e.target.value })} /></label><label>Tahun ajaran<input value={settings.academic_year} onChange={(e) => setSettings({ ...settings, academic_year: e.target.value })} /></label><label>Batas terlambat<input type="time" value={settings.late_cutoff.slice(0, 5)} onChange={(e) => setSettings({ ...settings, late_cutoff: e.target.value })} /></label><label>Zona waktu<input value={settings.timezone} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })} /></label><label>Telepon<input value={settings.phone || ''} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} /></label><label>Email<input type="email" value={settings.email || ''} onChange={(e) => setSettings({ ...settings, email: e.target.value })} /></label><label className="full">Alamat<textarea rows={3} value={settings.address || ''} onChange={(e) => setSettings({ ...settings, address: e.target.value })} /></label><div className="v2-form-actions full"><button type="button" className="v2-secondary" onClick={() => { setEditing(false); void load() }}>Batal</button><button className="v2-primary" disabled={busy}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Pengaturan'}</button></div></form> : <div className="v2-settings-grid"><Info label="Nama Sekolah" value={settings.school_name} /><Info label="Tahun Ajaran" value={settings.academic_year} /><Info label="Batas Terlambat" value={`${settings.late_cutoff.slice(0, 5)} WIB`} /><Info label="Zona Waktu" value={settings.timezone} /><Info label="Telepon" value={settings.phone || 'Belum diisi'} /><Info label="Email" value={settings.email || 'Belum diisi'} /><Info label="Alamat" value={settings.address || 'Belum diisi'} /></div>}</section></div>
+  if (loading) {
+    return <div className="v2-stack" aria-busy="true"><PageTitle eyebrow="KONFIGURASI" title="Pengaturan Sekolah" text="Memuat konfigurasi..." /><SkeletonRows /></div>
+  }
+
+  if (loadError || !settings) {
+    return <div className="v2-stack"><PageTitle eyebrow="KONFIGURASI" title="Pengaturan Sekolah" text="Konfigurasi sekolah dan aturan operasional." /><LoadError text={loadError || 'Pengaturan sekolah belum tersedia.'} onRetry={() => void load()} /></div>
+  }
+
+  return (
+    <div className="v2-stack">
+      <PageTitle
+        eyebrow="KONFIGURASI"
+        title="Pengaturan Sekolah"
+        text="Nilai ini digunakan langsung oleh sistem, termasuk tahun ajaran canonical dan batas terlambat absensi."
+        action={!editing ? <button className="v2-primary" onClick={() => setEditing(true)}><Edit3 size={17} /> Edit Pengaturan</button> : undefined}
+      />
+      {message && <Notice {...message} />}
+      <section className="v2-panel">
+        {editing ? (
+          <form className="v2-form v2-form-grid" onSubmit={save}>
+            <label>Nama sekolah<input required value={settings.school_name} onChange={(event) => setSettings({ ...settings, school_name: event.target.value })} /></label>
+            <label>
+              Tahun ajaran
+              <select required value={settings.academic_year_id} onChange={(event) => setSettings({ ...settings, academic_year_id: event.target.value })}>
+                {academicYears.map((year) => <option key={year.id} value={year.id}>{year.label}{year.is_current ? ' · Berjalan' : ''}</option>)}
+              </select>
+            </label>
+            <label>Batas terlambat<input type="time" required value={settings.late_cutoff.slice(0, 5)} onChange={(event) => setSettings({ ...settings, late_cutoff: event.target.value })} /></label>
+            <label>
+              Zona waktu
+              <select value={SCHOOL_TIMEZONE.value} disabled aria-describedby="school-timezone-help">
+                <option value={SCHOOL_TIMEZONE.value}>{SCHOOL_TIMEZONE.label}</option>
+              </select>
+              <small id="school-timezone-help">Zona waktu sekolah dikunci ke WIB sesuai konfigurasi RA Nurul Falah.</small>
+            </label>
+            <label>Telepon<input inputMode="tel" autoComplete="tel" value={settings.phone || ''} onChange={(event) => setSettings({ ...settings, phone: event.target.value })} /></label>
+            <label>Email<input type="email" autoComplete="email" value={settings.email || ''} onChange={(event) => setSettings({ ...settings, email: event.target.value })} /></label>
+            <label className="full">Alamat<textarea rows={3} autoComplete="street-address" value={settings.address || ''} onChange={(event) => setSettings({ ...settings, address: event.target.value })} /></label>
+            <div className="v2-form-actions full">
+              <button type="button" className="v2-secondary" disabled={busy} onClick={() => { setEditing(false); setMessage(null); void load() }}>Batal</button>
+              <button className="v2-primary" disabled={busy || !academicYears.length}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Pengaturan'}</button>
+            </div>
+          </form>
+        ) : (
+          <div className="v2-settings-grid">
+            <Info label="Nama Sekolah" value={settings.school_name} />
+            <Info label="Tahun Ajaran" value={settings.academic_year} />
+            <Info label="Batas Terlambat" value={`${settings.late_cutoff.slice(0, 5)} WIB`} />
+            <Info label="Zona Waktu" value={settings.timezone === SCHOOL_TIMEZONE.value ? SCHOOL_TIMEZONE.label : settings.timezone} />
+            <Info label="Telepon" value={settings.phone || 'Belum diisi'} />
+            <Info label="Email" value={settings.email || 'Belum diisi'} />
+            <Info label="Alamat" value={settings.address || 'Belum diisi'} />
+          </div>
+        )}
+      </section>
+    </div>
+  )
 }
 
 export function PageTitle({ eyebrow, title, text, action }: { eyebrow: string; title: string; text: string; action?: ReactNode }) {
   return <header className="v2-page-title"><div><small>{eyebrow}</small><h2>{title}</h2><p>{text}</p></div>{action}</header>
 }
 
-export function Notice({ tone, text }: { tone: 'success' | 'error'; text: string }) { return <div className={`v2-notice ${tone}`}>{tone === 'success' ? <CheckCircle2 size={18} /> : <ShieldCheck size={18} />}<span>{text}</span></div> }
+export function Notice({ tone, text }: { tone: 'success' | 'error'; text: string }) { return <div className={`v2-notice ${tone}`} role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'}>{tone === 'success' ? <CheckCircle2 size={18} /> : <ShieldCheck size={18} />}<span>{text}</span></div> }
 export function EmptyCard({ text }: { text: string }) { return <section className="v2-empty"><span>—</span><h3>Belum ada data</h3><p>{text}</p></section> }
 export function SkeletonRows() { return <div className="v2-skeleton-list">{Array.from({ length: 4 }, (_, i) => <i key={i} />)}</div> }
 function SkeletonCards() { return <div className="v2-stat-grid four">{Array.from({ length: 4 }, (_, i) => <div className="v2-skeleton-card" key={i} />)}</div> }
