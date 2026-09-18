@@ -25,6 +25,9 @@ test('session lifecycle is server-verified and account profile is rechecked', ()
   assert.match(app, /visibilitychange/)
   assert.match(app, /event === 'SIGNED_OUT'/)
   assert.match(app, /scope: 'local'/)
+  assert.match(app, /IDLE_SESSION_MS = 8 \* 60 \* 60_000/)
+  assert.match(app, /Sesi berakhir karena tidak aktif terlalu lama/)
+  assert.match(app, /LAST_ACTIVITY_KEY/)
 })
 
 test('in-session password change requires the current password and revokes other sessions', () => {
