@@ -103,30 +103,62 @@ Deno.serve(observeEdgeFunction('admin-manage-user', async (req: Request) => {
         return jsonResponse({ ok: false, error: 'Admin tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.' }, 400)
       }
 
-      const { error: authUpdateError } = await context.adminClient.auth.admin.updateUserById(userId, {
+      const { data: previousProfile, error: previousProfileError } = await context.adminClient
+        .from('user_profiles')
+        .select('display_name,role,is_active')
+        .eq('id', userId)
+        .maybeSingle()
+      if (previousProfileError || !previousProfile) {
+        return jsonResponse({ ok: false, error: 'Profil pengguna tidak ditemukan.' }, 404)
+      }
+
+      const authAttributes = {
         user_metadata: { display_name: displayName },
+        ban_duration: isActive ? 'none' : '876000h',
+      }
+      const rollbackAuth = () => context.adminClient.auth.admin.updateUserById(userId, {
+        user_metadata: { display_name: previousProfile.display_name ?? '' },
+        ban_duration: previousProfile.is_active ? 'none' : '876000h',
       })
-      if (authUpdateError) return jsonResponse({ ok: false, error: 'Profil login gagal diperbarui.' }, 400)
+
+      const { error: authUpdateError } = await context.adminClient.auth.admin.updateUserById(userId, authAttributes)
+      if (authUpdateError) return jsonResponse({ ok: false, error: 'Status login pengguna gagal diperbarui.' }, 400)
 
       const { error: profileError } = await context.adminClient
         .from('user_profiles')
         .update({ display_name: displayName, role, is_active: isActive })
         .eq('id', userId)
-      if (profileError) return jsonResponse({ ok: false, error: 'Profil pengguna gagal diperbarui.' }, 400)
+      if (profileError) {
+        await rollbackAuth()
+        return jsonResponse({ ok: false, error: 'Profil pengguna gagal diperbarui.' }, 400)
+      }
 
       const { data: targetData } = await context.adminClient.auth.admin.getUserById(userId)
       const email = targetData?.user?.email?.toLowerCase() ?? null
       if (email) {
-        await context.adminClient
+        const { error: allowlistError } = await context.adminClient
           .from('account_allowlist')
           .update({ display_name: displayName, role, is_active: isActive })
           .eq('email', email)
+        if (allowlistError) {
+          await context.adminClient
+            .from('user_profiles')
+            .update({
+              display_name: previousProfile.display_name,
+              role: previousProfile.role,
+              is_active: previousProfile.is_active,
+            })
+            .eq('id', userId)
+          await rollbackAuth()
+          return jsonResponse({ ok: false, error: 'Status akun gagal disinkronkan.' }, 500)
+        }
       }
 
       await appendAccountAudit(context, userId, 'ACCOUNT_UPDATED', {
         display_name: displayName,
         role,
         is_active: isActive,
+        auth_banned: !isActive,
       })
       return jsonResponse({ ok: true })
     }
