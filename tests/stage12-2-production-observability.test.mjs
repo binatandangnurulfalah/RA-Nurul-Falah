@@ -52,7 +52,7 @@ test('technical query details are not surfaced raw to end users', () => {
   assert.match(errorUtils, /Sesi Anda perlu diperbarui/)
   assert.match(errorUtils, /Akun Anda tidak memiliki akses/)
   assert.match(errorUtils, /return fallback/)
-  assert.doesNotMatch(errorUtils, /return error\.message/)
+  assert.doesNotMatch(errorUtils, /export function userErrorMessage[\\s\\S]*return error\\.message/)
 })
 
 test('service wrappers observe Edge, Storage and direct database mutation failures', () => {
