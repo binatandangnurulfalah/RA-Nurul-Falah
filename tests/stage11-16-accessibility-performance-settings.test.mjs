@@ -10,7 +10,7 @@ const designSystem = read('src/design-system.css')
 const vite = read('vite.config.ts')
 const packageJson = JSON.parse(read('package.json'))
 const performanceBudget = read('scripts/verify-performance-build.mjs')
-const migration = read('supabase/migrations/20260918034500_stage11_16_settings_hardening.sql')
+const migration = read('supabase/migrations/20260918034538_stage11_16_settings_hardening.sql')
 const normalizedTypes = read('src/lib/database-normalized.types.ts')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 
