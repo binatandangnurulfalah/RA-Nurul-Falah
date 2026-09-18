@@ -27,7 +27,7 @@ Aplikasi web manajemen RA (Raudhatul Athfal) Nurul Falah untuk Admin, Guru, dan 
 - Vite
 - React Router dengan `HashRouter`
 - Supabase Auth, Postgres, RLS, Storage, dan Edge Functions
-- `html5-qrcode` untuk pemindaian QR live-camera
+- Native browser `BarcodeDetector` + `getUserMedia` untuk pemindaian QR live-camera
 - `qrcode.react` untuk pembuatan QR murid
 
 ## Supabase
@@ -42,8 +42,9 @@ Edge Function aktif yang menjadi source of truth di repository:
 - `supabase/functions/admin-manage-user/index.ts`
 - `supabase/functions/record-attendance/index.ts`
 - `supabase/functions/manage-attendance-record/index.ts`
+- `supabase/functions/process-document-storage-cleanup/index.ts`
 
-`delete-attendance-record` telah dipensiunkan. Semua create/update/delete absensi manual menggunakan `manage-attendance-record`.
+`delete-attendance-record` telah dipensiunkan sebagai endpoint mutasi. Production mempertahankan tombstone kompatibilitas yang selalu mengembalikan HTTP `410`; source tombstone disimpan di `supabase/functions/delete-attendance-record/index.ts`. Semua create/update/delete absensi manual menggunakan `manage-attendance-record`.
 
 Shared helper Edge Function tersimpan di `supabase/functions/_shared/`. Supabase JS untuk Edge Function dipin pada satu versi melalui `_shared/auth.ts`.
 
@@ -129,3 +130,19 @@ tests/
 - Password, JWT, session, service-role key, dan isi dokumen sensitif tidak boleh dimasukkan ke audit log.
 - Bucket `school-documents` harus tetap private; akses file menggunakan signed URL sesuai authorization.
 - Custom SMTP direkomendasikan untuk pengiriman email produksi.
+
+
+## Tahap 11.18 — Final Production Audit
+
+Checklist final menjaga repository dan production tetap sinkron:
+
+- seluruh migration production harus memiliki file dengan version/name yang sama di `supabase/migrations/`;
+- `src/lib/database.types.ts` diregenerasi dari schema production, sedangkan `database-normalized.types.ts` hanya mempertahankan override kontrak TypeScript yang memang diperlukan frontend;
+- Edge Function production harus cocok dengan source repository; endpoint lama `delete-attendance-record` hanya boleh berupa tombstone HTTP `410`;
+- bucket `school-documents` tetap private dan akses file dikendalikan policy/signed URL;
+- tabel internal-only seperti `announcement_reads` dan queue cleanup tidak memberi akses langsung ke `anon`/`authenticated`;
+- RPC `SECURITY DEFINER` yang diekspos ke pengguna terautentikasi wajib memiliki pemeriksaan session/role di dalam fungsi. Warning Advisor untuk pola ini ditinjau sebagai intentional, bukan diabaikan;
+- warning `Leaked Password Protection Disabled` tetap merupakan batasan plan yang sudah dijelaskan di atas;
+- Performance Advisor foreign-key index ditangani dengan index non-destruktif; warning unused-index tidak dijadikan alasan menghapus index pada project baru tanpa data penggunaan yang cukup;
+- scanner wajib tetap **LIVE CAMERA ONLY** tanpa upload/galeri/manual/torch, dengan pergantian kamera tetap tersedia;
+- final gate mencakup unit/regression, integration security, TypeScript/build, Playwright desktop/mobile, PWA artifact verification, dan deploy GitHub Pages.
