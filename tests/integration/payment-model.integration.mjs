@@ -101,6 +101,14 @@ after(async () => {
   assert.ifError((await service.from('account_allowlist').delete().in('email', Object.values(emails))).error)
 })
 
+test('anon tidak dapat membaca tabel/view atau menjalankan payment summary', async () => {
+  const anon = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  assert.ok((await anon.from('student_payments').select('id')).error)
+  assert.ok((await anon.from('payment_transactions').select('id')).error)
+  assert.ok((await anon.from('student_payments_search').select('id')).error)
+  assert.ok((await anon.rpc('payment_summary', { p_student_id: null })).error)
+})
+
 test('tagihan hanya dapat dimutasi melalui RPC Admin', async () => {
   const direct = await actors.admin.db.from('student_payments').insert({
     student_id: fixture.studentId,
