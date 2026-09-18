@@ -5,19 +5,22 @@ import { HashRouter } from 'react-router-dom'
 import App from './App'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { queryClient } from './data/queryClient'
+import { PwaExperience } from './pwa/PwaExperience'
+import { registerPwa } from './pwa/registerPwa'
 import './styles/tokens.css'
 import './styles.css'
 import './brand.css'
 import './design-system.css'
 import './data-ui.css'
 import './mobile-v5.css'
+import './pwa.css'
 
 const brandLogoUrl = new URL('logo-ra-nurul-falah.png', document.baseURI).toString()
 document.documentElement.style.setProperty('--brand-logo-url', `url("${brandLogoUrl}")`)
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+if (import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL })
+    void registerPwa()
   })
 }
 
@@ -26,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <HashRouter>
+          <PwaExperience />
           <App />
         </HashRouter>
       </QueryClientProvider>

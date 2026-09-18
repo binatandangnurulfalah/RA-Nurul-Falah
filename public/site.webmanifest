@@ -1,18 +1,50 @@
 {
+  "id": "./",
   "name": "RA Nurul Falah",
-  "short_name": "RA Nurul Falah",
+  "short_name": "Nurul Falah",
   "description": "Sistem informasi Raudhatul Athfal Nurul Falah",
+  "lang": "id-ID",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#f5f7f5",
   "theme_color": "#174b3b",
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "logo-ra-nurul-falah.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "logo-ra-nurul-falah.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Masuk",
+      "short_name": "Masuk",
+      "url": "./#/login",
+      "icons": [
+        {
+          "src": "logo-ra-nurul-falah.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
 }

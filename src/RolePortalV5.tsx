@@ -24,7 +24,7 @@ import {
 import { announcementUnreadCountOptions } from './data/queries/announcements'
 import { useAnnouncementRealtime } from './data/useAnnouncementRealtime'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
-import { ChildSelectionProvider, GlobalChildSwitcher, OfflineBanner } from './portal-v2/AppExperience'
+import { ChildSelectionProvider, GlobalChildSwitcher } from './portal-v2/AppExperience'
 import './portal-v2.css'
 import './portal-v2-polish.css'
 import './school-modules.css'
@@ -242,7 +242,6 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
         </header>
 
         <main className="v2-content">
-          <OfflineBanner />
           {currentProfile.role === 'parent' && <GlobalChildSwitcher />}
           <Suspense fallback={<PageLoading />}><PageRouter role={currentProfile.role} page={active.id} profile={currentProfile} setProfile={setCurrentProfile} go={go} /></Suspense>
         </main>
