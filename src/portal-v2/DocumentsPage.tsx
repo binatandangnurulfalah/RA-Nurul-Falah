@@ -321,7 +321,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
         reportStorageFailure('upload_school_document', upload.error)
         busyRef.current = false
         setBusy(false)
-        setErrorText(upload.error.message)
+        setErrorText('File gagal diunggah. Periksa koneksi lalu coba lagi.')
         return
       }
       storagePath = uploadedPath
@@ -367,7 +367,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
       if (uploadedPath) cleanupQueued = await queueUploadedOrphan(uploadedPath)
       busyRef.current = false
       setBusy(false)
-      setErrorText(`${result.error.message}${cleanupQueued ? ' File unggahan baru sudah masuk antrean cleanup backend.' : ''}`)
+      setErrorText(`Dokumen gagal disimpan.${cleanupQueued ? ' File unggahan baru sudah masuk antrean cleanup backend.' : ''}`)
       return
     }
 
