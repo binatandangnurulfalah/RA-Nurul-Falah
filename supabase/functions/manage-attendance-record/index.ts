@@ -3,6 +3,7 @@ import { corsPreflight } from '../_shared/cors.ts'
 import { requireAuthenticatedUser } from '../_shared/auth.ts'
 import { requireRole, teacherCanAccessStudent } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
+import { observeEdgeFunction } from '../_shared/observability.ts'
 import { isIsoDate, isUuid, normalizeCorrectionReason } from '../_shared/validation.ts'
 
 const ALLOWED_STATUS = ['present', 'late', 'excused', 'sick', 'absent']
@@ -20,7 +21,7 @@ function sameInstant(left: string | null, right: string | null) {
   return new Date(left).getTime() === new Date(right).getTime()
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(observeEdgeFunction('manage-attendance-record', async (req: Request) => {
   const preflight = corsPreflight(req)
   if (preflight) return preflight
   if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
@@ -219,7 +220,7 @@ Deno.serve(async (req: Request) => {
     if (!updated) return jsonResponse({ ok: false, error: 'Data absensi berubah saat diproses. Muat ulang lalu coba lagi.' }, 409)
 
     return jsonResponse({ ok: true, record_id: updated.id, student_name: student.full_name })
-  } catch {
-    return jsonResponse({ ok: false, error: 'Terjadi kesalahan server.' }, 500)
+  } catch (error) {
+    throw error
   }
-})
+}))

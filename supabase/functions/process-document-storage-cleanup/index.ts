@@ -3,6 +3,7 @@ import { corsPreflight } from '../_shared/cors.ts'
 import { requireAuthenticatedUser } from '../_shared/auth.ts'
 import { requireRole } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
+import { observeEdgeFunction } from '../_shared/observability.ts'
 
 const DOCUMENT_BUCKET = 'school-documents'
 const MAX_BATCH = 25
@@ -18,7 +19,7 @@ function retryAt(attempts: number) {
   return new Date(Date.now() + (minutes * 60_000)).toISOString()
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(observeEdgeFunction('process-document-storage-cleanup', async (req: Request) => {
   const preflight = corsPreflight(req)
   if (preflight) return preflight
   if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
@@ -147,7 +148,7 @@ Deno.serve(async (req: Request) => {
       skipped,
       pending: pending ?? 0,
     })
-  } catch {
-    return jsonResponse({ ok: false, error: 'Terjadi kesalahan server.' }, 500)
+  } catch (error) {
+    throw error
   }
-})
+}))

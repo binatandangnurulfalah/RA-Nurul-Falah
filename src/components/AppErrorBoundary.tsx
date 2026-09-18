@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { reportOperationalError } from '../lib/observability'
 import { applyWaitingPwaUpdate } from '../pwa/registerPwa'
 
 type ErrorBoundaryState = {
@@ -20,7 +21,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBo
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Unhandled application error', error, info)
+    reportOperationalError('react-boundary', error, { component_stack_present: Boolean(info.componentStack) })
   }
 
   private recover = async () => {

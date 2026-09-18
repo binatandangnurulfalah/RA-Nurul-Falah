@@ -4,6 +4,7 @@ import { requireAuthenticatedUser, createPublicClient } from '../_shared/auth.ts
 import { appendAccountAudit } from '../_shared/audit.ts'
 import { requireRole } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
+import { observeEdgeFunction } from '../_shared/observability.ts'
 
 function randomBootstrapPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
@@ -23,7 +24,7 @@ function safeRedirect(value: unknown) {
   }
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
   const preflight = corsPreflight(req)
   if (preflight) return preflight
   if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'Metode tidak diizinkan.' }, 405)
@@ -120,7 +121,7 @@ Deno.serve(async (req: Request) => {
         display_name: displayName,
       },
     }, 201)
-  } catch {
-    return jsonResponse({ ok: false, error: 'Terjadi kesalahan server.' }, 500)
+  } catch (error) {
+    throw error
   }
-})
+}))

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
 import { Button, PageHeader } from '../components/ui'
+import { invokeObservedFunction } from '../lib/observed-services'
+import { reportOperationalError } from '../lib/observability'
 import { supabase } from '../lib/supabase'
 
 type AttendanceSummary = {
@@ -73,6 +75,7 @@ export function AttendanceScannerNative() {
   const load = async () => {
     const { data, error } = await supabase.rpc('attendance_summary_for_date', { p_date: jakartaDate() })
     if (error) {
+      reportOperationalError('query', error, { query_name: 'attendance_summary_for_date' })
       setSummaryError('Ringkasan hari ini belum dapat dimuat.')
       return
     }
@@ -108,7 +111,7 @@ export function AttendanceScannerNative() {
     busyRef.current = true
     setFeedback({ tone: 'info', text: 'Menyimpan absensi...' })
     try {
-      const { data, error } = await supabase.functions.invoke('record-attendance', { body: { token: cleanToken } })
+      const { data, error } = await invokeObservedFunction('record-attendance', { token: cleanToken })
       if (error || !data?.ok) {
         setFeedback({ tone: 'error', text: data?.error || 'QR gagal diproses.' })
         return false
@@ -120,7 +123,8 @@ export function AttendanceScannerNative() {
       lastScanRef.current = { token: cleanToken, at: Date.now() }
       await load()
       return true
-    } catch {
+    } catch (error) {
+      reportOperationalError('edge-function', error, { function_name: 'record-attendance' })
       setFeedback({ tone: 'error', text: 'Absensi gagal disimpan. Periksa koneksi lalu arahkan QR ke pemindai lagi.' })
       return false
     } finally {

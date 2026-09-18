@@ -5,6 +5,7 @@ import { HashRouter } from 'react-router-dom'
 import App from './App'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { queryClient } from './data/queryClient'
+import { installGlobalErrorObservers } from './lib/observability'
 import { PwaExperience } from './pwa/PwaExperience'
 import { registerPwa } from './pwa/registerPwa'
 import './styles/tokens.css'
@@ -14,6 +15,8 @@ import './design-system.css'
 import './data-ui.css'
 import './mobile-v5.css'
 import './pwa.css'
+
+installGlobalErrorObservers()
 
 const brandLogoUrl = new URL('logo-ra-nurul-falah.png', document.baseURI).toString()
 document.documentElement.style.setProperty('--brand-logo-url', `url("${brandLogoUrl}")`)

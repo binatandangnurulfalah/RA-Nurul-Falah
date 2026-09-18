@@ -8,7 +8,7 @@ import { queryKeys } from '../data/queryKeys'
 import { attendanceMetaOptions, attendancePageOptions, type AttendanceRecordRow, type AttendanceStudent, type AttendanceSummary } from '../data/queries/attendance'
 import { useDataFilters } from '../data/useDataFilters'
 import { userErrorMessage } from '../lib/error-utils'
-import { supabase } from '../lib/supabase'
+import { invokeObservedFunction } from '../lib/observed-services'
 import { ActionMenu, useChildSelection } from './AppExperience'
 import { PAGE_SIZE, PaginationControls, useDebouncedValue } from './DataExperience'
 import { Notice } from './PortalPages'
@@ -69,9 +69,7 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
     if (!deleting || !canManage || removingRef.current || deleteReason.trim().length < 3) return
     removingRef.current = true
     setRemoving(true)
-    const { data, error } = await supabase.functions.invoke('manage-attendance-record', {
-      body: { action: 'delete', record_id: deleting.id, correction_reason: deleteReason.trim() },
-    })
+    const { data, error } = await invokeObservedFunction('manage-attendance-record', { action: 'delete', record_id: deleting.id, correction_reason: deleteReason.trim() })
     removingRef.current = false
     setRemoving(false)
     if (error || !data?.ok) {
@@ -219,8 +217,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
     busyRef.current = true
     setBusy(true)
     setErrorText('')
-    const { data, error } = await supabase.functions.invoke('manage-attendance-record', {
-      body: {
+    const { data, error } = await invokeObservedFunction('manage-attendance-record', {
         action: value ? 'update' : 'create',
         record_id: value?.id,
         student_id: form.student_id,
@@ -229,8 +226,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
         check_out: form.check_out || null,
         status: form.status,
         correction_reason: value ? form.correction_reason.trim() : undefined,
-      },
-    })
+      })
     busyRef.current = false
     setBusy(false)
     if (error || !data?.ok) {

@@ -5,6 +5,7 @@ import test from 'node:test'
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 const styles = read('src/scanner-native.css')
+const observedServices = read('src/lib/observed-services.ts')
 
 test('11.9 memakai design system dan status scanner live yang jelas', () => {
   assert.match(scanner, /import \{ Button, PageHeader \} from '\.\.\/components\/ui'/)
@@ -34,8 +35,9 @@ test('start dan switch kamera memiliki synchronous guard serta fallback kamera l
 })
 
 test('kegagalan invoke attendance menjadi feedback UI tanpa mengubah edge function contract', () => {
-  assert.match(scanner, /supabase\.functions\.invoke\('record-attendance'/)
-  assert.match(scanner, /catch \{[\s\S]*Absensi gagal disimpan\. Periksa koneksi/)
+  assert.match(scanner, /invokeObservedFunction\('record-attendance'/)
+  assert.match(observedServices, /supabase\.functions\.invoke\(functionName/)
+  assert.match(scanner, /catch \(error\) \{[\s\S]*Absensi gagal disimpan\. Periksa koneksi/)
   assert.match(scanner, /busyRef\.current/)
   assert.match(scanner, /lastScanRef\.current/)
 })
