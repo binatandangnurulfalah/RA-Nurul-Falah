@@ -17,7 +17,7 @@ test('rapor dan kuitansi menyediakan cetak PDF', () => {
 test('unggahan dokumen memakai bucket privat dan signed URL', () => {
   assert.match(storageBucketMigration, /'school-documents','school-documents',false/)
   assert.match(storagePoliciesMigration, /school_documents_authorized_read/)
-  assert.match(documents, /createSignedUrl\(row\.file_url, 300\)/)
+  assert.match(documents, /createSignedUrl\(storagePath, 300\)/)
   assert.match(documents, /\.upload\(uploadedPath, file/)
 })
 
