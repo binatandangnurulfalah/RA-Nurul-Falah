@@ -8,7 +8,7 @@ const students = read('src/portal-v2/StudentsPageV2.tsx')
 const classes = read('src/portal-v2/ClassesPage.tsx')
 const settings = read('src/portal-v2/PortalPages.tsx')
 const normalizedTypes = read('src/lib/database-normalized.types.ts')
-const migration = read('supabase/migrations/20260918105200_stage12_6_teacher_class_management.sql')
+const migration = read('supabase/migrations/20260918110732_stage12_6_teacher_class_management.sql')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 
 test('Admin settings exposes one-teacher-one-class policy toggle', () => {
