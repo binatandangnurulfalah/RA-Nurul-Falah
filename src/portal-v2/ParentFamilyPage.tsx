@@ -4,7 +4,7 @@ import { Baby, CheckCircle2, Clock3, Edit3, Plus, ShieldCheck, UsersRound } from
 import { FormDialog, FormField, FormSection } from '../components/forms'
 import { StatusBadge } from '../components/data'
 import { Button, EmptyState, PageHeader } from '../components/ui'
-import { parentFamilyWorkspaceOptions, type VerificationPayload, type VerificationRequestRow } from '../data/queries/parentVerification'
+import { parentFamilyWorkspaceOptions, type ParentChildRow, type VerificationPayload, type VerificationRequestRow } from '../data/queries/parentVerification'
 import { queryKeys } from '../data/queryKeys'
 import { userErrorMessage } from '../lib/error-utils'
 import { supabase, type UserProfile } from '../lib/supabase'
@@ -135,10 +135,11 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   const data = workspaceQuery.data
   const requests = data?.requests ?? []
   const family = data?.family ?? null
-  const children = (data?.children ?? []) as Array<(typeof data.children)[number] & { relationship?: string }>
+  const children = (data?.children ?? []) as Array<ParentChildRow & { relationship?: string }>
   const pendingFamily = requests.find((item) => item.request_type === 'family_profile' && item.status === 'pending')
   const pendingChildLinks = requests.filter((item) => item.request_type === 'child_link' && item.status === 'pending')
-  const latestFamilyCorrection = requests.find((item) => item.request_type === 'family_profile' && (item.status === 'changes_requested' || item.status === 'rejected'))
+  const latestFamilyRequest = requests.find((item) => item.request_type === 'family_profile')
+  const latestFamilyCorrection = latestFamilyRequest && (latestFamilyRequest.status === 'changes_requested' || latestFamilyRequest.status === 'rejected') ? latestFamilyRequest : null
 
   const [familyOpen, setFamilyOpen] = useState(false)
   const [familySupersedes, setFamilySupersedes] = useState<string | null>(null)
@@ -270,8 +271,9 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     <section className="v2-panel">
       <header className="family-section-head"><div><small>ANAK</small><h3>Anak terhubung</h3></div><span>{children.length} siswa resmi</span></header>
       {workspaceQuery.isPending ? <p>Memuat data anak...</p> : children.length ? <div className="family-child-grid">{children.map((child) => {
-        const pendingUpdate = requests.find((request) => request.request_type === 'child_update' && request.target_student_id === child.id && request.status === 'pending')
-        const correction = requests.find((request) => request.request_type === 'child_update' && request.target_student_id === child.id && (request.status === 'changes_requested' || request.status === 'rejected'))
+        const latestUpdate = requests.find((request) => request.request_type === 'child_update' && request.target_student_id === child.id)
+        const pendingUpdate = latestUpdate?.status === 'pending' ? latestUpdate : null
+        const correction = latestUpdate && (latestUpdate.status === 'changes_requested' || latestUpdate.status === 'rejected') ? latestUpdate : null
         return <article className="family-child-card" key={child.id}>
           <span className="family-child-avatar"><Baby size={21} /></span>
           <div className="family-child-main">
