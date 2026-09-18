@@ -5,6 +5,7 @@ import test from 'node:test'
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
 const migration = read('supabase/migrations/20260918192125_stage12_11_parent_family_verification.sql')
+const grantHardening = read('supabase/migrations/20260919101500_stage12_11_verification_grant_hardening.sql')
 const portal = read('src/RolePortalV5.tsx')
 const parentPage = read('src/portal-v2/ParentFamilyPage.tsx')
 const verificationPage = read('src/portal-v2/ParentVerificationPage.tsx')
@@ -18,6 +19,14 @@ test('Tahap 12.11 menyediakan canonical family profile dan immutable-style verif
   assert.match(migration, /status in \('pending','approved','changes_requested','rejected'\)/)
   assert.match(migration, /supersedes_request_id/)
   assert.match(migration, /parent_verification_one_pending_subject_idx/)
+})
+
+test('verification tables expose SELECT-only access to authenticated clients', () => {
+  assert.match(grantHardening, /revoke all on table public\.parent_family_profiles from anon, authenticated/)
+  assert.match(grantHardening, /revoke all on table public\.parent_verification_requests from anon, authenticated/)
+  assert.match(grantHardening, /grant select on table public\.parent_family_profiles to authenticated/)
+  assert.match(grantHardening, /grant select on table public\.parent_verification_requests to authenticated/)
+  assert.doesNotMatch(grantHardening, /grant (insert|update|delete|truncate|trigger|references)/i)
 })
 
 test('Orang Tua hanya mengajukan perubahan dan tidak menulis canonical data langsung', () => {
