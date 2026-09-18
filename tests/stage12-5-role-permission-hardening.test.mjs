@@ -12,7 +12,7 @@ const attendance = read('src/portal-v2/AttendancePages.tsx')
 const reports = read('src/portal-v2/ReportsPage.tsx')
 const announcements = read('src/portal-v2/AnnouncementsPage.tsx')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
-const migration = read('supabase/migrations/20260918090000_stage12_5_role_permission_hardening.sql')
+const migration = read('supabase/migrations/20260918092710_stage12_5_role_permission_hardening.sql')
 
 test('teacher student UI is read-only except QR access', () => {
   assert.match(students, /const canManage = role === 'admin'/)
