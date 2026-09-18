@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const migration = read('supabase/migrations/20260918015500_stage11_12_storage_document_architecture.sql')
+const migration = read('supabase/migrations/20260918021105_stage11_12_storage_document_architecture.sql')
 const bucketMigration = read('supabase/migrations/20260917032201_school_documents_storage_bucket.sql')
 const documentsPage = read('src/portal-v2/DocumentsPage.tsx')
 const documentsQuery = read('src/data/queries/documents.ts')
