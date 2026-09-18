@@ -331,6 +331,5 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
 
 function PageLoading() { return <div className="v5-page-loading" role="status" aria-live="polite"><span /><span /><span /><p>Memuat halaman…</p></div> }
 
-function initials(name?: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function roleLabel(role: AppRole) { return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Orang Tua / Wali' }
 function mobileLabel(label: string) { if (label === 'Dashboard') return 'Beranda'; if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Absen') return 'Absen'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; if (label === 'Penilaian & Rapor') return 'Rapor'; if (label === 'Rapor Anak') return 'Rapor'; if (label === 'Dokumen & Surat') return 'Dokumen'; return label.split(' ')[0] }
