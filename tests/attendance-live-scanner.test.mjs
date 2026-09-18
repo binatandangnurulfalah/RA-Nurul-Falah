@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const [scanner, styles, packageText] = await Promise.all([
+const [scanner, styles, packageText, observedServices] = await Promise.all([
   readFile(new URL('../src/portal-v2/AttendanceScannerNative.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/scanner-native.css', import.meta.url), 'utf8'),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
+  readFile(new URL('../src/lib/observed-services.ts', import.meta.url), 'utf8'),
 ])
 
 test('scanner absensi hanya menerima pemindaian QR dari kamera live', () => {
@@ -32,7 +33,6 @@ test('pergantian kamera tetap tersedia dan kamera depan dicerminkan hanya pada p
 
 test('scanner tetap memproses token melalui edge function record-attendance', () => {
   assert.match(scanner, /invokeObservedFunction\('record-attendance'/)
-  const observedServices = readFileSync(new URL('../src/lib/observed-services.ts', import.meta.url), 'utf8')
   assert.match(observedServices, /supabase\.functions\.invoke\(functionName/)
   assert.match(scanner, /busyRef\.current/)
   assert.match(scanner, /lastScanRef\.current/)
