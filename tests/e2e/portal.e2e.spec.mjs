@@ -57,13 +57,16 @@ test('mobile menu traps focus, closes with Escape, and restores opener focus', a
   await expectNoHorizontalOverflow(page)
 })
 
-test('role navigation does not expose finance module to teacher', async ({ page }) => {
+test('role navigation does not expose finance module to teacher', async ({ page }, testInfo) => {
   await page.goto(portalUrl('teacher'))
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   await expect(page.getByText('Pembayaran', { exact: true })).toHaveCount(0)
 
   await page.goto(portalUrl('parent'))
-  await expect(page.getByText('Pembayaran', { exact: true }).first()).toBeVisible()
+  const parentNavigation = testInfo.project.name === 'chromium-mobile'
+    ? page.locator('.v2-bottom-nav')
+    : page.locator('.v2-sidebar')
+  await expect(parentNavigation.getByText('Pembayaran', { exact: true })).toBeVisible()
 })
 
 test('scanner browser UI remains live-camera only on desktop and mobile', async ({ page }) => {
