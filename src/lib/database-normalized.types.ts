@@ -128,6 +128,67 @@ type SchoolSettingsTable = PatchTable<
   }]
 >
 
+type StudentPaymentsTable = PatchTable<
+  BaseTables['student_payments'],
+  { is_waived: boolean },
+  { is_waived?: boolean },
+  { is_waived?: boolean }
+>
+
+type PaymentTransactionsTable = {
+  Row: {
+    id: string
+    payment_id: string
+    amount: number
+    paid_at: string
+    method: 'cash' | 'bank_transfer' | 'qris' | 'other' | 'legacy'
+    reference_no: string | null
+    notes: string | null
+    created_by: string | null
+    created_at: string
+    voided_at: string | null
+    voided_by: string | null
+    void_reason: string | null
+  }
+  Insert: {
+    id?: string
+    payment_id: string
+    amount: number
+    paid_at?: string
+    method?: 'cash' | 'bank_transfer' | 'qris' | 'other' | 'legacy'
+    reference_no?: string | null
+    notes?: string | null
+    created_by?: string | null
+    created_at?: string
+    voided_at?: string | null
+    voided_by?: string | null
+    void_reason?: string | null
+  }
+  Update: {
+    id?: string
+    payment_id?: string
+    amount?: number
+    paid_at?: string
+    method?: 'cash' | 'bank_transfer' | 'qris' | 'other' | 'legacy'
+    reference_no?: string | null
+    notes?: string | null
+    created_by?: string | null
+    created_at?: string
+    voided_at?: string | null
+    voided_by?: string | null
+    void_reason?: string | null
+  }
+  Relationships: [
+    {
+      foreignKeyName: 'payment_transactions_payment_id_fkey'
+      columns: ['payment_id']
+      isOneToOne: false
+      referencedRelation: 'student_payments'
+      referencedColumns: ['id']
+    },
+  ]
+}
+
 type SchoolDocumentsTable = PatchTable<
   BaseTables['school_documents'],
   {
@@ -184,11 +245,13 @@ type AuditEventsView = Omit<BaseViews['audit_events_view'], 'Row'> & {
 
 export type Database = Omit<GeneratedDatabase, 'public'> & {
   public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views' | 'Functions'> & {
-    Tables: Omit<BaseTables, 'audit_events' | 'school_classes' | 'school_documents' | 'students' | 'school_schedules' | 'school_settings'> & {
+    Tables: Omit<BaseTables, 'audit_events' | 'school_classes' | 'school_documents' | 'student_payments' | 'students' | 'school_schedules' | 'school_settings'> & {
       academic_years: AcademicYearsTable
       audit_events: AuditEventsTable
       school_classes: SchoolClassesTable
       school_documents: SchoolDocumentsTable
+      student_payments: StudentPaymentsTable
+      payment_transactions: PaymentTransactionsTable
       students: StudentsTable
       school_schedules: SchoolSchedulesTable
       school_settings: SchoolSettingsTable
@@ -197,6 +260,38 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       audit_events_view: AuditEventsView
     }
     Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
+      save_student_charge: {
+        Args: {
+          p_payment_id: string | null
+          p_student_id: string
+          p_payment_type: string
+          p_period_label: string | null
+          p_amount: number
+          p_due_date: string | null
+          p_is_waived: boolean
+          p_notes: string | null
+        }
+        Returns: string
+      }
+      record_payment_transaction: {
+        Args: {
+          p_payment_id: string
+          p_amount: number
+          p_paid_at: string | null
+          p_method: string
+          p_reference_no: string | null
+          p_notes: string | null
+        }
+        Returns: string
+      }
+      void_payment_transaction: {
+        Args: { p_transaction_id: string; p_reason: string }
+        Returns: string
+      }
+      delete_student_charge: {
+        Args: { p_payment_id: string }
+        Returns: string
+      }
       announcement_unread_count: {
         Args: never
         Returns: number
