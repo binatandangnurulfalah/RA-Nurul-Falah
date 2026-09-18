@@ -69,7 +69,7 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
     if (!deleting || !canManage || removingRef.current || deleteReason.trim().length < 3) return
     removingRef.current = true
     setRemoving(true)
-    const { data, error } = await invokeObservedFunction('manage-attendance-record', { action: 'delete', record_id: deleting.id, correction_reason: deleteReason.trim() },)
+    const { data, error } = await invokeObservedFunction('manage-attendance-record', { action: 'delete', record_id: deleting.id, correction_reason: deleteReason.trim() })
     removingRef.current = false
     setRemoving(false)
     if (error || !data?.ok) {
@@ -226,7 +226,7 @@ function AttendanceModal({ value, students, onClose, onDone }: { value: Attendan
         check_out: form.check_out || null,
         status: form.status,
         correction_reason: value ? form.correction_reason.trim() : undefined,
-      },)
+      })
     busyRef.current = false
     setBusy(false)
     if (error || !data?.ok) {
