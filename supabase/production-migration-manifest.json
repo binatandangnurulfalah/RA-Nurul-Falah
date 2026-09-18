@@ -45,7 +45,8 @@
     "20260918021105_stage11_12_storage_document_architecture.sql",
     "20260918023205_stage11_13_announcement_reads_realtime.sql",
     "20260918025037_stage11_14_payment_data_model.sql",
-    "20260918025511_stage11_14_payment_permissions_hardening.sql"
+    "20260918025511_stage11_14_payment_permissions_hardening.sql",
+    "20260918034500_stage11_16_settings_hardening.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
