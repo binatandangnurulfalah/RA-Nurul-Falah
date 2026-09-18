@@ -92,6 +92,11 @@ declare
   legacy_changed boolean := false;
   canonical_changed boolean := false;
 begin
+  if new.storage_path is not null and new.external_url is not null then
+    raise exception 'Pilih salah satu sumber dokumen: Storage internal atau tautan eksternal.'
+      using errcode = '22023';
+  end if;
+
   if tg_op = 'UPDATE' then
     legacy_changed := new.file_url is distinct from old.file_url;
     canonical_changed := new.storage_path is distinct from old.storage_path
