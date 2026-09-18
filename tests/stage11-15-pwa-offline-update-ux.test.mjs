@@ -8,6 +8,8 @@ const vite = read('vite.config.ts')
 const pwaExperience = read('src/pwa/PwaExperience.tsx')
 const registerPwa = read('src/pwa/registerPwa.ts')
 const main = read('src/main.tsx')
+const app = read('src/App.tsx')
+const queryClient = read('src/data/queryClient.ts')
 const packageJson = JSON.parse(read('package.json'))
 const manifest = JSON.parse(read('public/site.webmanifest'))
 const verifyBuild = read('scripts/verify-pwa-build.mjs')
@@ -58,6 +60,16 @@ test('main me-mount PWA experience dan registration terisolasi di helper', () =>
   assert.match(main, /pwa\.css/)
   assert.doesNotMatch(main, /navigator\.serviceWorker\.register/)
   assert.match(registerPwa, /navigator\.serviceWorker\.register/)
+})
+
+test('offline session dipertahankan dan mutation tidak direplay diam-diam', () => {
+  assert.match(app, /status: 'unavailable'/)
+  assert.match(app, /profileUnavailable/)
+  assert.match(app, /Koneksi diperlukan untuk membuka sesi/)
+  assert.match(app, /document\.visibilityState !== 'visible' \|\| !navigator\.onLine/)
+  assert.match(app, /error && isConnectivityError\(error\)/)
+  assert.match(queryClient, /networkMode: 'always'/)
+  assert.match(queryClient, /mutations:[\s\S]*retry: 0/)
 })
 
 test('manifest tetap standalone dan memiliki metadata install yang stabil', () => {
