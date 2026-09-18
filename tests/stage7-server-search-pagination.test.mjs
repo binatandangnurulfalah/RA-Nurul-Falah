@@ -54,7 +54,7 @@ test('pembayaran memakai view pencarian, pagination dan summary server-side', ()
 
 test('dokumen memakai pencarian dan pagination server-side tanpa merusak lifecycle Storage', () => {
   assertServerPage(documents, 'school_documents')
-  assert.ok(documentPage.includes('flushDocumentStorageCleanup'))
+  assert.ok(documentPage.includes('processDocumentStorageCleanup'))
   assert.ok(documentPage.includes('createSignedUrl'))
   assert.ok(!documents.includes('usePaginatedItems'))
 })
