@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const cleanup = read('supabase/migrations/20260918053500_stage12_3_redundant_index_cleanup.sql')
+const cleanup = read('supabase/migrations/20260918053616_stage12_3_redundant_index_cleanup.sql')
 const normalizedRefs = read('supabase/migrations/20260917175117_stage11_10_academic_year_class_normalization.sql')
 const searchIndexes = read('supabase/migrations/20260917071352_stage7_server_search_pagination.sql')
 const students = read('src/data/queries/students.ts')
