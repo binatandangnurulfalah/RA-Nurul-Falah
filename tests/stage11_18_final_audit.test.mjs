@@ -5,7 +5,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const migration = read('supabase/migrations/20260918041000_stage11_18_final_audit_hardening.sql')
+const migration = read('supabase/migrations/20260918041836_stage11_18_final_audit_hardening.sql')
 const generatedTypes = read('src/lib/database.types.ts')
 const normalizedTypes = read('src/lib/database-normalized.types.ts')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
