@@ -22,4 +22,5 @@ export const queryKeys = {
   announcements: scoped('announcements'),
   dashboard: scoped('dashboard'),
   audit: scoped('audit'),
+  verification: scoped('verification'),
 } as const
