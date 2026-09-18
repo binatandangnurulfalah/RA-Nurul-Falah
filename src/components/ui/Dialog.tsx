@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef } from 'react'
+import { useId, useRef } from 'react'
+import { useDialogFocus } from './useDialogFocus'
 import type { ReactNode } from 'react'
 
 type DialogProps = {
@@ -11,63 +12,17 @@ type DialogProps = {
   onClose: () => void
 }
 
-const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 export function Dialog({ open, title, description, children, actions, closeLabel = 'Tutup dialog', onClose }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
-  const onCloseRef = useRef(onClose)
   const titleId = useId()
   const descriptionId = useId()
 
-  onCloseRef.current = onClose
-
-  useEffect(() => {
-    if (!open) return
-
-    const previousActive = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const dialog = dialogRef.current
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    const focusFirst = () => {
-      const first = dialog?.querySelector<HTMLElement>(focusableSelector)
-      ;(first ?? dialog)?.focus()
-    }
-    focusFirst()
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onCloseRef.current()
-        return
-      }
-      if (event.key !== 'Tab' || !dialog) return
-
-      const items = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter((item) => item.offsetParent !== null)
-      if (items.length === 0) {
-        event.preventDefault()
-        dialog.focus()
-        return
-      }
-
-      const first = items[0]
-      const last = items[items.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
-      previousActive?.focus()
-    }
-  }, [open])
+  useDialogFocus({
+    active: open,
+    containerRef: dialogRef,
+    onClose,
+    lockBodyScroll: true,
+  })
 
   if (!open) return null
 
