@@ -107,10 +107,29 @@ async function networkFirstResource(request) {
 `
 }
 
+function vendorChunk(id: string) {
+  if (!id.includes('node_modules')) return undefined
+  if (id.includes('@supabase') || id.includes('realtime-js') || id.includes('postgrest-js') || id.includes('gotrue-js') || id.includes('storage-js')) return 'vendor-supabase'
+  if (id.includes('@tanstack')) return 'vendor-query'
+  if (id.includes('react-router')) return 'vendor-router'
+  if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler')) return 'vendor-react'
+  if (id.includes('lucide-react')) return 'vendor-icons'
+  if (id.includes('qrcode.react')) return 'vendor-qrcode'
+  return 'vendor-misc'
+}
+
 export default defineConfig({
   base,
   define: {
     __RA_BUILD_ID__: JSON.stringify(buildId),
+  },
+  build: {
+    chunkSizeWarningLimit: 420,
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
+    },
   },
   plugins: [
     react(),
