@@ -4,8 +4,8 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const migration = read('supabase/migrations/20260918030000_stage11_14_payment_data_model.sql')
-const permissions = read('supabase/migrations/20260918030010_stage11_14_payment_permissions_hardening.sql')
+const migration = read('supabase/migrations/20260918025037_stage11_14_payment_data_model.sql')
+const permissions = read('supabase/migrations/20260918025511_stage11_14_payment_permissions_hardening.sql')
 const payments = read('src/portal-v2/PaymentsPage.tsx')
 const paymentsQuery = read('src/data/queries/payments.ts')
 const types = read('src/lib/database-normalized.types.ts')
