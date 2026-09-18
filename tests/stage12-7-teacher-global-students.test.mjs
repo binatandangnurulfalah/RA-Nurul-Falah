@@ -6,7 +6,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 
 const students = read('src/portal-v2/StudentsPageV2.tsx')
 const studentQueries = read('src/data/queries/students.ts')
-const migration = read('supabase/migrations/20260918113000_stage12_7_teacher_global_students_when_policy_off.sql')
+const migration = read('supabase/migrations/20260918112412_stage12_7_teacher_global_students_when_policy_off.sql')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 
 test('student lookup loads the teacher-class mode setting', () => {
