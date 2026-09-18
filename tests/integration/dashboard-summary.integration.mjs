@@ -90,6 +90,9 @@ before(async () => {
   const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' }).format(new Date())
   const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }
   const dayOfWeek = dayMap[weekday]
+  const schoolDay = dayOfWeek >= 1 && dayOfWeek <= 5
+  fixture.expectedScopedScheduleCount = schoolDay ? 1 : 0
+  fixture.expectedAdminScheduleCount = schoolDay ? 2 : 0
 
   assert.ifError((await service.from('attendance_records').insert([
     { student_id: fixture.studentA, attendance_date: jakartaDate, status: 'present', source: 'manual', check_in: new Date().toISOString(), recorded_by: actors.teacher.id },
@@ -106,10 +109,12 @@ before(async () => {
     { student_id: fixture.studentB, payment_type: 'SPP', amount: 100000, paid_amount: 50000, status: 'partial', created_by: actors.admin.id },
   ])).error)
 
-  assert.ifError((await service.from('school_schedules').insert([
-    { class_name: 'Dashboard RPC A', day_of_week: dayOfWeek, start_time: '07:30', end_time: '08:00', activity: 'Pembukaan A', academic_year: '2026/2027', created_by: actors.admin.id },
-    { class_name: 'Dashboard RPC B', day_of_week: dayOfWeek, start_time: '08:00', end_time: '08:30', activity: 'Pembukaan B', academic_year: '2026/2027', created_by: actors.admin.id },
-  ])).error)
+  if (schoolDay) {
+    assert.ifError((await service.from('school_schedules').insert([
+      { class_name: 'Dashboard RPC A', day_of_week: dayOfWeek, start_time: '07:30', end_time: '08:00', activity: 'Pembukaan A', academic_year: '2026/2027', created_by: actors.admin.id },
+      { class_name: 'Dashboard RPC B', day_of_week: dayOfWeek, start_time: '08:00', end_time: '08:30', activity: 'Pembukaan B', academic_year: '2026/2027', created_by: actors.admin.id },
+    ])).error)
+  }
 
   assert.ifError((await service.from('announcements').insert([
     { title: 'Info Semua Dashboard', body: 'Informasi umum', audience: 'all', is_published: true, created_by: actors.admin.id },
@@ -161,7 +166,7 @@ test('dashboard_summary saat mode OFF menghitung seluruh murid yang terlihat Gur
   assert.equal(summary.unrecorded_today, 1)
   assert.equal(summary.draft_reports, 1)
   assert.equal(summary.open_payments, 0)
-  assert.equal(summary.today_schedule_count, 1)
+  assert.equal(summary.today_schedule_count, fixture.expectedScopedScheduleCount)
   assert.deepEqual(summary.recent_attendance.map((row) => row.student_name), ['Dashboard Murid A'])
 })
 
@@ -176,7 +181,7 @@ test('dashboard_summary saat mode ON membatasi Guru ke kelas yang ditugaskan', a
   assert.equal(summary.unrecorded_today, 0)
   assert.equal(summary.draft_reports, 1)
   assert.equal(summary.open_payments, 0)
-  assert.equal(summary.today_schedule_count, 1)
+  assert.equal(summary.today_schedule_count, fixture.expectedScopedScheduleCount)
   assert.deepEqual(summary.recent_attendance.map((row) => row.student_name), ['Dashboard Murid A'])
   assert.ok(summary.recent_announcements.some((row) => row.title === 'Info Semua Dashboard'))
   assert.ok(summary.recent_announcements.some((row) => row.title === 'Info Guru Dashboard'))
@@ -190,7 +195,7 @@ test('dashboard_summary membatasi Wali ke anak terhubung dan tidak membuka draft
   assert.equal(summary.unrecorded_today, 0)
   assert.equal(summary.draft_reports, 0)
   assert.equal(summary.open_payments, 1)
-  assert.equal(summary.today_schedule_count, 1)
+  assert.equal(summary.today_schedule_count, fixture.expectedScopedScheduleCount)
   assert.deepEqual(summary.recent_attendance, [])
   assert.ok(summary.recent_announcements.some((row) => row.title === 'Info Semua Dashboard'))
   assert.equal(summary.recent_announcements.some((row) => row.title === 'Info Guru Dashboard'), false)
@@ -203,5 +208,5 @@ test('dashboard_summary Admin mendapat ringkasan sekolah tanpa mengubah data', a
   assert.ok(summary.attendance_today >= 2)
   assert.ok(summary.active_accounts >= 3)
   assert.ok(summary.open_payments >= 2)
-  assert.ok(summary.today_schedule_count >= 2)
+  assert.equal(summary.today_schedule_count, fixture.expectedAdminScheduleCount)
 })
