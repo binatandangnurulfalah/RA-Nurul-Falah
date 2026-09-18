@@ -57,6 +57,27 @@ test('mobile menu traps focus, closes with Escape, and restores opener focus', a
   await expectNoHorizontalOverflow(page)
 })
 
+test('mobile form keeps keyboard focus while typing multiple characters', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile')
+
+  await page.goto(portalUrl('admin', 'accounts'))
+  await page.getByRole('button', { name: 'Tambah Akun' }).first().click()
+
+  const dialog = page.getByRole('dialog', { name: 'Tambah Akun' })
+  await expect(dialog).toBeVisible()
+
+  const nameInput = dialog.getByLabel('Nama lengkap')
+  await nameInput.click()
+  await expect(nameInput).toBeFocused()
+
+  for (const character of 'NURUL') {
+    await page.keyboard.type(character)
+    await expect(nameInput).toBeFocused()
+  }
+
+  await expect(nameInput).toHaveValue('NURUL')
+})
+
 test('role navigation does not expose finance module to teacher', async ({ page }, testInfo) => {
   await page.goto(portalUrl('teacher'))
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
