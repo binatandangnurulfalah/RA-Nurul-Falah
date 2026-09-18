@@ -5,6 +5,7 @@ import test from 'node:test'
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
 const migration = read('supabase/migrations/20260918030000_stage11_14_payment_data_model.sql')
+const permissions = read('supabase/migrations/20260918030010_stage11_14_payment_permissions_hardening.sql')
 const payments = read('src/portal-v2/PaymentsPage.tsx')
 const paymentsQuery = read('src/data/queries/payments.ts')
 const types = read('src/lib/database-normalized.types.ts')
@@ -18,6 +19,15 @@ test('tagihan dan transaksi pembayaran dipisah tanpa memutus compatibility aggre
   assert.match(migration, /status = case/)
   assert.match(paymentsQuery, /student_payments_search/)
   assert.match(paymentsQuery, /payment_summary/)
+})
+
+test('permission keuangan menolak anon dan membatasi authenticated ke read-only', () => {
+  assert.match(permissions, /revoke all privileges on table public\.student_payments from anon, authenticated/)
+  assert.match(permissions, /grant select on table public\.student_payments to authenticated/)
+  assert.match(permissions, /revoke all privileges on table public\.payment_transactions from anon, authenticated/)
+  assert.match(permissions, /grant select on table public\.payment_transactions to authenticated/)
+  assert.match(permissions, /revoke all privileges on table public\.student_payments_search from anon, authenticated/)
+  assert.match(permissions, /revoke all on function public\.payment_summary\(uuid\) from public, anon/)
 })
 
 test('browser tidak lagi melakukan direct mutation ke tabel keuangan', () => {
