@@ -909,6 +909,7 @@ export type Database = {
       user_profiles: {
         Row: {
           address: string | null
+          avatar_path: string | null
           bio: string | null
           created_at: string
           display_name: string | null
@@ -920,6 +921,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          avatar_path?: string | null
           bio?: string | null
           created_at?: string
           display_name?: string | null
@@ -931,6 +933,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          avatar_path?: string | null
           bio?: string | null
           created_at?: string
           display_name?: string | null
@@ -1227,6 +1230,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_my_avatar: {
+        Args: { p_avatar_path?: string }
+        Returns: {
+          address: string | null
+          avatar_path: string | null
+          bio: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          is_active: boolean
+          phone: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_my_profile: {
         Args: {
           p_address?: string
@@ -1236,6 +1260,7 @@ export type Database = {
         }
         Returns: {
           address: string | null
+          avatar_path: string | null
           bio: string | null
           created_at: string
           display_name: string | null
