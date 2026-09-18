@@ -33,6 +33,7 @@ import './portal-v2-polish.css'
 import './school-modules.css'
 import './scanner-native.css'
 import './navigation-shell.css'
+import './parent-verification.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
 type NavGroupDefinition = { label: string; ids: readonly string[] }
