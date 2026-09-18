@@ -59,7 +59,7 @@ export function AccountsPage() {
     if (!deleting || removingRef.current) return
     removingRef.current = true
     setRemoving(true)
-    const { data, error } = await invokeObservedFunction('admin-manage-user', { action: 'delete', user_id: deleting.id },)
+    const { data, error } = await invokeObservedFunction('admin-manage-user', { action: 'delete', user_id: deleting.id })
     removingRef.current = false
     setRemoving(false)
     if (error || !data?.ok) {
@@ -81,7 +81,7 @@ export function AccountsPage() {
         action: 'send_password_reset',
         user_id: account.id,
         redirect_to: authRedirectUrl(),
-      },)
+      })
     resetRef.current = false
     setResettingId(null)
     if (error || !data?.ok) {
@@ -239,7 +239,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
         display_name: form.name.trim(),
         role: form.role,
         redirect_to: authRedirectUrl(),
-      },)
+      })
     busyRef.current = false
     setBusy(false)
     if (error || !data?.ok) {
@@ -286,7 +286,7 @@ function EditAccountModal({ account, onClose, onDone }: { account: Account; onCl
         display_name: form.name.trim(),
         role: form.role,
         is_active: form.active,
-      },)
+      })
     busyRef.current = false
     setBusy(false)
     if (error || !data?.ok) {
