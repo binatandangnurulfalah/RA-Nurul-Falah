@@ -36,6 +36,8 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   const parents = lookupQuery.data?.parents ?? []
   const classes = lookupQuery.data?.classes ?? []
   const academicYears = lookupQuery.data?.academicYears ?? []
+  const singleTeacherClassMode = lookupQuery.data?.singleTeacherClassMode ?? true
+  const teacherNeedsAssignment = role === 'teacher' && singleTeacherClassMode && classes.length === 0
   const loading = pageQuery.isPending
   const [editing, setEditing] = useState<Student | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
@@ -101,7 +103,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       description={hasFilters ? 'Ubah kata pencarian atau reset filter untuk melihat data lainnya.' : 'Data murid akan muncul setelah ditambahkan ke sistem.'}
       action={hasFilters
         ? <Button variant="secondary" onClick={resetFilters}>Reset Filter</Button>
-        : canEditStudents ? <Button disabled={role === 'teacher' && !classes.length} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
+        : canEditStudents ? <Button disabled={teacherNeedsAssignment} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
   )
 
@@ -109,12 +111,16 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
     <PageHeader
       eyebrow="AKADEMIK"
       title="Data Murid"
-      subtitle={canManage ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Lihat murid pada kelas yang ditugaskan, tambah atau edit data murid kelas Anda, dan tampilkan QR untuk kebutuhan absensi.'}
-      actions={canEditStudents ? <Button disabled={role === 'teacher' && !classes.length} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
+      subtitle={canManage
+        ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.'
+        : singleTeacherClassMode
+          ? 'Mode 1 Guru = 1 Kelas aktif. Anda hanya melihat dan mengelola murid pada kelas yang ditugaskan.'
+          : 'Mode 1 Guru = 1 Kelas nonaktif. Anda dapat melihat seluruh murid di sistem serta menambah atau mengedit data murid.'}
+      actions={canEditStudents ? <Button disabled={teacherNeedsAssignment} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
     {message && <Notice {...message} />}
-    {role === 'teacher' && !lookupQuery.isPending && !lookupQuery.isError && classes.length === 0 && (
-      <Notice tone="error" text="Anda belum ditugaskan ke kelas. Minta Admin menentukan kelas Guru terlebih dahulu sebelum menambah murid." />
+    {teacherNeedsAssignment && !lookupQuery.isPending && !lookupQuery.isError && (
+      <Notice tone="error" text="Mode 1 Guru = 1 Kelas aktif, tetapi Anda belum ditugaskan ke kelas. Minta Admin menentukan kelas Guru terlebih dahulu." />
     )}
     {lookupQuery.isError && <Notice tone="error" text={userErrorMessage(lookupQuery.error, 'Data pendukung murid gagal dimuat.')} />}
     <section className="v2-panel">
@@ -158,6 +164,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
 
     {editing && canEditStudents && <StudentModal
       role={role}
+      singleTeacherClassMode={singleTeacherClassMode}
       student={editing === 'new' ? null : editing}
       parents={parents}
       classes={classes}
@@ -189,8 +196,9 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
   </div>
 }
 
-function StudentModal({ role, student, parents, classes, academicYears, onClose, onDone }: {
+function StudentModal({ role, singleTeacherClassMode, student, parents, classes, academicYears, onClose, onDone }: {
   role: 'admin' | 'teacher'
+  singleTeacherClassMode: boolean
   student: Student | null
   parents: Account[]
   classes: SchoolClass[]
@@ -200,7 +208,7 @@ function StudentModal({ role, student, parents, classes, academicYears, onClose,
 }) {
   const canManageGuardians = role === 'admin'
   const currentYear = academicYears.find((item) => item.is_current) ?? academicYears[0]
-  const teacherDefaultClass = role === 'teacher'
+  const teacherDefaultClass = role === 'teacher' && singleTeacherClassMode
     ? classes.find((item) => item.academic_year_id === currentYear?.id) ?? classes[0]
     : undefined
   const initialClass = student?.class_id ? classes.find((item) => item.id === student.class_id) : teacherDefaultClass
@@ -260,8 +268,8 @@ function StudentModal({ role, student, parents, classes, academicYears, onClose,
       setErrorText('Pilih tahun ajaran resmi terlebih dahulu.')
       return
     }
-    if (role === 'teacher' && !selectedClass) {
-      setErrorText('Pilih kelas yang ditugaskan kepada Anda terlebih dahulu.')
+    if (role === 'teacher' && singleTeacherClassMode && !selectedClass) {
+      setErrorText('Mode 1 Guru = 1 Kelas aktif. Pilih kelas yang ditugaskan kepada Anda terlebih dahulu.')
       return
     }
     if (selectedClass && selectedClass.academic_year_id !== selectedYear.id) {
@@ -323,15 +331,16 @@ function StudentModal({ role, student, parents, classes, academicYears, onClose,
             {academicYears.map((year) => <option key={year.id} value={year.id}>{year.label}{year.is_current ? ' · Berjalan' : ''}</option>)}
           </select>
         </FormField>
-        <FormField label="Kelompok" required={role === 'teacher'}>
-          <select required={role === 'teacher'} value={form.class_id} onChange={(event) => setForm({ ...form, class_id: event.target.value })}>
-            <option value="">{role === 'teacher' ? 'Pilih kelas yang ditugaskan' : 'Belum ditentukan'}</option>
+        <FormField label="Kelompok" required={role === 'teacher' && singleTeacherClassMode}>
+          <select required={role === 'teacher' && singleTeacherClassMode} value={form.class_id} onChange={(event) => setForm({ ...form, class_id: event.target.value })}>
+            <option value="">{role === 'teacher' && singleTeacherClassMode ? 'Pilih kelas yang ditugaskan' : 'Belum ditentukan'}</option>
             {classesForYear.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}
           </select>
         </FormField>
         <label className="v2-toggle"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Murid aktif</span></label>
       </FormSection>
 
+      {role === 'teacher' && !singleTeacherClassMode ? <p className="full helper-text">Mode 1 Guru = 1 Kelas sedang nonaktif. Anda dapat memilih kelas mana pun yang tersedia atau menyimpan murid tanpa kelas terlebih dahulu.</p> : null}
       {canManageGuardians ? <>
         <fieldset className="full v5-teacher-picker">
           <legend>Wali murid terhubung</legend>
@@ -341,12 +350,14 @@ function StudentModal({ role, student, parents, classes, academicYears, onClose,
           </label>) : <p>Belum ada akun Orang Tua/Wali aktif. Data murid tetap dapat disimpan tanpa akun wali.</p>}
         </fieldset>
         <p className="full helper-text">Satu murid dapat dihubungkan ke beberapa akun wali. Perubahan data murid dan daftar wali disimpan sekaligus dalam satu transaksi.</p>
-      </> : <p className="full helper-text">Guru dapat mengelola data murid pada kelas yang ditugaskan. Pengaitan akun Orang Tua/Wali tetap dikelola oleh Admin dan tidak diubah dari formulir Guru.</p>}
+      </> : <p className="full helper-text">{singleTeacherClassMode
+        ? 'Guru dapat mengelola data murid pada kelas yang ditugaskan.'
+        : 'Guru dapat mengelola seluruh data murid saat pembatasan 1 Guru = 1 Kelas nonaktif.'} Pengaitan akun Orang Tua/Wali tetap dikelola oleh Admin dan tidak diubah dari formulir Guru.</p>}
 
       {errorText && <p className="v2-field-error full">{errorText}</p>}
       <div className="v2-form-actions full">
         <button type="button" className="v2-secondary" disabled={busy} onClick={onClose}>Batal</button>
-        <button className="v2-primary" disabled={busy || guardianLoading || (role === 'teacher' && !form.class_id)}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Murid'}</button>
+        <button className="v2-primary" disabled={busy || guardianLoading || (role === 'teacher' && singleTeacherClassMode && !form.class_id)}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Murid'}</button>
       </div>
     </form>
   </Dialog>

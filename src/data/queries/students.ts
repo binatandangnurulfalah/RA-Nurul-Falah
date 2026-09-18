@@ -49,17 +49,19 @@ export function studentLookupsOptions({ includeParents = false }: { includeParen
       const parentsPromise = includeParents
         ? supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name')
         : Promise.resolve({ data: [] as StudentAccount[], error: null })
-      const [parents, classes, academicYears] = await Promise.all([
+      const [parents, classes, academicYears, schoolSettings] = await Promise.all([
         parentsPromise,
         supabase.from('school_classes').select('id,name,academic_year_id,academic_year,is_active').eq('is_active', true).order('academic_year', { ascending: false }).order('name'),
         supabase.from('academic_years').select('id,label,is_current,is_active').eq('is_active', true).order('start_date', { ascending: false }),
+        supabase.from('school_settings').select('single_teacher_class_mode').eq('id', 1).single(),
       ])
-      const error = parents.error || classes.error || academicYears.error
+      const error = parents.error || classes.error || academicYears.error || schoolSettings.error
       if (error) throw new Error(error.message || 'Data pendukung murid gagal dimuat.')
       return {
         parents: (parents.data as StudentAccount[] | null) ?? [],
         classes: (classes.data as StudentClass[] | null) ?? [],
         academicYears: (academicYears.data as StudentAcademicYear[] | null) ?? [],
+        singleTeacherClassMode: Boolean(schoolSettings.data?.single_teacher_class_mode),
       }
     },
     staleTime: 60_000,
