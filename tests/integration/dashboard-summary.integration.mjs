@@ -34,6 +34,26 @@ async function createActor(name, role) {
   actors[name] = { id: created.user.id, db: dbFor(signed.session.access_token) }
 }
 
+async function setSingleTeacherClassMode(enabled) {
+  const { data: settings, error: settingsError } = await service
+    .from('school_settings')
+    .select('school_name,address,phone,email,late_cutoff,academic_year_id')
+    .eq('id', 1)
+    .single()
+  assert.ifError(settingsError)
+
+  const { error } = await actors.admin.db.rpc('save_school_settings_with_policy', {
+    p_school_name: settings.school_name,
+    p_address: settings.address,
+    p_phone: settings.phone,
+    p_email: settings.email,
+    p_late_cutoff: settings.late_cutoff,
+    p_academic_year_id: settings.academic_year_id,
+    p_single_teacher_class_mode: enabled,
+  })
+  assert.ifError(error)
+}
+
 before(async () => {
   await createActor('admin', 'admin')
   await createActor('teacher', 'teacher')
@@ -98,6 +118,8 @@ before(async () => {
 })
 
 after(async () => {
+  await setSingleTeacherClassMode(false)
+
   const studentIds = [fixture.studentA, fixture.studentB].filter(Boolean)
   const classIds = [fixture.classA, fixture.classB].filter(Boolean)
 
@@ -128,7 +150,23 @@ async function summaryFor(actor) {
   return data
 }
 
-test('dashboard_summary membatasi Guru ke kelas yang ditugaskan', async () => {
+test('dashboard_summary saat mode OFF menghitung seluruh murid yang terlihat Guru', async () => {
+  await setSingleTeacherClassMode(false)
+  const summary = await summaryFor(actors.teacher)
+  assert.equal(summary.role, 'teacher')
+  assert.equal(summary.active_students, 2)
+  assert.equal(summary.attendance_today, 1)
+  assert.equal(summary.late_today, 0)
+  assert.equal(summary.absent_today, 0)
+  assert.equal(summary.unrecorded_today, 1)
+  assert.equal(summary.draft_reports, 1)
+  assert.equal(summary.open_payments, 0)
+  assert.equal(summary.today_schedule_count, 1)
+  assert.deepEqual(summary.recent_attendance.map((row) => row.student_name), ['Dashboard Murid A'])
+})
+
+test('dashboard_summary saat mode ON membatasi Guru ke kelas yang ditugaskan', async () => {
+  await setSingleTeacherClassMode(true)
   const summary = await summaryFor(actors.teacher)
   assert.equal(summary.role, 'teacher')
   assert.equal(summary.active_students, 1)
