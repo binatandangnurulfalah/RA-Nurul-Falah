@@ -5,7 +5,7 @@ import test from 'node:test'
 const documents = await readFile(new URL('../src/portal-v2/DocumentsPage.tsx', import.meta.url), 'utf8')
 const cleanupMigration = await readFile(new URL('../supabase/migrations/20260917050213_document_storage_cleanup_queue.sql', import.meta.url), 'utf8')
 const hardeningMigration = await readFile(new URL('../supabase/migrations/20260917050525_harden_document_storage_cleanup_trigger.sql', import.meta.url), 'utf8')
-const storageArchitectureMigration = await readFile(new URL('../supabase/migrations/20260918015500_stage11_12_storage_document_architecture.sql', import.meta.url), 'utf8')
+const storageArchitectureMigration = await readFile(new URL('../supabase/migrations/20260918021105_stage11_12_storage_document_architecture.sql', import.meta.url), 'utf8')
 const wrapper = await readFile(new URL('../src/portal-v2/SchoolModules.tsx', import.meta.url), 'utf8')
 
 test('dokumen membedakan Storage path internal dari tautan eksternal', () => {
