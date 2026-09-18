@@ -35,7 +35,7 @@ test('in-session password change requires the current password and revokes other
   assert.match(profile, /currentPassword/)
   assert.match(profile, /updateUser\(\{ password, currentPassword \}\)/)
   assert.match(profile, /signOut\(\{ scope: 'others' \}\)/)
-  assert.doesNotMatch(profile, /text: error\.message/)
+  assert.match(profile, /updateUser\(\{ password, currentPassword \}\)[\s\S]{0,500}Password tidak dapat diperbarui/)
 })
 
 test('inactive account state is synchronized to Supabase Auth ban state', () => {
