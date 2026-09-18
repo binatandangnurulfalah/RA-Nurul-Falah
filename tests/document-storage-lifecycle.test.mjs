@@ -6,7 +6,7 @@ const documents = await readFile(new URL('../src/portal-v2/DocumentsPage.tsx', i
 const cleanupMigration = await readFile(new URL('../supabase/migrations/20260917050213_document_storage_cleanup_queue.sql', import.meta.url), 'utf8')
 const hardeningMigration = await readFile(new URL('../supabase/migrations/20260917050525_harden_document_storage_cleanup_trigger.sql', import.meta.url), 'utf8')
 const storageArchitectureMigration = await readFile(new URL('../supabase/migrations/20260918021105_stage11_12_storage_document_architecture.sql', import.meta.url), 'utf8')
-const wrapper = await readFile(new URL('../src/portal-v2/SchoolModules.tsx', import.meta.url), 'utf8')
+const portal = await readFile(new URL('../src/RolePortalV5.tsx', import.meta.url), 'utf8')
 
 test('dokumen membedakan Storage path internal dari tautan eksternal', () => {
   assert.match(documents, /isExternalDocumentUrl/)
@@ -34,10 +34,10 @@ test('perubahan atau penghapusan dokumen mengantrekan file Storage lama', () => 
   assert.match(storageArchitectureMigration, /claim_school_document_storage_cleanup/)
 })
 
-test('portal aktif mengekspor Dokumen dan modul data besar dari implementasi aktifnya', () => {
-  assert.match(wrapper, /TeachersPage.*\.\/TeachersPage/)
-  assert.match(wrapper, /ReportsPage.*\.\/ReportsPage/)
-  assert.match(wrapper, /PaymentsPage.*\.\/PaymentsPage/)
-  assert.match(wrapper, /DocumentsPage.*\.\/DocumentsPage/)
-  assert.doesNotMatch(wrapper, /SchoolModulesLegacy/)
+test('portal aktif lazy-load Dokumen dan modul data besar langsung dari implementasi aktifnya', () => {
+  assert.match(portal, /import\('\.\/portal-v2\/TeachersPage'\)/)
+  assert.match(portal, /import\('\.\/portal-v2\/ReportsPage'\)/)
+  assert.match(portal, /import\('\.\/portal-v2\/PaymentsPage'\)/)
+  assert.match(portal, /import\('\.\/portal-v2\/DocumentsPage'\)/)
+  assert.doesNotMatch(portal, /SchoolModules/)
 })
