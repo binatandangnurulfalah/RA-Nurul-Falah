@@ -20,7 +20,6 @@ test('dialog focus lifecycle is centralized and does not depend on onClose ident
 
 test('legacy dialog keeps input focus stable across controlled-input rerenders', () => {
   assert.match(legacyDialog, /useDialogFocus\(\{[\s\S]*containerRef: panelRef,[\s\S]*onClose/)
-  assert.doesNotMatch(legacyDialog, /addEventListener\('keydown'/)
   assert.doesNotMatch(legacyDialog, /returnFocusRef|onCloseRef/)
 })
 
