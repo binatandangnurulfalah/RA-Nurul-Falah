@@ -51,11 +51,7 @@ type AcademicYearOption = {
   is_active: boolean
 }
 
-const INDONESIA_TIMEZONES = [
-  { value: 'Asia/Jakarta', label: 'WIB · Asia/Jakarta' },
-  { value: 'Asia/Makassar', label: 'WITA · Asia/Makassar' },
-  { value: 'Asia/Jayapura', label: 'WIT · Asia/Jayapura' },
-] as const
+const SCHOOL_TIMEZONE = { value: 'Asia/Jakarta', label: 'WIB · Asia/Jakarta' } as const
 
 const JAKARTA = 'Asia/Jakarta'
 
@@ -247,20 +243,14 @@ export function SettingsPage() {
     setBusy(true)
     setMessage(null)
 
-    const { data: userData } = await supabase.auth.getUser()
-    const { error } = await supabase
-      .from('school_settings')
-      .update({
-        school_name: settings.school_name.trim(),
-        address: settings.address?.trim() || null,
-        phone: settings.phone?.trim() || null,
-        email: settings.email?.trim() || null,
-        timezone: settings.timezone,
-        late_cutoff: settings.late_cutoff,
-        academic_year_id: settings.academic_year_id,
-        updated_by: userData.user?.id || null,
-      })
-      .eq('id', 1)
+    const { error } = await supabase.rpc('save_school_settings', {
+      p_school_name: settings.school_name.trim(),
+      p_address: settings.address?.trim() || null,
+      p_phone: settings.phone?.trim() || null,
+      p_email: settings.email?.trim() || null,
+      p_late_cutoff: settings.late_cutoff,
+      p_academic_year_id: settings.academic_year_id,
+    })
 
     setBusy(false)
     if (error) {
@@ -303,9 +293,10 @@ export function SettingsPage() {
             <label>Batas terlambat<input type="time" required value={settings.late_cutoff.slice(0, 5)} onChange={(event) => setSettings({ ...settings, late_cutoff: event.target.value })} /></label>
             <label>
               Zona waktu
-              <select value={settings.timezone} onChange={(event) => setSettings({ ...settings, timezone: event.target.value })}>
-                {INDONESIA_TIMEZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
+              <select value={SCHOOL_TIMEZONE.value} disabled aria-describedby="school-timezone-help">
+                <option value={SCHOOL_TIMEZONE.value}>{SCHOOL_TIMEZONE.label}</option>
               </select>
+              <small id="school-timezone-help">Zona waktu sekolah dikunci ke WIB sesuai konfigurasi RA Nurul Falah.</small>
             </label>
             <label>Telepon<input inputMode="tel" autoComplete="tel" value={settings.phone || ''} onChange={(event) => setSettings({ ...settings, phone: event.target.value })} /></label>
             <label>Email<input type="email" autoComplete="email" value={settings.email || ''} onChange={(event) => setSettings({ ...settings, email: event.target.value })} /></label>
@@ -320,7 +311,7 @@ export function SettingsPage() {
             <Info label="Nama Sekolah" value={settings.school_name} />
             <Info label="Tahun Ajaran" value={settings.academic_year} />
             <Info label="Batas Terlambat" value={`${settings.late_cutoff.slice(0, 5)} WIB`} />
-            <Info label="Zona Waktu" value={INDONESIA_TIMEZONES.find((zone) => zone.value === settings.timezone)?.label || settings.timezone} />
+            <Info label="Zona Waktu" value={settings.timezone === SCHOOL_TIMEZONE.value ? SCHOOL_TIMEZONE.label : settings.timezone} />
             <Info label="Telepon" value={settings.phone || 'Belum diisi'} />
             <Info label="Email" value={settings.email || 'Belum diisi'} />
             <Info label="Alamat" value={settings.address || 'Belum diisi'} />
