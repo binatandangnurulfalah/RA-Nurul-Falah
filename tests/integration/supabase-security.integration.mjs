@@ -120,6 +120,36 @@ test('master data murid, relasi wali, dan jadwal hanya dapat ditulis Admin', asy
   assert.ifError(unchangedStudentError)
   assert.equal(unchangedStudent.full_name, 'Murid A')
 
+  const teacherOwnCreate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_full_name: 'Murid Dibuat Guru',
+    p_class_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ifError(teacherOwnCreate.error)
+  assert.equal(teacherOwnCreate.data.class_id, fixture.classA)
+
+  const teacherOwnUpdate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_student_id: teacherOwnCreate.data.id,
+    p_full_name: 'Murid Diperbarui Guru',
+    p_class_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ifError(teacherOwnUpdate.error)
+  assert.equal(teacherOwnUpdate.data.full_name, 'Murid Diperbarui Guru')
+
+  const teacherCrossCreate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_full_name: 'Murid Lintas Kelas Ditolak',
+    p_class_name: 'Kelas B',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ok(teacherCrossCreate.error)
+  assert.equal(teacherCrossCreate.error.code, '42501')
+
+  assert.ifError((await actors.admin.db.from('students').delete().eq('id', teacherOwnCreate.data.id)).error)
+
   const teacherRpc = await actors.teacherA.db.rpc('save_student_with_guardians', {
     p_student_id: fixture.studentA,
     p_full_name: 'Murid A',
