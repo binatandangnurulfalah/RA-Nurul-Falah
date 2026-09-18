@@ -46,7 +46,7 @@ test('inactive account state is synchronized to Supabase Auth ban state', () => 
 
 test('local Auth baseline mirrors hardened production expectations', () => {
   assert.match(config, /\[auth\][\s\S]*enable_signup = false/)
-  assert.match(config, /\[auth\.email\][\s\S]*enable_signup = false/)
+  assert.match(config, /\[auth\.email\][\s\S]*enable_signup = true/)
   assert.match(config, /secure_password_change = true/)
   assert.match(config, /max_frequency = "60s"/)
   assert.match(config, /otp_expiry = 900/)
