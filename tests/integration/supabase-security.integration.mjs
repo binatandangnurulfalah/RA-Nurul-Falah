@@ -219,6 +219,57 @@ test('master data murid, relasi wali, dan jadwal hanya dapat ditulis Admin', asy
   assert.ifError((await actors.admin.db.from('school_schedules').delete().eq('id', schedule.id)).error)
 })
 
+test('mode 1 Guru = 1 Kelas menolak penugasan yang bertabrakan', async () => {
+  const { data: settings, error: settingsError } = await actors.admin.db
+    .from('school_settings')
+    .select('school_name,address,phone,email,late_cutoff,academic_year_id,single_teacher_class_mode')
+    .eq('id', 1)
+    .single()
+  assert.ifError(settingsError)
+
+  const enableMode = await actors.admin.db.rpc('save_school_settings_with_policy', {
+    p_school_name: settings.school_name,
+    p_address: settings.address,
+    p_phone: settings.phone,
+    p_email: settings.email,
+    p_late_cutoff: settings.late_cutoff,
+    p_academic_year_id: settings.academic_year_id,
+    p_single_teacher_class_mode: true,
+  })
+  assert.ifError(enableMode.error)
+
+  const twoTeachersOneClass = await actors.admin.db.rpc('save_class_with_assignments', {
+    p_class_id: fixture.classA,
+    p_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_is_active: true,
+    p_teacher_profile_ids: [fixture.teacherA, fixture.teacherB],
+  })
+  assert.ok(twoTeachersOneClass.error)
+  assert.equal(twoTeachersOneClass.error.code, '23514')
+
+  const oneTeacherTwoClasses = await actors.admin.db.rpc('save_class_with_assignments', {
+    p_class_id: fixture.classB,
+    p_name: 'Kelas B',
+    p_academic_year: fixture.academicYearLabelA,
+    p_is_active: true,
+    p_teacher_profile_ids: [fixture.teacherA],
+  })
+  assert.ok(oneTeacherTwoClasses.error)
+  assert.equal(oneTeacherTwoClasses.error.code, '23514')
+
+  const disableMode = await actors.admin.db.rpc('save_school_settings_with_policy', {
+    p_school_name: settings.school_name,
+    p_address: settings.address,
+    p_phone: settings.phone,
+    p_email: settings.email,
+    p_late_cutoff: settings.late_cutoff,
+    p_academic_year_id: settings.academic_year_id,
+    p_single_teacher_class_mode: false,
+  })
+  assert.ifError(disableMode.error)
+})
+
 test('Auth tetap tertutup dan manajemen akun hanya untuk Admin', async () => {
   assert.ok((await createClient(url, anonKey).auth.signUp({ email: 'tanpa-izin@stage11.test', password })).error)
   assert.equal((await invoke('admin-create-user', actors.teacherA, { email: 'ditolak@stage11.test', display_name: 'Ditolak', role: 'parent' })).status, 403)
