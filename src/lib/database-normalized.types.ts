@@ -360,7 +360,7 @@ type ParentVerificationRequestsTable = {
 
 export type Database = Omit<GeneratedDatabase, 'public'> & {
   public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views' | 'Functions'> & {
-    Tables: Omit<BaseTables, 'academic_years' | 'audit_events' | 'school_classes' | 'school_documents' | 'student_payments' | 'payment_transactions' | 'students' | 'school_schedules' | 'school_settings'> & {
+    Tables: Omit<BaseTables, 'academic_years' | 'audit_events' | 'parent_family_profiles' | 'parent_verification_requests' | 'school_classes' | 'school_documents' | 'student_payments' | 'payment_transactions' | 'students' | 'school_schedules' | 'school_settings'> & {
       academic_years: AcademicYearsTable
       parent_family_profiles: ParentFamilyProfilesTable
       parent_verification_requests: ParentVerificationRequestsTable
@@ -390,6 +390,9 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       | 'save_academic_year'
       | 'save_student_with_guardians'
       | 'update_my_avatar'
+      | 'submit_parent_family_verification'
+      | 'submit_parent_child_verification'
+      | 'review_parent_verification_request'
     > & {
       save_school_settings: {
         Args: {
