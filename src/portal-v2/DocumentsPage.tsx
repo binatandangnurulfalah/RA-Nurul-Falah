@@ -15,8 +15,7 @@ import { Notice } from './PortalPages'
 
 type Message = { tone: 'success' | 'error'; text: string }
 type SchoolDocument = SchoolDocumentRow
-type StorageCleanupRow = { id: string; object_path: string; attempts: number }
-type CleanupSummary = { processed: number; failed: number; error: string | null }
+type CleanupSummary = { processed: number; failed: number; skipped: number; pending: number; error: string | null }
 
 const DOCUMENT_BUCKET = 'school-documents'
 const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
@@ -32,8 +31,14 @@ function isExternalDocumentUrl(value?: string | null) {
   return Boolean(value && /^https?:\/\//i.test(value))
 }
 
-function storedDocumentPath(value?: string | null) {
-  return value && !isExternalDocumentUrl(value) ? value : null
+function externalDocumentUrl(row?: SchoolDocument | null) {
+  if (!row) return null
+  return row.external_url || (isExternalDocumentUrl(row.file_url) ? row.file_url : null)
+}
+
+function storedDocumentPath(row?: SchoolDocument | null) {
+  if (!row) return null
+  return row.storage_path || (row.file_url && !isExternalDocumentUrl(row.file_url) ? row.file_url : null)
 }
 
 function documentMimeType(file: File) {
@@ -48,61 +53,34 @@ function safeDocumentFileName(file: File) {
   return `${baseName}.${extension}`
 }
 
-async function enqueueStorageCleanup(objectPath: string, lastError?: string) {
-  const { error } = await supabase
-    .from('school_document_storage_cleanup')
-    .upsert(
-      { object_path: objectPath, attempts: lastError ? 1 : 0, last_error: lastError?.slice(0, 1000) || null },
-      { onConflict: 'object_path' },
-    )
-  return error
-}
-
-async function flushDocumentStorageCleanup(): Promise<CleanupSummary> {
-  const { data, error } = await supabase
-    .from('school_document_storage_cleanup')
-    .select('id,object_path,attempts')
-    .order('queued_at', { ascending: true })
-    .limit(25)
-
-  if (error) return { processed: 0, failed: 0, error: error.message }
-
-  const rows = (data as StorageCleanupRow[] | null) ?? []
-  let processed = 0
-  let failed = 0
-
-  for (const row of rows) {
-    const removal = await supabase.storage.from(DOCUMENT_BUCKET).remove([row.object_path])
-    if (removal.error) {
-      failed += 1
-      await supabase
-        .from('school_document_storage_cleanup')
-        .update({ attempts: row.attempts + 1, last_error: removal.error.message.slice(0, 1000) })
-        .eq('id', row.id)
-      continue
-    }
-
-    const queueDelete = await supabase.from('school_document_storage_cleanup').delete().eq('id', row.id)
-    if (queueDelete.error) {
-      failed += 1
-      continue
-    }
-    processed += 1
+async function processDocumentStorageCleanup(objectPath?: string): Promise<CleanupSummary> {
+  const { data, error } = await supabase.functions.invoke('process-document-storage-cleanup', {
+    body: objectPath ? { object_path: objectPath } : {},
+  })
+  if (error || !data?.ok) {
+    return { processed: 0, failed: 0, skipped: 0, pending: 0, error: data?.error || error?.message || 'Cleanup dokumen gagal diproses.' }
   }
-
-  return { processed, failed, error: null }
+  return {
+    processed: Number(data.processed || 0),
+    failed: Number(data.failed || 0),
+    skipped: Number(data.skipped || 0),
+    pending: Number(data.pending || 0),
+    error: null,
+  }
 }
 
-async function removeUploadedFileOrQueue(objectPath: string) {
-  const removal = await supabase.storage.from(DOCUMENT_BUCKET).remove([objectPath])
-  if (!removal.error) return false
-  await enqueueStorageCleanup(objectPath, removal.error.message)
+async function queueUploadedOrphan(objectPath: string) {
+  const { error } = await supabase.rpc('enqueue_school_document_storage_cleanup', {
+    p_object_path: objectPath,
+  })
+  if (error) return false
+  void processDocumentStorageCleanup()
   return true
 }
 
 function cleanupMessage(summary: CleanupSummary, successText: string) {
-  if (summary.error || summary.failed > 0) {
-    return `${successText} Sebagian file lama belum bisa dibersihkan dan sudah disimpan dalam antrean untuk dicoba lagi otomatis.`
+  if (summary.error || summary.failed > 0 || summary.pending > 0) {
+    return `${successText} Sebagian file lama masih berada dalam antrean cleanup backend dan akan dicoba lagi.`
   }
   return successText
 }
@@ -126,9 +104,9 @@ export function DocumentsPage({ role }: { role: AppRole }) {
 
   useEffect(() => {
     if (!canManage) return
-    void flushDocumentStorageCleanup().then((summary) => {
-      if (summary.error || summary.failed > 0) {
-        setMessage({ tone: 'error', text: 'Ada file lama yang belum dapat dibersihkan. Sistem akan mencoba lagi otomatis saat Admin membuka halaman Dokumen.' })
+    void processDocumentStorageCleanup().then((summary) => {
+      if (summary.error || summary.failed > 0 || summary.pending > 0) {
+        setMessage({ tone: 'error', text: 'Ada file lama yang belum dapat dibersihkan. Cleanup tetap tersimpan aman di antrean backend untuk dicoba lagi.' })
       }
     })
   }, [canManage])
@@ -156,20 +134,23 @@ export function DocumentsPage({ role }: { role: AppRole }) {
 
     const shouldGoBack = rows.length === 1 && page > 1
     setDeleting(null)
-    const cleanup = await flushDocumentStorageCleanup()
+    const cleanup = await processDocumentStorageCleanup()
     setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil dihapus.') })
     await refreshDocuments()
     if (shouldGoBack) filters.setPage(page - 1)
   }
 
   const openDocument = async (row: SchoolDocument) => {
-    if (!row.file_url) return
-    if (isExternalDocumentUrl(row.file_url)) {
-      window.open(row.file_url, '_blank', 'noopener,noreferrer')
+    const externalUrl = externalDocumentUrl(row)
+    if (externalUrl) {
+      window.open(externalUrl, '_blank', 'noopener,noreferrer')
       return
     }
 
-    const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrl(row.file_url, 300)
+    const storagePath = storedDocumentPath(row)
+    if (!storagePath) return
+
+    const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrl(storagePath, 300)
     if (error || !data?.signedUrl) {
       setMessage({ tone: 'error', text: 'Dokumen gagal dibuka. Silakan coba lagi.' })
       return
@@ -178,7 +159,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
   }
 
   const actionItems = (row: SchoolDocument) => [
-    ...(row.file_url ? [{ label: 'Buka dokumen', icon: ExternalLink, onSelect: () => void openDocument(row) }] : []),
+    ...((storedDocumentPath(row) || externalDocumentUrl(row)) ? [{ label: 'Buka dokumen', icon: ExternalLink, onSelect: () => void openDocument(row) }] : []),
     ...(canManage ? [
       { label: 'Edit dokumen', icon: Edit3, onSelect: () => setEditing(row) },
       { label: 'Hapus dokumen', icon: Trash2, danger: true, onSelect: () => setDeleting(row) },
@@ -254,7 +235,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
 
     {editing && canManage && <DocumentModal value={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={async () => {
       setEditing(null)
-      const cleanup = await flushDocumentStorageCleanup()
+      const cleanup = await processDocumentStorageCleanup()
       setMessage({ tone: 'success', text: cleanupMessage(cleanup, 'Dokumen berhasil disimpan.') })
       await refreshDocuments()
     }} />}
@@ -272,7 +253,8 @@ export function DocumentsPage({ role }: { role: AppRole }) {
 }
 
 function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | null; onClose: () => void; onDone: () => void }) {
-  const existingStoredPath = storedDocumentPath(value?.file_url)
+  const existingStoredPath = storedDocumentPath(value)
+  const existingExternalUrl = externalDocumentUrl(value)
   const [form, setForm] = useState({
     title: value?.title || '',
     category: value?.category || 'Umum',
@@ -280,7 +262,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
     date: value?.document_date || '',
     recipient: value?.recipient || '',
     description: value?.description || '',
-    externalUrl: isExternalDocumentUrl(value?.file_url) ? value?.file_url || '' : '',
+    externalUrl: existingExternalUrl || '',
     audience: value?.audience || 'all' as SchoolDocument['audience'],
     published: value?.is_published ?? true,
     removeStoredFile: false,
@@ -322,7 +304,11 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
     busyRef.current = true
     setBusy(true)
     let uploadedPath: string | null = null
-    let fileReference: string | null = externalUrl || (form.removeStoredFile ? null : existingStoredPath)
+    let storagePath: string | null = form.removeStoredFile ? null : existingStoredPath
+    let resolvedExternalUrl: string | null = externalUrl || null
+    let originalFileName: string | null = storagePath ? (value?.original_file_name || storagePath.split('/').pop() || null) : null
+    let mimeType: string | null = storagePath ? value?.mime_type || null : null
+    let fileSizeBytes: number | null = storagePath ? value?.file_size_bytes || null : null
 
     if (file && contentType) {
       uploadedPath = `${new Date().getFullYear()}/${crypto.randomUUID()}-${safeDocumentFileName(file)}`
@@ -333,7 +319,22 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
         setErrorText(upload.error.message)
         return
       }
-      fileReference = uploadedPath
+      storagePath = uploadedPath
+      resolvedExternalUrl = null
+      originalFileName = file.name.slice(0, 255)
+      mimeType = contentType
+      fileSizeBytes = file.size
+    }
+
+    if (resolvedExternalUrl) {
+      storagePath = null
+      originalFileName = null
+      mimeType = null
+      fileSizeBytes = null
+    } else if (!storagePath) {
+      originalFileName = null
+      mimeType = null
+      fileSizeBytes = null
     }
 
     const payload = {
@@ -343,7 +344,11 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
       document_date: form.date || null,
       recipient: form.recipient.trim() || null,
       description: form.description.trim() || null,
-      file_url: fileReference,
+      storage_path: storagePath,
+      external_url: resolvedExternalUrl,
+      original_file_name: originalFileName,
+      mime_type: mimeType,
+      file_size_bytes: fileSizeBytes,
       audience: form.audience,
       is_published: form.published,
     }
@@ -353,10 +358,10 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
 
     if (result.error) {
       let cleanupQueued = false
-      if (uploadedPath) cleanupQueued = await removeUploadedFileOrQueue(uploadedPath)
+      if (uploadedPath) cleanupQueued = await queueUploadedOrphan(uploadedPath)
       busyRef.current = false
       setBusy(false)
-      setErrorText(`${result.error.message}${cleanupQueued ? ' File unggahan baru masuk antrean pembersihan otomatis.' : ''}`)
+      setErrorText(`${result.error.message}${cleanupQueued ? ' File unggahan baru sudah masuk antrean cleanup backend.' : ''}`)
       return
     }
 
@@ -368,7 +373,7 @@ function DocumentModal({ value, onClose, onDone }: { value: SchoolDocument | nul
   const currentFileText = file
     ? file.name
     : existingStoredPath && !form.removeStoredFile
-      ? `File tersimpan: ${existingStoredPath.split('/').pop() || existingStoredPath}`
+      ? `File tersimpan: ${value?.original_file_name || existingStoredPath.split('/').pop() || existingStoredPath}`
       : form.externalUrl
         ? 'Menggunakan tautan eksternal.'
         : 'PDF, JPG, PNG, atau DOCX · maksimal 10 MB'
