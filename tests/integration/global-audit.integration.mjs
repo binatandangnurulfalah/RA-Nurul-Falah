@@ -34,14 +34,23 @@ before(async () => {
   await createActor('auditAdmin', 'admin')
   await createActor('auditTeacher', 'teacher')
 
-  const { data: year, error: yearError } = await actors.auditAdmin.db
-    .from('academic_years')
-    .select('id,label')
-    .eq('is_current', true)
-    .single()
+  const [{ data: year, error: yearError }, { data: settings, error: settingsError }] = await Promise.all([
+    actors.auditAdmin.db
+      .from('academic_years')
+      .select('id,label')
+      .eq('is_current', true)
+      .single(),
+    actors.auditAdmin.db
+      .from('school_settings')
+      .select('school_name,address,phone,email,late_cutoff,academic_year_id')
+      .eq('id', 1)
+      .single(),
+  ])
   assert.ifError(yearError)
+  assert.ifError(settingsError)
   fixture.yearId = year.id
   fixture.yearLabel = year.label
+  fixture.settings = settings
 })
 
 test('audit global menyimpan UUID, integer, dan composite record key dengan actor yang benar', async () => {
@@ -69,10 +78,14 @@ test('audit global menyimpan UUID, integer, dan composite record key dengan acto
     teacher_profile_id: teacher.id,
   })).error)
 
-  assert.ifError((await actors.auditAdmin.db.from('school_settings').update({
-    late_cutoff: '07:16:00',
-    updated_by: actors.auditAdmin.id,
-  }).eq('id', 1)).error)
+  assert.ifError((await actors.auditAdmin.db.rpc('save_school_settings', {
+    p_school_name: fixture.settings.school_name,
+    p_address: fixture.settings.address,
+    p_phone: fixture.settings.phone,
+    p_email: fixture.settings.email,
+    p_late_cutoff: '07:16:00',
+    p_academic_year_id: fixture.settings.academic_year_id,
+  })).error)
 
   const { data: rows, error } = await actors.auditAdmin.db
     .from('audit_events_view')
