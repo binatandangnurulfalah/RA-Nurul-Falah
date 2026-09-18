@@ -47,10 +47,14 @@ before(async () => {
   const { data: classes, error: classError } = await service.from('school_classes').insert([
     { name: 'Kelas A', academic_year: '2026/2027', created_by: actors.admin.id },
     { name: 'Kelas B', academic_year: '2026/2027', created_by: actors.admin.id },
-  ]).select('id,name')
+  ]).select('id,name,academic_year_id,academic_year')
   assert.ifError(classError)
-  fixture.classA = classes.find((row) => row.name === 'Kelas A').id
-  fixture.classB = classes.find((row) => row.name === 'Kelas B').id
+  const classA = classes.find((row) => row.name === 'Kelas A')
+  const classB = classes.find((row) => row.name === 'Kelas B')
+  fixture.classA = classA.id
+  fixture.classB = classB.id
+  fixture.academicYearA = classA.academic_year_id
+  fixture.academicYearLabelA = classA.academic_year
 
   const { data: teachers, error: teacherError } = await service.from('teacher_profiles').insert([
     { full_name: 'Guru A', teacher_user_id: actors.teacherA.id },
@@ -93,6 +97,96 @@ test('RLS membatasi Guru dan Wali ke kelas atau anaknya', async () => {
   }
   const { data: hidden } = await actors.teacherA.db.from('attendance_records').select('id').eq('id', fixture.attendanceB)
   assert.equal(hidden.length, 0)
+})
+
+test('master data murid, relasi wali, dan jadwal hanya dapat ditulis Admin', async () => {
+  const teacherInsert = await actors.teacherA.db.from('students').insert({
+    full_name: 'Murid Ditolak Guru',
+    class_id: fixture.classA,
+    class_name: 'Kelas A',
+    academic_year_id: fixture.academicYearA,
+    academic_year: fixture.academicYearLabelA,
+    created_by: actors.teacherA.id,
+  })
+  assert.ok(teacherInsert.error)
+
+  const teacherUpdate = await actors.teacherA.db.from('students')
+    .update({ full_name: 'Murid A Diubah Guru' })
+    .eq('id', fixture.studentA)
+    .select('id')
+  assert.ifError(teacherUpdate.error)
+  assert.equal(teacherUpdate.data.length, 0)
+  const { data: unchangedStudent, error: unchangedStudentError } = await service.from('students').select('full_name').eq('id', fixture.studentA).single()
+  assert.ifError(unchangedStudentError)
+  assert.equal(unchangedStudent.full_name, 'Murid A')
+
+  const teacherRpc = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_student_id: fixture.studentA,
+    p_full_name: 'Murid A',
+    p_class_name: 'Kelas A',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [actors.parentA.id],
+  })
+  assert.ok(teacherRpc.error)
+  assert.match(teacherRpc.error.message, /Hanya Admin/)
+
+  const guardianInsert = await actors.teacherA.db.from('student_guardians').insert({
+    student_id: fixture.studentA,
+    guardian_user_id: actors.parentB.id,
+    relationship: 'Wali',
+  })
+  assert.ok(guardianInsert.error)
+
+  const guardianDelete = await actors.teacherA.db.from('student_guardians')
+    .delete()
+    .eq('student_id', fixture.studentA)
+    .eq('guardian_user_id', actors.parentA.id)
+    .select('student_id')
+  assert.ifError(guardianDelete.error)
+  assert.equal(guardianDelete.data.length, 0)
+
+  const { data: schedule, error: scheduleError } = await actors.admin.db.from('school_schedules').insert({
+    class_id: fixture.classA,
+    class_name: 'Kelas A',
+    academic_year_id: fixture.academicYearA,
+    academic_year: fixture.academicYearLabelA,
+    day_of_week: 1,
+    start_time: '08:00',
+    end_time: '08:30',
+    activity: 'Kegiatan Tahap 12.5',
+    teacher_name: 'Guru A',
+    created_by: actors.admin.id,
+  }).select('id').single()
+  assert.ifError(scheduleError)
+
+  const teacherScheduleInsert = await actors.teacherA.db.from('school_schedules').insert({
+    class_id: fixture.classA,
+    class_name: 'Kelas A',
+    academic_year_id: fixture.academicYearA,
+    academic_year: fixture.academicYearLabelA,
+    day_of_week: 2,
+    start_time: '08:00',
+    end_time: '08:30',
+    activity: 'Jadwal Ditolak',
+    created_by: actors.teacherA.id,
+  })
+  assert.ok(teacherScheduleInsert.error)
+
+  const teacherScheduleUpdate = await actors.teacherA.db.from('school_schedules')
+    .update({ activity: 'Diubah Guru' })
+    .eq('id', schedule.id)
+    .select('id')
+  assert.ifError(teacherScheduleUpdate.error)
+  assert.equal(teacherScheduleUpdate.data.length, 0)
+
+  const teacherScheduleDelete = await actors.teacherA.db.from('school_schedules')
+    .delete()
+    .eq('id', schedule.id)
+    .select('id')
+  assert.ifError(teacherScheduleDelete.error)
+  assert.equal(teacherScheduleDelete.data.length, 0)
+
+  assert.ifError((await actors.admin.db.from('school_schedules').delete().eq('id', schedule.id)).error)
 })
 
 test('Auth tetap tertutup dan manajemen akun hanya untuk Admin', async () => {
