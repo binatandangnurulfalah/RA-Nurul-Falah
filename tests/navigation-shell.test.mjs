@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const shell = await readFile(new URL('../src/RolePortalV5.tsx', import.meta.url), 'utf8')
 const styles = await readFile(new URL('../src/navigation-shell.css', import.meta.url), 'utf8')
+const focusHook = await readFile(new URL('../src/components/ui/useDialogFocus.ts', import.meta.url), 'utf8')
 
 test('sidebar desktop dikelompokkan sesuai domain utama aplikasi', () => {
   assert.match(shell, /label: 'Ringkasan', ids: \['dashboard'\]/)
@@ -43,5 +44,6 @@ test('state navigasi diekspos ke assistive technology', () => {
   assert.match(shell, /aria-expanded=\{moreOpen\}/)
   assert.match(shell, /aria-controls="mobile-more-menu"/)
   assert.match(shell, /role="dialog" aria-modal="true" aria-label="Menu lainnya"/)
-  assert.match(shell, /event\.key === 'Escape'/)
+  assert.match(shell, /useDialogFocus/)
+  assert.match(focusHook, /event\.key === 'Escape'/)
 })

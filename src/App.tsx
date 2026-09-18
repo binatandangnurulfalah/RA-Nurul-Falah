@@ -4,7 +4,7 @@ import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { validatePassword } from './lib/auth-utils.js'
 
-const RolePortal = lazy(() => import('./RolePortal'))
+const RolePortal = lazy(() => import('./RolePortalV5'))
 
 const ROLE_PATHS: Record<AppRole, string> = {
   admin: '/admin',

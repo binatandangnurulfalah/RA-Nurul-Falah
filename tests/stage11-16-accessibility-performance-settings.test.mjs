@@ -13,6 +13,7 @@ const performanceBudget = read('scripts/verify-performance-build.mjs')
 const migration = read('supabase/migrations/20260918034538_stage11_16_settings_hardening.sql')
 const normalizedTypes = read('src/lib/database-normalized.types.ts')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
+const focusHook = read('src/components/ui/useDialogFocus.ts')
 
 test('portal menyediakan skip link, main landmark, focus route, dan judul halaman dinamis', () => {
   assert.match(shell, /className="skip-link" href="#main-content"/)
@@ -28,13 +29,13 @@ test('portal menyediakan skip link, main landmark, focus route, dan judul halama
 
 test('menu mobile dialog memiliki focus trap, escape close, dan focus restore', () => {
   assert.match(shell, /sheetRef/)
-  assert.match(shell, /moreButtonRef/)
-  assert.match(shell, /event\.key === 'Escape'/)
-  assert.match(shell, /event\.key !== 'Tab'/)
-  assert.match(shell, /last\.focus\(\)/)
-  assert.match(shell, /first\.focus\(\)/)
-  assert.match(shell, /opener\?\.focus\(\)/)
+  assert.match(shell, /useDialogFocus/)
   assert.match(shell, /aria-haspopup="dialog"/)
+  assert.match(focusHook, /event\.key === 'Escape'/)
+  assert.match(focusHook, /event\.key !== 'Tab'/)
+  assert.match(focusHook, /lastItem\.focus\(\)/)
+  assert.match(focusHook, /firstItem\.focus\(\)/)
+  assert.match(focusHook, /previousActive\?\.focus\(\)/)
 })
 
 test('feedback dan reduced motion tetap accessible', () => {

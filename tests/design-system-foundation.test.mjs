@@ -8,6 +8,7 @@ const design = read('src/design-system.css')
 const main = read('src/main.tsx')
 const uiIndex = read('src/components/ui/index.ts')
 const dialog = read('src/components/ui/Dialog.tsx')
+const dialogFocus = read('src/components/ui/useDialogFocus.ts')
 
 test('design tokens memakai palette Tahap 11 sebagai source of truth', () => {
   const required = [
@@ -37,10 +38,11 @@ test('primitive UI reusable tersedia dan memakai class design system', () => {
 })
 
 test('Dialog foundation memiliki escape, focus loop, aria-modal, dan return focus', () => {
-  assert.match(dialog, /event\.key === 'Escape'/)
-  assert.match(dialog, /event\.key !== 'Tab'/)
+  assert.match(dialog, /useDialogFocus/)
   assert.match(dialog, /aria-modal="true"/)
-  assert.match(dialog, /previousActive\?\.focus\(\)/)
+  assert.match(dialogFocus, /event\.key === 'Escape'/)
+  assert.match(dialogFocus, /event\.key !== 'Tab'/)
+  assert.match(dialogFocus, /previousActive\?\.focus\(\)/)
 })
 
 test('reduced motion dan focus-visible dipertahankan', () => {

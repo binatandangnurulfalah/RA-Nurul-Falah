@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
 
-const [attendance, accounts, teachers, reports, payments, documents, documentPage, modules, migration, manifestText] = await Promise.all([
+const [attendance, accounts, teachers, reports, payments, documents, documentPage, portal, migration, manifestText] = await Promise.all([
   read('../src/data/queries/attendance.ts'),
   read('../src/data/queries/accounts.ts'),
   read('../src/data/queries/teachers.ts'),
@@ -12,7 +12,7 @@ const [attendance, accounts, teachers, reports, payments, documents, documentPag
   read('../src/data/queries/payments.ts'),
   read('../src/data/queries/documents.ts'),
   read('../src/portal-v2/DocumentsPage.tsx'),
-  read('../src/portal-v2/SchoolModules.tsx'),
+  read('../src/RolePortalV5.tsx'),
   read('../supabase/migrations/20260917071352_stage7_server_search_pagination.sql'),
   read('../supabase/production-migration-manifest.json'),
 ])
@@ -59,12 +59,12 @@ test('dokumen memakai pencarian dan pagination server-side tanpa merusak lifecyc
   assert.ok(!documents.includes('usePaginatedItems'))
 })
 
-test('portal aktif memakai modul server-paginated baru', () => {
-  assert.ok(modules.includes("export { TeachersPage } from './TeachersPage'"))
-  assert.ok(modules.includes("export { ReportsPage } from './ReportsPage'"))
-  assert.ok(modules.includes("export { PaymentsPage } from './PaymentsPage'"))
-  assert.ok(modules.includes("export { DocumentsPage } from './DocumentsPage'"))
-  assert.ok(!modules.includes('SchoolModulesLegacy'))
+test('portal aktif lazy-load modul server-paginated langsung dari sumbernya', () => {
+  assert.ok(portal.includes("import('./portal-v2/TeachersPage')"))
+  assert.ok(portal.includes("import('./portal-v2/ReportsPage')"))
+  assert.ok(portal.includes("import('./portal-v2/PaymentsPage')"))
+  assert.ok(portal.includes("import('./portal-v2/DocumentsPage')"))
+  assert.ok(!portal.includes("import('./portal-v2/SchoolModules')"))
 })
 
 test('migration stage 7 mempertahankan RLS lewat security_invoker dan sinkron dengan produksi', () => {

@@ -8,7 +8,6 @@ const packageJson = JSON.parse(read('package.json'))
 const main = read('src/main.tsx')
 const queryClient = read('src/data/queryClient.ts')
 const queryKeys = read('src/data/queryKeys.ts')
-const queryIndex = read('src/data/queries/index.ts')
 const filters = read('src/data/useDataFilters.ts')
 const forms = read('src/components/forms/FormField.tsx')
 const boundary = read('src/components/AppErrorBoundary.tsx')
@@ -52,14 +51,16 @@ test('11.8 foundation tetap terpasang di root dengan konfigurasi cache yang terk
   assert.match(queryClient, /mutations:[\s\S]*retry: 0/)
 })
 
-test('query key dan query exports mencakup seluruh domain target 11.8', () => {
+test('query key dan query modules mencakup seluruh domain target 11.8', () => {
   const domains = ['students', 'attendance', 'teachers', 'accounts', 'payments', 'documents', 'announcements', 'dashboard']
   for (const domain of domains) {
     assert.match(queryKeys, new RegExp(`${domain}: scoped\\('${domain}'\\)`), `${domain} kehilangan scoped query key`)
   }
-  for (const moduleName of ['students', 'teachers', 'attendance', 'accounts', 'payments', 'documents', 'dashboard', 'announcements']) {
-    assert.match(queryIndex, new RegExp(`from './${moduleName}'`), `${moduleName} belum diekspor dari query layer`)
+  for (const [name, source] of Object.entries(paginatedQueries)) {
+    assert.match(source, /queryOptions|keepPreviousData/, `${name} kehilangan TanStack query contract`)
   }
+  assert.match(dashboardQuery, /queryOptions/)
+  assert.match(announcementsQuery, /queryOptions/)
 })
 
 test('URL-backed filter architecture menjaga page normalization dan reset pagination', () => {

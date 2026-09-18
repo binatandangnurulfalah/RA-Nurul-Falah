@@ -21,7 +21,6 @@ import {
 import { dashboardSummaryOptions, parentTodayAttendanceOptions, type DashboardAttendanceItem, type DashboardSummary } from '../data/queries/dashboard'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { Dialog, LoadError, useChildSelection } from './AppExperience'
-import '../dashboard-v11.css'
 
 type Student = {
   id: string
