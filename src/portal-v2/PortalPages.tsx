@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { dashboardSummaryOptions, parentTodayAttendanceOptions, type DashboardAttendanceItem, type DashboardSummary } from '../data/queries/dashboard'
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
-import { Dialog, LoadError, useChildSelection } from './AppExperience'
+import { LoadError, useChildSelection } from './AppExperience'
 
 
 type SchoolSetting = {
@@ -67,7 +67,7 @@ export function DashboardPage({ role, profile, go }: { role: AppRole; profile: U
   }
 
   if (role === 'parent') {
-    const children = childSelection.children as Student[]
+    const children = childSelection.children
     const child = children.find((item) => item.id === childSelection.selectedChildId) ?? children[0]
     return (
       <div className="v2-stack">
