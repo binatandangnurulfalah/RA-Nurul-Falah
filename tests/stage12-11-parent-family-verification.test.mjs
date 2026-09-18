@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const migration = read('supabase/migrations/20260919100000_stage12_11_parent_family_verification.sql')
+const migration = read('supabase/migrations/20260918192125_stage12_11_parent_family_verification.sql')
 const portal = read('src/RolePortalV5.tsx')
 const parentPage = read('src/portal-v2/ParentFamilyPage.tsx')
 const verificationPage = read('src/portal-v2/ParentVerificationPage.tsx')
