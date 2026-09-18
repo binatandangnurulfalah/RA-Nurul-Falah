@@ -1,21 +1,38 @@
 export const PWA_UPDATE_EVENT = 'ra-pwa-update'
 const UPDATE_PENDING_KEY = 'ra_pwa_update_pending'
 const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000
+const VERSION_TIMEOUT = 1500
 
 type PwaUpdateDetail = {
   registration: ServiceWorkerRegistration
   buildId: string
 }
 
-function notifyUpdate(registration: ServiceWorkerRegistration) {
+async function workerBuildId(worker: ServiceWorker | null) {
+  if (!worker) return null
+
+  return await new Promise<string | null>((resolve) => {
+    const channel = new MessageChannel()
+    const timeout = window.setTimeout(() => resolve(null), VERSION_TIMEOUT)
+    channel.port1.onmessage = (event) => {
+      window.clearTimeout(timeout)
+      const buildId = typeof event.data?.buildId === 'string' ? event.data.buildId : null
+      resolve(buildId)
+    }
+    worker.postMessage({ type: 'GET_VERSION' }, [channel.port2])
+  })
+}
+
+async function notifyUpdate(registration: ServiceWorkerRegistration) {
+  const buildId = await workerBuildId(registration.waiting)
   window.dispatchEvent(new CustomEvent<PwaUpdateDetail>(PWA_UPDATE_EVENT, {
-    detail: { registration, buildId: __RA_BUILD_ID__ },
+    detail: { registration, buildId: buildId || 'unknown' },
   }))
 }
 
 function checkRegistration(registration: ServiceWorkerRegistration) {
   if (registration.waiting && navigator.serviceWorker.controller) {
-    notifyUpdate(registration)
+    void notifyUpdate(registration)
   }
 
   registration.addEventListener('updatefound', () => {
@@ -28,7 +45,7 @@ function checkRegistration(registration: ServiceWorkerRegistration) {
         && navigator.serviceWorker.controller
         && registration.waiting
       ) {
-        notifyUpdate(registration)
+        void notifyUpdate(registration)
       }
     })
   })
@@ -81,6 +98,17 @@ export function applyPwaUpdate(registration: ServiceWorkerRegistration) {
   sessionStorage.setItem(UPDATE_PENDING_KEY, '1')
   registration.waiting.postMessage({ type: 'SKIP_WAITING' })
   return true
+}
+
+export async function applyWaitingPwaUpdate() {
+  if (!('serviceWorker' in navigator)) return false
+  const registration = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL)
+  if (!registration) return false
+
+  if (!registration.waiting) {
+    await registration.update().catch(() => undefined)
+  }
+  return applyPwaUpdate(registration)
 }
 
 if ('serviceWorker' in navigator) {
