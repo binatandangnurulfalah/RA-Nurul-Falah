@@ -232,9 +232,9 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     <div className="v2-stack profile-v3">
       <PageTitle
         eyebrow="PROFIL PENGGUNA"
-        title={profile.role === 'teacher' ? 'Profil Guru' : profile.role === 'parent' ? 'Profil Keluarga' : 'Profil Administrator'}
-        text="Kelola data pribadi dan keamanan akun dari satu halaman."
-        action={!editing ? <button className="v2-primary" onClick={() => { setEditing(true); setMessage(null) }}><Edit3 size={17} /> Edit Profil</button> : undefined}
+        title={profile.role === 'teacher' ? 'Profil Guru' : profile.role === 'parent' ? 'Profil Akun' : 'Profil Administrator'}
+        text={profile.role === 'parent' ? 'Foto dan keamanan akun dikelola di sini. Identitas, kontak, dan alamat resmi diajukan melalui menu Data Keluarga.' : 'Kelola data pribadi dan keamanan akun dari satu halaman.'}
+        action={!editing && profile.role !== 'parent' ? <button className="v2-primary" onClick={() => { setEditing(true); setMessage(null) }}><Edit3 size={17} /> Edit Profil</button> : undefined}
       />
 
       {message && <Notice {...message} />}
@@ -292,7 +292,16 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
             <UserRound size={22} />
           </div>
 
-          {editing ? (
+          {profile.role === 'parent' ? (
+            <>
+              <div className="profile-v3-info">
+                <InfoRow icon={<UserRound size={17} />} label="Nama akun terverifikasi" value={profile.display_name || 'Belum diisi'} filled={Boolean(profile.display_name)} />
+                <InfoRow icon={<Phone size={17} />} label="Telepon resmi" value={profile.phone || 'Belum diisi'} filled={Boolean(profile.phone)} />
+                <InfoRow icon={<MapPin size={17} />} label="Alamat resmi" value={profile.address || 'Belum diisi'} filled={Boolean(profile.address)} />
+              </div>
+              <div className="profile-v3-hint"><ShieldCheck size={16} /><span>Perubahan nama, telepon, alamat, data Ayah/Ibu/Wali, dan data anak harus diajukan melalui menu <strong>Data Keluarga</strong> agar diverifikasi Guru.</span></div>
+            </>
+          ) : editing ? (
             <form className="v2-form profile-v3-form" onSubmit={saveProfile}>
               <label>Nama lengkap
                 <input required maxLength={120} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} autoComplete="name" />
