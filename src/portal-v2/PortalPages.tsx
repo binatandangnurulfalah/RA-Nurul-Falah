@@ -42,6 +42,7 @@ type SchoolSetting = {
   late_cutoff: string
   academic_year: string
   academic_year_id: string
+  single_teacher_class_mode: boolean
 }
 
 type AcademicYearOption = {
@@ -206,7 +207,7 @@ export function SettingsPage() {
     const [settingsResult, yearsResult] = await Promise.all([
       supabase
         .from('school_settings')
-        .select('id,school_name,address,phone,email,timezone,late_cutoff,academic_year,academic_year_id')
+        .select('id,school_name,address,phone,email,timezone,late_cutoff,academic_year,academic_year_id,single_teacher_class_mode')
         .eq('id', 1)
         .single(),
       supabase
@@ -243,13 +244,14 @@ export function SettingsPage() {
     setBusy(true)
     setMessage(null)
 
-    const { error } = await supabase.rpc('save_school_settings', {
+    const { error } = await supabase.rpc('save_school_settings_with_policy', {
       p_school_name: settings.school_name.trim(),
       p_address: settings.address?.trim() || null,
       p_phone: settings.phone?.trim() || null,
       p_email: settings.email?.trim() || null,
       p_late_cutoff: settings.late_cutoff,
       p_academic_year_id: settings.academic_year_id,
+      p_single_teacher_class_mode: settings.single_teacher_class_mode,
     })
 
     setBusy(false)
@@ -276,7 +278,7 @@ export function SettingsPage() {
       <PageTitle
         eyebrow="KONFIGURASI"
         title="Pengaturan Sekolah"
-        text="Nilai ini digunakan langsung oleh sistem, termasuk tahun ajaran canonical dan batas terlambat absensi."
+        text="Kelola identitas sekolah, tahun ajaran, batas terlambat, dan aturan pembagian Guru dengan kelas."
         action={!editing ? <button className="v2-primary" onClick={() => setEditing(true)}><Edit3 size={17} /> Edit Pengaturan</button> : undefined}
       />
       {message && <Notice {...message} />}
@@ -301,6 +303,15 @@ export function SettingsPage() {
             <label>Telepon<input inputMode="tel" autoComplete="tel" value={settings.phone || ''} onChange={(event) => setSettings({ ...settings, phone: event.target.value })} /></label>
             <label>Email<input type="email" autoComplete="email" value={settings.email || ''} onChange={(event) => setSettings({ ...settings, email: event.target.value })} /></label>
             <label className="full">Alamat<textarea rows={3} autoComplete="street-address" value={settings.address || ''} onChange={(event) => setSettings({ ...settings, address: event.target.value })} /></label>
+            <label className="v2-toggle full">
+              <input
+                type="checkbox"
+                checked={settings.single_teacher_class_mode}
+                onChange={(event) => setSettings({ ...settings, single_teacher_class_mode: event.target.checked })}
+              />
+              <span>Aktifkan pola 1 Guru = 1 Kelas</span>
+            </label>
+            <p className="helper-text full">Jika aktif, setiap kelas maksimal memiliki satu Guru dan setiap Guru maksimal mewakili satu kelas pada tahun ajaran yang sama. Guru tetap dapat menambah dan mengedit murid pada kelas yang ditugaskan kepadanya.</p>
             <div className="v2-form-actions full">
               <button type="button" className="v2-secondary" disabled={busy} onClick={() => { setEditing(false); setMessage(null); void load() }}>Batal</button>
               <button className="v2-primary" disabled={busy || !academicYears.length}><Save size={17} /> {busy ? 'Menyimpan...' : 'Simpan Pengaturan'}</button>
@@ -315,6 +326,7 @@ export function SettingsPage() {
             <Info label="Telepon" value={settings.phone || 'Belum diisi'} />
             <Info label="Email" value={settings.email || 'Belum diisi'} />
             <Info label="Alamat" value={settings.address || 'Belum diisi'} />
+            <Info label="Pola Guru & Kelas" value={settings.single_teacher_class_mode ? '1 Guru = 1 Kelas' : 'Fleksibel'} />
           </div>
         )}
       </section>
