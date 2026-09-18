@@ -7,10 +7,17 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#f5f7f5",
   "theme_color": "#174b3b",
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "logo-ra-nurul-falah.svg",
@@ -38,5 +45,6 @@
         }
       ]
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }
