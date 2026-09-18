@@ -34,7 +34,9 @@ test('start dan switch kamera memiliki synchronous guard serta fallback kamera l
 })
 
 test('kegagalan invoke attendance menjadi feedback UI tanpa mengubah edge function contract', () => {
-  assert.match(scanner, /supabase\.functions\.invoke\('record-attendance'/)
+  assert.match(scanner, /invokeObservedFunction\('record-attendance'/)
+  const observedServices = readFileSync(new URL('../src/lib/observed-services.ts', import.meta.url), 'utf8')
+  assert.match(observedServices, /supabase\.functions\.invoke\(functionName/)
   assert.match(scanner, /catch \{[\s\S]*Absensi gagal disimpan\. Periksa koneksi/)
   assert.match(scanner, /busyRef\.current/)
   assert.match(scanner, /lastScanRef\.current/)
