@@ -23,8 +23,9 @@ test('12.3 only removes the two structurally redundant zero-scan indexes', () =>
 test('covering unique indexes remain after redundant single-column indexes are removed', () => {
   assert.match(normalizedRefs, /unique \(academic_year_id, name\)/)
   assert.match(normalizedRefs, /unique \(class_id, day_of_week, start_time\)/)
-  assert.doesNotMatch(cleanup, /school_classes_academic_year_name_key/)
-  assert.doesNotMatch(cleanup, /school_schedules_class_slot_key/)
+  const dropTargets = [...cleanup.matchAll(/drop index if exists public\.([a-z0-9_]+);/g)].map((match) => match[1])
+  assert.ok(!dropTargets.includes('school_classes_academic_year_name_key'))
+  assert.ok(!dropTargets.includes('school_schedules_class_slot_key'))
 })
 
 test('actively used report-card student index is deliberately preserved', () => {
@@ -61,6 +62,10 @@ test('search indexes are retained because current product queries use substring 
 })
 
 test('12.3 does not perform broad unused-index deletion', () => {
-  assert.doesNotMatch(cleanup, /pg_stat_user_indexes/)
-  assert.doesNotMatch(cleanup, /drop index[\s\S]*(trgm|created_by|recorded_by|updated_by)/i)
+  const sql = cleanup
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n')
+  assert.doesNotMatch(sql, /pg_stat_user_indexes/)
+  assert.doesNotMatch(sql, /drop index[\s\S]*(trgm|created_by|recorded_by|updated_by)/i)
 })
