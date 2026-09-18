@@ -14,11 +14,11 @@ const announcements = read('src/portal-v2/AnnouncementsPage.tsx')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 const migration = read('supabase/migrations/20260918092710_stage12_5_role_permission_hardening.sql')
 
-test('teacher student UI retains scoped read and QR while later policy may add guarded editing', () => {
+test('teacher student UI retains QR and role-aware management after later scope policies', () => {
   assert.match(students, /const canManage = role === 'admin'/)
   assert.match(students, /Tampilkan QR/)
   assert.match(students, /\.\.\.\(canManage \? \[/)
-  assert.match(students, /Lihat murid pada kelas yang ditugaskan/)
+  assert.match(students, /Mode 1 Guru = 1 Kelas aktif/)
   assert.match(students, /role: 'admin' \| 'teacher'/)
 })
 
