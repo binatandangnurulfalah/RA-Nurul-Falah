@@ -21,6 +21,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import { ProfileAvatar } from './components/ProfileAvatar'
 import { announcementUnreadCountOptions } from './data/queries/announcements'
 import { useAnnouncementRealtime } from './data/useAnnouncementRealtime'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
@@ -269,7 +270,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
             </div>
           ))}
         </nav>
-        <div className="v2-sidebar-profile"><span className="v2-avatar large">{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || roleLabel(currentProfile.role)}</strong><small>{roleLabel(currentProfile.role)}</small></div><button aria-label="Keluar" onClick={() => void logout()}><LogOut size={18} /></button></div>
+        <div className="v2-sidebar-profile"><ProfileAvatar profile={currentProfile} className="v2-avatar large" /><div><strong>{currentProfile.display_name || roleLabel(currentProfile.role)}</strong><small>{roleLabel(currentProfile.role)}</small></div><button aria-label="Keluar" onClick={() => void logout()}><LogOut size={18} /></button></div>
       </aside>
 
       <div className="v2-main">
@@ -278,7 +279,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
           <div className="v2-top-title"><h1 id="portal-page-title">{active.label}</h1><small>{roleLabel(currentProfile.role)}</small></div>
           <div className="v2-top-actions">
             <button className="v2-bell" onClick={() => go('announcements')} aria-label="Buka pengumuman" aria-current={active.id === 'announcements' ? 'page' : undefined}><Bell size={20} />{announcementCount > 0 && <i>{Math.min(announcementCount, 9)}</i>}</button>
-            <button className={`v2-top-profile ${active.id === 'profile' ? 'active' : ''}`} onClick={() => go('profile')} aria-label="Buka profil" aria-current={active.id === 'profile' ? 'page' : undefined}><span>{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button>
+            <button className={`v2-top-profile ${active.id === 'profile' ? 'active' : ''}`} onClick={() => go('profile')} aria-label="Buka profil" aria-current={active.id === 'profile' ? 'page' : undefined}><ProfileAvatar profile={currentProfile} /><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button>
           </div>
         </header>
 
