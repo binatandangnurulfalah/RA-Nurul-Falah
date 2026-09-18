@@ -102,7 +102,7 @@ const menus: Record<AppRole, NavItem[]> = {
 const desktopNavGroups: Record<AppRole, readonly NavGroupDefinition[]> = {
   admin: [
     { label: 'Ringkasan', ids: ['dashboard'] },
-    { label: 'Akademik', ids: ['students', 'teachers', 'classes', 'schedule', 'reports', 'verification'] },
+    { label: 'Akademik', ids: ['students', 'teachers', 'classes', 'schedule', 'reports'] },
     { label: 'Kehadiran', ids: ['attendance', 'attendance-data'] },
     { label: 'Administrasi', ids: ['payments', 'documents', 'announcements'] },
     { label: 'Sistem', ids: ['accounts', 'verification', 'audit', 'settings'] },
