@@ -9,7 +9,7 @@ const portal = read('src/RolePortalV5.tsx')
 const accounts = read('src/portal-v2/AccountsPage.tsx')
 const accountQuery = read('src/data/queries/accounts.ts')
 const avatar = read('src/components/ProfileAvatar.tsx')
-const migration = read('supabase/migrations/20260918115000_stage12_8_profile_photo_upload.sql')
+const migration = read('supabase/migrations/20260918115932_stage12_8_profile_photo_upload.sql')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 
 test('profile photo storage is private, size-limited, and scoped to the signed-in user', () => {
