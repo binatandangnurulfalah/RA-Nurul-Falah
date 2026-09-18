@@ -201,3 +201,32 @@ body {
   .v2-modal:has(.v5-print-document) > .v5-print-button { display: none !important; }
   .v5-print-document { color: #111; }
 }
+
+
+.skip-link {
+  position: fixed;
+  z-index: 2000;
+  top: 8px;
+  left: 8px;
+  transform: translateY(-160%);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  background: var(--color-text);
+  color: #fff;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform var(--transition-fast);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+#main-content:focus {
+  outline: none;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  scroll-margin: 96px;
+}
