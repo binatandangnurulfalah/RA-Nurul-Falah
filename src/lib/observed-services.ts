@@ -1,7 +1,7 @@
 import { reportOperationalError, responseStatus } from './observability'
 import { supabase } from './supabase'
 
-export async function invokeObservedFunction(functionName: string, body: unknown) {
+export async function invokeObservedFunction(functionName: string, body: Record<string, unknown>) {
   try {
     const result = await supabase.functions.invoke(functionName, { body })
     if (result.error) {
