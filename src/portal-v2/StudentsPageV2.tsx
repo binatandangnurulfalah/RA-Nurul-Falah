@@ -350,7 +350,9 @@ function StudentModal({ role, singleTeacherClassMode, student, parents, classes,
           </label>) : <p>Belum ada akun Orang Tua/Wali aktif. Data murid tetap dapat disimpan tanpa akun wali.</p>}
         </fieldset>
         <p className="full helper-text">Satu murid dapat dihubungkan ke beberapa akun wali. Perubahan data murid dan daftar wali disimpan sekaligus dalam satu transaksi.</p>
-      </> : <p className="full helper-text">Guru dapat mengelola data murid pada kelas yang ditugaskan. Pengaitan akun Orang Tua/Wali tetap dikelola oleh Admin dan tidak diubah dari formulir Guru.</p>}
+      </> : <p className="full helper-text">{singleTeacherClassMode
+        ? 'Guru dapat mengelola data murid pada kelas yang ditugaskan.'
+        : 'Guru dapat mengelola seluruh data murid saat pembatasan 1 Guru = 1 Kelas nonaktif.'} Pengaitan akun Orang Tua/Wali tetap dikelola oleh Admin dan tidak diubah dari formulir Guru.</p>}
 
       {errorText && <p className="v2-field-error full">{errorText}</p>}
       <div className="v2-form-actions full">
