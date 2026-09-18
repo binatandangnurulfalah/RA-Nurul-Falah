@@ -133,7 +133,7 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
     }
 
     setPasswordBusy(true)
-    const { error } = await supabase.auth.updateUser({ password, currentPassword })
+    const { error } = await supabase.auth.updateUser({ password, current_password: currentPassword })
     setPasswordBusy(false)
 
     if (error) {
