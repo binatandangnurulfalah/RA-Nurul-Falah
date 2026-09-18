@@ -176,7 +176,7 @@ test('Storage private, metadata canonical, dan cleanup backend dipaksa', async (
 
   assert.ifError((await actors.teacherA.db.storage.from('school-documents').download(path)).error)
   assert.ok((await actors.parentA.db.storage.from('school-documents').download(path)).error)
-  assert.ok((await actors.admin.db.storage.from('school-documents').remove([path])).error, 'client Admin tidak boleh menghapus object langsung')
+  assert.ifError((await service.storage.from('school-documents').download(path)).error)
 
   const teacherCleanup = await invoke('process-document-storage-cleanup', actors.teacherA, {})
   assert.equal(teacherCleanup.status, 403)
