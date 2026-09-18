@@ -56,11 +56,13 @@ export async function registerPwa() {
 
     const interval = window.setInterval(requestUpdate, UPDATE_CHECK_INTERVAL)
     window.addEventListener('online', requestUpdate)
+    window.addEventListener('focus', requestUpdate)
     document.addEventListener('visibilitychange', requestUpdate)
 
     window.addEventListener('pagehide', () => {
       window.clearInterval(interval)
       window.removeEventListener('online', requestUpdate)
+      window.removeEventListener('focus', requestUpdate)
       document.removeEventListener('visibilitychange', requestUpdate)
     }, { once: true })
 
