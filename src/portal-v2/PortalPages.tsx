@@ -1,6 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { QRCodeSVG } from 'qrcode.react'
 import {
   AlertTriangle,
   Bell,
@@ -22,14 +21,6 @@ import { dashboardSummaryOptions, parentTodayAttendanceOptions, type DashboardAt
 import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { Dialog, LoadError, useChildSelection } from './AppExperience'
 
-type Student = {
-  id: string
-  full_name: string
-  nis: string | null
-  class_name: string | null
-  academic_year: string | null
-  qr_token: string
-}
 
 type SchoolSetting = {
   id: number
@@ -173,21 +164,6 @@ function DashboardInfoGrid({ summary, role, go }: { summary: DashboardSummary | 
 
 function DashboardMiniEmpty({ icon: Icon, text }: { icon: typeof UsersRound; text: string }) {
   return <div className="v11-mini-empty"><Icon size={20} /><span>{text}</span></div>
-}
-
-export function ChildrenPage() {
-  const [students, setStudents] = useState<Student[]>([])
-  const [selected, setSelected] = useState<Student | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    void supabase.from('students').select('id,full_name,nis,class_name,academic_year,qr_token').order('full_name').then(({ data }) => {
-      setStudents((data as Student[] | null) ?? [])
-      setLoading(false)
-    })
-  }, [])
-
-  return <div className="v2-stack"><PageTitle eyebrow="DATA KELUARGA" title="Data Anak" text="Data resmi anak yang terhubung dengan akun wali." />{loading ? <SkeletonRows /> : students.length ? <div className="v2-card-grid">{students.map((student) => <article className="v2-person-card" key={student.id}><span>{initials(student.full_name)}</span><div><h3>{student.full_name}</h3><p>{student.class_name || 'Belum ada kelompok'}</p><small>{student.nis ? `NIS ${student.nis}` : 'NIS belum diisi'} · {student.academic_year || '-'}</small></div><button onClick={() => setSelected(student)}><QrCode size={17} /> Tampilkan QR</button></article>)}</div> : <EmptyCard text="Belum ada anak yang terhubung." />}{selected && <Dialog title={selected.full_name} onClose={() => setSelected(null)}><div className="v2-qr"><QRCodeSVG value={`RA-NF:${selected.qr_token}`} size={230} level="H" includeMargin /></div><p>{selected.class_name || 'RA Nurul Falah'}</p><small>Tunjukkan QR kepada Guru saat masuk dan pulang.</small></Dialog>}</div>
 }
 
 export function SettingsPage() {
