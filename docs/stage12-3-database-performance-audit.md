@@ -32,7 +32,7 @@ Two single-column btree indexes are redundant with UNIQUE btree indexes that hav
    - covered by `school_schedules_class_slot_key (class_id, day_of_week, start_time)`
    - production scans: 0
 
-The Stage 12.3 migration removes only these two indexes. The covering UNIQUE indexes remain available for equality lookups on their leading columns and for referential-integrity related access paths.
+The production migration `20260918053616_stage12_3_redundant_index_cleanup` removes only these two indexes. The covering UNIQUE indexes remain available for equality lookups on their leading columns and for referential-integrity related access paths. After applying it, Supabase Performance Advisor decreased from 46 to 44 unused-index findings.
 
 ## Decision rule for later cleanup
 
