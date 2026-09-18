@@ -401,6 +401,40 @@ test('double checkout hanya memberi satu response sukses', async () => {
   assert.equal(stored.check_out_by, actors.teacherA.id)
 })
 
+test('foto profil private hanya dapat dikelola pemilik dan dibaca Admin', async () => {
+  const ownerPath = `${actors.teacherA.id}/avatar`
+  const otherPath = `${actors.teacherB.id}/avatar`
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+
+  const ownUpload = await actors.teacherA.db.storage
+    .from('profile-photos')
+    .upload(ownerPath, bytes, { contentType: 'image/png', upsert: true })
+  assert.ifError(ownUpload.error)
+
+  const ownAvatarUpdate = await actors.teacherA.db.rpc('update_my_avatar', { p_avatar_path: ownerPath })
+  assert.ifError(ownAvatarUpdate.error)
+  assert.equal(ownAvatarUpdate.data.avatar_path, ownerPath)
+
+  const crossUpload = await actors.teacherA.db.storage
+    .from('profile-photos')
+    .upload(otherPath, bytes, { contentType: 'image/png', upsert: true })
+  assert.ok(crossUpload.error)
+
+  const crossAvatarUpdate = await actors.teacherA.db.rpc('update_my_avatar', { p_avatar_path: otherPath })
+  assert.ok(crossAvatarUpdate.error)
+  assert.equal(crossAvatarUpdate.error.code, '22023')
+
+  assert.ifError((await actors.teacherA.db.storage.from('profile-photos').download(ownerPath)).error)
+  assert.ifError((await actors.admin.db.storage.from('profile-photos').download(ownerPath)).error)
+  assert.ok((await actors.parentA.db.storage.from('profile-photos').download(ownerPath)).error)
+
+  const clearAvatar = await actors.teacherA.db.rpc('update_my_avatar', { p_avatar_path: null })
+  assert.ifError(clearAvatar.error)
+  assert.equal(clearAvatar.data.avatar_path, null)
+
+  assert.ifError((await actors.teacherA.db.storage.from('profile-photos').remove([ownerPath])).error)
+})
+
 test('Storage private, metadata canonical, dan cleanup backend dipaksa', async () => {
   const path = 'stage12/dokumen-guru.pdf'
   const orphanPath = 'stage12/orphan.pdf'
