@@ -33,9 +33,9 @@ test('session lifecycle is server-verified and account profile is rechecked', ()
 test('in-session password change requires the current password and revokes other sessions', () => {
   assert.match(profile, /Password saat ini/)
   assert.match(profile, /currentPassword/)
-  assert.match(profile, /updateUser\\(\\{ password, current_password: currentPassword \\}\\)/)
+  assert.ok(profile.includes("supabase.auth.updateUser({ password, current_password: currentPassword })"))
   assert.match(profile, /signOut\(\{ scope: 'others' \}\)/)
-  assert.match(profile, /updateUser\\(\\{ password, current_password: currentPassword \\}\\)[\s\S]{0,500}Password tidak dapat diperbarui/)
+  assert.match(profile, /current_password: currentPassword[\s\S]{0,500}Password tidak dapat diperbarui/)
 })
 
 test('inactive account state is synchronized to Supabase Auth ban state', () => {
