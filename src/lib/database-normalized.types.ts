@@ -197,6 +197,14 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       audit_events_view: AuditEventsView
     }
     Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
+      announcement_unread_count: {
+        Args: never
+        Returns: number
+      }
+      mark_announcements_read: {
+        Args: { p_announcement_ids: string[] }
+        Returns: number
+      }
       enqueue_school_document_storage_cleanup: {
         Args: { p_object_path: string }
         Returns: string

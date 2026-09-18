@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   BadgeDollarSign,
@@ -20,6 +21,8 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import { announcementUnreadCountOptions } from './data/queries/announcements'
+import { useAnnouncementRealtime } from './data/useAnnouncementRealtime'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { ChildSelectionProvider, GlobalChildSwitcher, OfflineBanner } from './portal-v2/AppExperience'
 import './portal-v2.css'
@@ -142,7 +145,9 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
   const location = useLocation()
   const [currentProfile, setCurrentProfile] = useState(profile)
   const [moreOpen, setMoreOpen] = useState(false)
-  const [announcementCount, setAnnouncementCount] = useState(0)
+  const unreadAnnouncementsQuery = useQuery(announcementUnreadCountOptions({ role: currentProfile.role, currentUserId: currentProfile.id }))
+  const announcementCount = unreadAnnouncementsQuery.data ?? 0
+  useAnnouncementRealtime(currentProfile.id)
 
   const base = currentProfile.role === 'teacher' ? '/guru' : currentProfile.role === 'parent' ? '/orang-tua' : '/admin'
   const menu = menus[currentProfile.role]
@@ -181,21 +186,6 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
       .filter((group) => group.items.length),
     [currentProfile.role, mobileSecondary],
   )
-
-  useEffect(() => {
-    let mounted = true
-    const loadUnread = () => {
-      const query = currentProfile.role === 'parent'
-        ? supabase.from('announcements').select('id').eq('is_published', true).in('audience', ['all', 'parent'])
-        : currentProfile.role === 'teacher'
-          ? supabase.from('announcements').select('id').eq('is_published', true).in('audience', ['all', 'teacher'])
-          : supabase.from('announcements').select('id').eq('is_published', true)
-      void query.then(({ data }) => { if (!mounted) return; let stored: string[] = []; try { stored = JSON.parse(localStorage.getItem('ra_read_announcements') || '[]') as string[] } catch { localStorage.removeItem('ra_read_announcements') }; const read = new Set(stored); setAnnouncementCount((data ?? []).filter((row) => !read.has(row.id)).length) })
-    }
-    loadUnread()
-    window.addEventListener('ra-announcements-read', loadUnread)
-    return () => { mounted = false; window.removeEventListener('ra-announcements-read', loadUnread) }
-  }, [currentProfile.role])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Edit3, Megaphone, Plus, Trash2 } from 'lucide-react'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { queryKeys } from '../data/queryKeys'
-import { announcementsOptions, type AnnouncementRow } from '../data/queries/announcements'
+import { announcementsOptions, markAnnouncementsRead, type AnnouncementRow } from '../data/queries/announcements'
 import { userErrorMessage } from '../lib/error-utils'
 import { type AppRole, supabase } from '../lib/supabase'
 import { ActionMenu, LoadError } from './AppExperience'
@@ -22,16 +22,37 @@ export function AnnouncementsPage({ role, currentUserId }: { role: AppRole; curr
   const [deleting, setDeleting] = useState<Announcement | null>(null)
   const [removing, setRemoving] = useState(false)
   const removingRef = useRef(false)
+  const readSyncRef = useRef('')
+  const readPendingRef = useRef('')
   const [message, setMessage] = useState<Message | null>(null)
 
   const canManageRow = (row: Announcement) => role === 'admin' || (role === 'teacher' && row.created_by === currentUserId)
 
   useEffect(() => {
     if (loading || !rows.length) return
-    const publishedIds = rows.filter((row) => row.is_published).map((row) => row.id)
-    localStorage.setItem('ra_read_announcements', JSON.stringify(publishedIds))
-    window.dispatchEvent(new Event('ra-announcements-read'))
-  }, [loading, rows])
+    const publishedRows = rows.filter((row) => row.is_published)
+    if (!publishedRows.length) return
+
+    const signature = publishedRows
+      .map((row) => `${row.id}:${row.updated_at}`)
+      .sort()
+      .join('|')
+    if (readSyncRef.current === signature || readPendingRef.current === signature) return
+
+    readPendingRef.current = signature
+    void markAnnouncementsRead(publishedRows.map((row) => row.id))
+      .then(() => {
+        readSyncRef.current = signature
+        return queryClient.invalidateQueries({
+          queryKey: queryKeys.announcements.meta('unread', { role, currentUserId }),
+          exact: true,
+        })
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (readPendingRef.current === signature) readPendingRef.current = ''
+      })
+  }, [currentUserId, loading, queryClient, role, rows])
 
   const refreshAnnouncements = async () => {
     await Promise.all([

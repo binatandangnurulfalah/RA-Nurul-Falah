@@ -27,3 +27,24 @@ export function announcementsOptions({ role, currentUserId }: { role: AppRole; c
     staleTime: 30_000,
   })
 }
+
+export function announcementUnreadCountOptions({ role, currentUserId }: { role: AppRole; currentUserId: string }) {
+  return queryOptions({
+    queryKey: queryKeys.announcements.meta('unread', { role, currentUserId }),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('announcement_unread_count')
+      if (error) throw new Error(error.message || 'Status pengumuman belum dibaca gagal dimuat.')
+      return Number(data ?? 0)
+    },
+    staleTime: 30_000,
+  })
+}
+
+export async function markAnnouncementsRead(announcementIds: string[]) {
+  if (!announcementIds.length) return 0
+  const { data, error } = await supabase.rpc('mark_announcements_read', {
+    p_announcement_ids: announcementIds,
+  })
+  if (error) throw new Error(error.message || 'Status baca pengumuman gagal disimpan.')
+  return Number(data ?? 0)
+}

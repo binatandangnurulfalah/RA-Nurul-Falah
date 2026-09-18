@@ -35,10 +35,12 @@ test('pengumuman memakai TanStack Query dan invalidasi dashboard setelah mutatio
   assert.match(announcementsPage, /FormDialog/)
 })
 
-test('ownership Guru dan read tracking sementara tetap dipertahankan', () => {
+test('ownership Guru tetap dipertahankan dan read tracking sudah server-side', () => {
   assert.match(announcementsPage, /row\.created_by === currentUserId/)
-  assert.match(announcementsPage, /ra_read_announcements/)
-  assert.match(announcementsPage, /ra-announcements-read/)
+  assert.match(announcementsPage, /markAnnouncementsRead/)
+  assert.match(announcementsQuery, /announcement_unread_count/)
+  assert.match(announcementsQuery, /mark_announcements_read/)
+  assert.doesNotMatch(announcementsPage, /ra_read_announcements|ra-announcements-read/)
   assert.match(announcementsPage, /const busyRef = useRef\(false\)/)
   assert.match(announcementsPage, /const removingRef = useRef\(false\)/)
 })
