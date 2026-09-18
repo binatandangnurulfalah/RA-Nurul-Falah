@@ -12,6 +12,12 @@ const ROLE_PATHS: Record<AppRole, string> = {
   parent: '/orang-tua',
 }
 
+const RECOVERY_SESSION_KEY = 'ra_password_recovery_ready'
+const PROFILE_RECHECK_MS = 5 * 60_000
+const IDLE_SESSION_MS = 8 * 60 * 60_000
+const LAST_ACTIVITY_KEY = 'ra_last_activity_at'
+const AUTH_NOTICE_KEY = 'ra_auth_notice'
+
 const PREVIEW_NAMES: Record<AppRole, string> = {
   admin: 'Administrator RA Nurul Falah',
   teacher: 'Siti Aminah, S.Pd.',
@@ -24,6 +30,18 @@ function isAppRole(value: string | null): value is AppRole {
 
 function rolePath(role: AppRole) {
   return ROLE_PATHS[role]
+}
+
+function authRedirectUrl() {
+  return new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+}
+
+function clearRecoverySession() {
+  sessionStorage.removeItem(RECOVERY_SESSION_KEY)
+}
+
+function markRecoverySession() {
+  sessionStorage.setItem(RECOVERY_SESSION_KEY, '1')
 }
 
 type ActiveProfileResult =
@@ -58,6 +76,7 @@ function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileUnavailable, setProfileUnavailable] = useState(false)
+  const [recoveryReady, setRecoveryReady] = useState(() => sessionStorage.getItem(RECOVERY_SESSION_KEY) === '1')
   const isLocalPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
   const previewRoleParam = isLocalPreview ? new URLSearchParams(window.location.search).get('previewRole') : null
   const previewRole = isAppRole(previewRoleParam) ? previewRoleParam : null
@@ -65,20 +84,48 @@ function App() {
   useEffect(() => {
     let mounted = true
 
+    const clearLocalSession = async (notice?: string) => {
+      if (notice) sessionStorage.setItem(AUTH_NOTICE_KEY, notice)
+      await supabase.auth.signOut({ scope: 'local' })
+      if (!mounted) return
+      clearRecoverySession()
+      localStorage.removeItem(LAST_ACTIVITY_KEY)
+      setRecoveryReady(false)
+      setProfile(null)
+      setProfileUnavailable(false)
+      setLoading(false)
+    }
+
     const loadProfile = async () => {
       const {
         data: { session },
+        error: sessionError,
       } = await supabase.auth.getSession()
       if (!mounted) return
 
-      if (!session?.user) {
-        setProfile(null)
-        setProfileUnavailable(false)
-        setLoading(false)
+      if (sessionError || !session?.user) {
+        if (sessionError && isConnectivityError(sessionError)) {
+          setProfileUnavailable(true)
+          setLoading(false)
+          return
+        }
+        await clearLocalSession()
         return
       }
 
-      const profileResult = await fetchActiveProfile(session.user.id)
+      const { data: verified, error: verifyError } = await supabase.auth.getUser()
+      if (!mounted) return
+      if (verifyError || !verified.user) {
+        if (verifyError && isConnectivityError(verifyError)) {
+          setProfileUnavailable(true)
+          setLoading(false)
+          return
+        }
+        await clearLocalSession('Sesi login telah berakhir. Silakan masuk kembali.')
+        return
+      }
+
+      const profileResult = await fetchActiveProfile(verified.user.id)
       if (!mounted) return
 
       if (profileResult.status === 'unavailable') {
@@ -90,39 +137,71 @@ function App() {
       setProfileUnavailable(false)
       if (profileResult.status === 'inactive') {
         await supabase.auth.signOut()
-        setProfile(null)
+        if (mounted) {
+          clearRecoverySession()
+          setRecoveryReady(false)
+          setProfile(null)
+        }
       } else {
+        if (!localStorage.getItem(LAST_ACTIVITY_KEY)) localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()))
         setProfile(profileResult.profile)
       }
       setLoading(false)
+    }
+
+    const noteActivity = () => {
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()))
+    }
+    const checkIdleSession = async () => {
+      const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || Date.now())
+      if (!Number.isFinite(lastActivity) || Date.now() - lastActivity < IDLE_SESSION_MS) return
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      await clearLocalSession('Sesi berakhir karena tidak aktif terlalu lama. Silakan masuk kembali.')
     }
 
     void loadProfile()
 
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
+        markRecoverySession()
+        setRecoveryReady(true)
+        setProfile(null)
         setLoading(false)
         navigate('/password-baru', { replace: true })
         return
       }
-      void loadProfile()
+      if (event === 'SIGNED_OUT') {
+        clearRecoverySession()
+        setRecoveryReady(false)
+        setProfile(null)
+        setProfileUnavailable(false)
+        setLoading(false)
+        return
+      }
+      window.setTimeout(() => { if (mounted) void loadProfile() }, 0)
     })
+
     const verifyVisibleSession = () => {
-      if (document.visibilityState !== 'visible' || !navigator.onLine) return
-      void supabase.auth.getUser().then(async ({ data, error }) => {
-        if (!mounted || (!error && data.user)) return
-        if (error && isConnectivityError(error)) return
-        await supabase.auth.signOut()
-        if (mounted) {
-          setProfile(null)
-          setProfileUnavailable(false)
-          setLoading(false)
-        }
-      })
+      if (document.visibilityState !== 'visible') return
+      void checkIdleSession()
+      if (navigator.onLine) void loadProfile()
     }
     const retryProfileWhenOnline = () => {
       if (!mounted) return
       void loadProfile()
+    }
+    const profileRecheck = window.setInterval(() => {
+      if (!mounted || document.visibilityState !== 'visible' || !navigator.onLine) return
+      void loadProfile()
+    }, PROFILE_RECHECK_MS)
+    const idleRecheck = window.setInterval(() => {
+      if (!mounted) return
+      void checkIdleSession()
+    }, 60_000)
+
+    for (const eventName of ['pointerdown', 'keydown', 'touchstart'] as const) {
+      window.addEventListener(eventName, noteActivity, { passive: true })
     }
     document.addEventListener('visibilitychange', verifyVisibleSession)
     window.addEventListener('online', retryProfileWhenOnline)
@@ -130,6 +209,11 @@ function App() {
     return () => {
       mounted = false
       listener.subscription.unsubscribe()
+      window.clearInterval(profileRecheck)
+      window.clearInterval(idleRecheck)
+      for (const eventName of ['pointerdown', 'keydown', 'touchstart'] as const) {
+        window.removeEventListener(eventName, noteActivity)
+      }
       document.removeEventListener('visibilitychange', verifyVisibleSession)
       window.removeEventListener('online', retryProfileWhenOnline)
     }
@@ -163,8 +247,8 @@ function App() {
       <Routes>
         <Route path="/login" element={profile ? <RoleRedirect profile={profile} /> : <LoginPage />} />
         <Route path="/lupa-password" element={<ForgotPasswordPage />} />
-        <Route path="/verifikasi-kode" element={<VerifyOtpPage />} />
-        <Route path="/password-baru" element={<NewPasswordPage />} />
+        <Route path="/verifikasi-kode" element={<Navigate to="/lupa-password" replace />} />
+        <Route path="/password-baru" element={<NewPasswordPage recoveryReady={recoveryReady} onRecoveryComplete={() => { clearRecoverySession(); setRecoveryReady(false) }} />} />
         <Route
           path="/guru/*"
           element={
@@ -211,6 +295,11 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice] = useState(() => {
+    const value = sessionStorage.getItem(AUTH_NOTICE_KEY) ?? ''
+    sessionStorage.removeItem(AUTH_NOTICE_KEY)
+    return value
+  })
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -254,6 +343,7 @@ function LoginPage() {
             Lupa password?
           </button>
         </div>
+        {notice && <div className="alert success">{notice}</div>}
         {error && <div className="alert error">{error}</div>}
         <button className="primary-button" disabled={busy}>
           {busy ? 'Memeriksa...' : 'Masuk'}
@@ -274,24 +364,21 @@ function ForgotPasswordPage() {
     event.preventDefault()
     setBusy(true)
 
-    await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { shouldCreateUser: false },
+    await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: authRedirectUrl(),
     })
 
-    sessionStorage.setItem('ra_recovery_email', email.trim())
-    setMessage('Jika email terdaftar, kode verifikasi akan dikirim ke email tersebut.')
+    setMessage('Jika email terdaftar, tautan pemulihan password akan dikirim. Buka tautan tersebut pada perangkat ini untuk melanjutkan.')
     setBusy(false)
-    setTimeout(() => navigate('/verifikasi-kode'), 900)
   }
 
   return (
-    <AuthLayout title="Lupa password" subtitle="Masukkan email akun Anda untuk menerima kode verifikasi.">
+    <AuthLayout title="Lupa password" subtitle="Masukkan email akun Anda untuk menerima tautan pemulihan yang aman.">
       <form onSubmit={submit} className="form-stack">
         <Field icon={<Mail size={18} />} label="Email" type="email" value={email} onChange={setEmail} placeholder="nama@email.com" />
         {message && <div className="alert success">{message}</div>}
         <button className="primary-button" disabled={busy}>
-          {busy ? 'Mengirim...' : 'Kirim kode verifikasi'}
+          {busy ? 'Mengirim...' : 'Kirim tautan pemulihan'}
         </button>
         <button type="button" className="secondary-button" onClick={() => navigate('/login')}>
           Kembali ke login
@@ -301,52 +388,7 @@ function ForgotPasswordPage() {
   )
 }
 
-function VerifyOtpPage() {
-  const navigate = useNavigate()
-  const email = sessionStorage.getItem('ra_recovery_email') ?? ''
-  const [token, setToken] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  if (!email) return <Navigate to="/lupa-password" replace />
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-
-    const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
-    if (verifyError) {
-      setError('Kode verifikasi salah atau sudah kedaluwarsa.')
-      setBusy(false)
-      return
-    }
-
-    navigate('/password-baru', { replace: true })
-  }
-
-  return (
-    <AuthLayout title="Verifikasi kode" subtitle={`Masukkan kode 6 digit yang dikirim ke ${maskEmail(email)}.`}>
-      <form onSubmit={submit} className="form-stack">
-        <label className="field-label">Kode verifikasi</label>
-        <input
-          className="otp-input"
-          inputMode="numeric"
-          maxLength={6}
-          value={token}
-          onChange={(event) => setToken(event.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="000000"
-        />
-        {error && <div className="alert error">{error}</div>}
-        <button className="primary-button" disabled={busy || token.length !== 6}>
-          {busy ? 'Memverifikasi...' : 'Verifikasi'}
-        </button>
-      </form>
-    </AuthLayout>
-  )
-}
-
-function NewPasswordPage() {
+function NewPasswordPage({ recoveryReady, onRecoveryComplete }: { recoveryReady: boolean; onRecoveryComplete: () => void }) {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -386,12 +428,28 @@ function NewPasswordPage() {
       return
     }
 
-    setMessage('Password berhasil diperbarui. Anda akan diarahkan ke halaman login dalam 5 detik.')
-    sessionStorage.removeItem('ra_recovery_email')
-    setTimeout(async () => {
+    setMessage('Password berhasil diperbarui. Sesi lama akan diakhiri dan Anda diarahkan ke login.')
+    onRecoveryComplete()
+    window.setTimeout(async () => {
       await supabase.auth.signOut()
       navigate('/login', { replace: true })
-    }, 5000)
+    }, 1200)
+  }
+
+  if (!recoveryReady) {
+    return (
+      <AuthLayout title="Tautan pemulihan diperlukan" subtitle="Halaman ini hanya dapat dibuka dari tautan pemulihan password yang masih valid.">
+        <div className="form-stack">
+          <div className="alert error">Sesi pemulihan tidak tersedia atau sudah kedaluwarsa.</div>
+          <button type="button" className="primary-button" onClick={() => navigate('/lupa-password', { replace: true })}>
+            Minta tautan baru
+          </button>
+          <button type="button" className="secondary-button" onClick={() => navigate('/login', { replace: true })}>
+            Kembali ke login
+          </button>
+        </div>
+      </AuthLayout>
+    )
   }
 
   return (
@@ -475,12 +533,6 @@ function OfflineSessionPage() {
 
 function CenteredMessage({ text }: { text: string }) {
   return <div className="centered-message">{text}</div>
-}
-
-function maskEmail(email: string) {
-  const [name, domain] = email.split('@')
-  if (!domain) return email
-  return `${name.slice(0, 1)}${'*'.repeat(Math.max(2, name.length - 1))}@${domain}`
 }
 
 export default App
