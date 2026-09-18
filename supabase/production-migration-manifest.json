@@ -43,7 +43,8 @@
     "20260917175154_stage11_10_class_year_change_guard.sql",
     "20260917183405_stage11_11_global_audit_events.sql",
     "20260918021105_stage11_12_storage_document_architecture.sql",
-    "20260918023205_stage11_13_announcement_reads_realtime.sql"
+    "20260918023205_stage11_13_announcement_reads_realtime.sql",
+    "20260918030000_stage11_14_payment_data_model.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
