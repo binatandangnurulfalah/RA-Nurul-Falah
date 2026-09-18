@@ -22,13 +22,14 @@ type Message = { tone: 'success' | 'error'; text: string }
 
 export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) {
   const queryClient = useQueryClient()
+  const canManage = role === 'admin'
   const filters = useDataFilters({ q: '', class: 'all' })
   const search = filters.value('q')
   const classFilter = filters.value('class') || 'all'
   const page = filters.page
   const debouncedSearch = useDebouncedValue(search)
   const pageQuery = useQuery(studentPageOptions({ page, pageSize: PAGE_SIZE, search: debouncedSearch, classFilter }))
-  const lookupQuery = useQuery(studentLookupsOptions())
+  const lookupQuery = useQuery(studentLookupsOptions({ includeParents: canManage }))
   const students = pageQuery.data?.rows ?? []
   const total = pageQuery.data?.total ?? 0
   const parents = lookupQuery.data?.parents ?? []
@@ -71,8 +72,10 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
 
   const actionItems = (student: Student) => [
     { label: 'Tampilkan QR', icon: QrCode, onSelect: () => setQrStudent(student) },
-    { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) },
-    ...(role === 'admin' ? [{ label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) }] : []),
+    ...(canManage ? [
+      { label: 'Edit data murid', icon: Edit3, onSelect: () => setEditing(student) },
+      { label: 'Hapus murid', icon: Trash2, danger: true, onSelect: () => setDeleting(student) },
+    ] : []),
   ]
 
   const columns: DataTableColumn<Student>[] = [
@@ -95,7 +98,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       description={hasFilters ? 'Ubah kata pencarian atau reset filter untuk melihat data lainnya.' : 'Data murid akan muncul setelah ditambahkan ke sistem.'}
       action={hasFilters
         ? <Button variant="secondary" onClick={resetFilters}>Reset Filter</Button>
-        : <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button>}
+        : canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
   )
 
@@ -103,8 +106,8 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
     <PageHeader
       eyebrow="AKADEMIK"
       title="Data Murid"
-      subtitle={role === 'admin' ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Tambah, edit, hubungkan satu atau beberapa wali, dan tampilkan QR murid.'}
-      actions={<Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button>}
+      subtitle={canManage ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.' : 'Lihat murid pada kelas yang ditugaskan dan tampilkan QR untuk kebutuhan absensi.'}
+      actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
     {message && <Notice {...message} />}
     {lookupQuery.isError && <Notice tone="error" text={userErrorMessage(lookupQuery.error, 'Data pendukung murid gagal dimuat.')} />}
@@ -147,7 +150,7 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
       </>}
     </section>
 
-    {editing && <StudentModal
+    {editing && canManage && <StudentModal
       student={editing === 'new' ? null : editing}
       parents={parents}
       classes={classes}

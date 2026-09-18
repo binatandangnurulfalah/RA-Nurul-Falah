@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Edit3, Plus, Save, Trash2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, type AppRole } from '../lib/supabase'
 import { ActionMenu, Dialog } from './AppExperience'
 import { EmptyCard, Notice, PageTitle, SkeletonRows } from './PortalPages'
 
@@ -28,7 +28,8 @@ type SchoolClass = {
 
 type Message = { tone: 'success' | 'error'; text: string }
 
-export default function SchedulePage({ canManage }: { canManage: boolean }) {
+export default function SchedulePage({ role }: { role: AppRole }) {
+  const canManage = role === 'admin'
   const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']
   const [rows, setRows] = useState<Schedule[]>([])
   const [classes, setClasses] = useState<SchoolClass[]>([])
@@ -63,7 +64,7 @@ export default function SchedulePage({ canManage }: { canManage: boolean }) {
   }
 
   return <div className="v2-stack">
-    <PageTitle eyebrow="AGENDA BELAJAR" title="Jadwal Mingguan" text={canManage ? 'Tambah, edit, dan hapus jadwal berdasarkan kelas resmi dan tahun ajarannya.' : 'Jadwal kegiatan belajar anak sesuai kelompoknya.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')} disabled={!classes.length}><Plus size={17} /> Tambah Jadwal</button> : undefined} />
+    <PageTitle eyebrow="AGENDA BELAJAR" title="Jadwal Mingguan" text={canManage ? 'Tambah, edit, dan hapus jadwal berdasarkan kelas resmi dan tahun ajarannya.' : role === 'teacher' ? 'Lihat jadwal kegiatan belajar untuk kelas yang ditugaskan.' : 'Jadwal kegiatan belajar anak sesuai kelompoknya.'} action={canManage ? <button className="v2-primary" onClick={() => setEditing('new')} disabled={!classes.length}><Plus size={17} /> Tambah Jadwal</button> : undefined} />
     {message && <Notice {...message} />}
     {canManage && !loading && !classes.length && <Notice tone="error" text="Belum ada kelas aktif. Tambahkan kelas terlebih dahulu sebelum membuat jadwal." />}
     <div className="v2-tabs">{days.map((label, index) => <button key={label} className={day === index + 1 ? 'active' : ''} onClick={() => setDay(index + 1)}>{label}</button>)}</div>

@@ -319,7 +319,7 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
   if (page === 'payments' && role !== 'teacher') return <PaymentsPage role={role} />
   if (page === 'documents') return <DocumentsPage role={role} />
   if (page === 'classes' && role === 'admin') return <ClassesPage />
-  if (page === 'schedule') return <SchedulePage canManage={role !== 'parent'} />
+  if (page === 'schedule') return <SchedulePage role={role} />
   if (page === 'announcements') return <AnnouncementsPage role={role} currentUserId={profile.id} />
   if (page === 'audit' && role === 'admin') return <AuditTrailPage />
   if (page === 'settings' && role === 'admin') return <SettingsPage />
