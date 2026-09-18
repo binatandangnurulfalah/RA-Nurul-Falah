@@ -535,10 +535,4 @@ function CenteredMessage({ text }: { text: string }) {
   return <div className="centered-message">{text}</div>
 }
 
-function maskEmail(email: string) {
-  const [name, domain] = email.split('@')
-  if (!domain) return email
-  return `${name.slice(0, 1)}${'*'.repeat(Math.max(2, name.length - 1))}@${domain}`
-}
-
 export default App
