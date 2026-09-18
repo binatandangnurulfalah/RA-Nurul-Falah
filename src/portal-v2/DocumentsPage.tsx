@@ -131,7 +131,7 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     setRemoving(false)
     if (error) {
       reportDatabaseMutationFailure('delete_school_document', error)
-      setMessage({ tone: 'error', text: 'Dokumen gagal dihapus. Silakan coba lagi.')
+      setMessage({ tone: 'error', text: 'Dokumen gagal dihapus. Silakan coba lagi.' })
       return
     }
 
