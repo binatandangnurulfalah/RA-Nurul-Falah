@@ -48,7 +48,8 @@
     "20260918025511_stage11_14_payment_permissions_hardening.sql",
     "20260918034538_stage11_16_settings_hardening.sql",
     "20260918041836_stage11_18_final_audit_hardening.sql",
-    "20260918053616_stage12_3_redundant_index_cleanup.sql"
+    "20260918053616_stage12_3_redundant_index_cleanup.sql",
+    "20260918090000_stage12_5_role_permission_hardening.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
