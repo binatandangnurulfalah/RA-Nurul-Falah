@@ -27,15 +27,16 @@ test('Guru hanya dapat mengubah dan menghapus pengumuman miliknya sendiri', () =
   assert.match(portal, /portal-v2\/AnnouncementsPage/)
 })
 
-test('integritas pembayaran dipaksa di database dan dicerminkan frontend', () => {
+test('integritas pembayaran legacy tetap ada dan frontend 11.14 memakai RPC backend', () => {
   assert.match(migration, /student_payments_paid_not_over_amount/)
   assert.match(migration, /check \(paid_amount <= amount\)/)
   assert.match(migration, /status = 'unpaid' and paid_amount = 0/)
   assert.match(migration, /status = 'partial' and paid_amount > 0 and paid_amount < amount/)
   assert.match(migration, /status = 'paid' and amount > 0 and paid_amount = amount/)
-  assert.match(payments, /paidAmount > amount/)
-  assert.match(payments, /tidak boleh melebihi total tagihan/)
-  assert.match(payments, /max=\{form\.amount \|\| undefined\}/)
+  assert.match(payments, /save_student_charge/)
+  assert.match(payments, /record_payment_transaction/)
+  assert.match(payments, /void_payment_transaction/)
+  assert.doesNotMatch(payments, /paidAmount > amount/)
 })
 
 test('audit trail append-only mencatat perubahan pengumuman dan pembayaran', () => {

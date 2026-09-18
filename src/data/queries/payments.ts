@@ -19,6 +19,20 @@ export type PaymentRow = {
   student_full_name: string
   student_class_name: string | null
 }
+export type PaymentTransaction = {
+  id: string
+  payment_id: string
+  amount: number | string
+  paid_at: string
+  method: 'cash' | 'bank_transfer' | 'qris' | 'other' | 'legacy'
+  reference_no: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  voided_at: string | null
+  voided_by: string | null
+  void_reason: string | null
+}
 export type PaymentSummary = { total_billed: number | string; total_paid: number | string; total_outstanding: number | string }
 const EMPTY_SUMMARY: PaymentSummary = { total_billed: 0, total_paid: 0, total_outstanding: 0 }
 
@@ -60,5 +74,21 @@ export function paymentMetaOptions({ canManage, studentId }: { canManage: boolea
         students: (studentsResult.data as PaymentStudent[] | null) ?? [],
       }
     },
+  })
+}
+
+export function paymentTransactionsOptions(paymentId: string) {
+  return queryOptions({
+    queryKey: queryKeys.payments.detail(paymentId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payment_transactions')
+        .select('id,payment_id,amount,paid_at,method,reference_no,notes,created_by,created_at,voided_at,voided_by,void_reason')
+        .eq('payment_id', paymentId)
+        .order('paid_at', { ascending: false })
+      if (error) throw new Error(error.message || 'Riwayat transaksi pembayaran gagal dimuat.')
+      return (data as PaymentTransaction[] | null) ?? []
+    },
+    enabled: Boolean(paymentId),
   })
 }
