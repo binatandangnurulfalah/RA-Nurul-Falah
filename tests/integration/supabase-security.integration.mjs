@@ -103,7 +103,16 @@ test('Auth tetap tertutup dan manajemen akun hanya untuk Admin', async () => {
   assert.equal(created.status, 201, JSON.stringify(created.payload))
   assert.equal('password' in created.payload, false)
   const userId = created.payload.user.id
+  assert.equal((await invoke('admin-manage-user', actors.admin, { action: 'update', user_id: userId, display_name: 'Akun Diperbarui', role: 'parent', is_active: false })).status, 200)
+  const { data: bannedUser, error: bannedUserError } = await service.auth.admin.getUserById(userId)
+  assert.ifError(bannedUserError)
+  assert.ok(bannedUser.user.banned_until && new Date(bannedUser.user.banned_until).getTime() > Date.now())
+
   assert.equal((await invoke('admin-manage-user', actors.admin, { action: 'update', user_id: userId, display_name: 'Akun Diperbarui', role: 'parent', is_active: true })).status, 200)
+  const { data: activeUser, error: activeUserError } = await service.auth.admin.getUserById(userId)
+  assert.ifError(activeUserError)
+  assert.ok(!activeUser.user.banned_until || new Date(activeUser.user.banned_until).getTime() <= Date.now())
+
   assert.equal((await invoke('admin-manage-user', actors.admin, { action: 'send_password_reset', user_id: userId })).status, 200)
   assert.equal((await invoke('admin-manage-user', actors.admin, { action: 'delete', user_id: userId })).status, 200)
 })
