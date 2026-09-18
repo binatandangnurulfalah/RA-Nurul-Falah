@@ -1,6 +1,6 @@
 {
   "project_ref": "mtfeuozwxwayzcjltaak",
-  "captured_at": "2026-09-18",
+  "captured_at": "2026-09-19",
   "production_migrations": [
     "20260916024441_setup_auth_profiles_and_roles.sql",
     "20260916025000_lock_signup_and_create_profiles.sql",
@@ -52,7 +52,8 @@
     "20260918092710_stage12_5_role_permission_hardening.sql",
     "20260918110732_stage12_6_teacher_class_management.sql",
     "20260918112412_stage12_7_teacher_global_students_when_policy_off.sql",
-    "20260918115932_stage12_8_profile_photo_upload.sql"
+    "20260918115932_stage12_8_profile_photo_upload.sql",
+    "20260919100000_stage12_11_parent_family_verification.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
