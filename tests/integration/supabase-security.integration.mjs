@@ -39,6 +39,26 @@ async function invoke(name, actor, body) {
   return { status: response.status, payload: await response.json() }
 }
 
+async function setSingleTeacherClassMode(enabled) {
+  const { data: settings, error: settingsError } = await service
+    .from('school_settings')
+    .select('school_name,address,phone,email,late_cutoff,academic_year_id')
+    .eq('id', 1)
+    .single()
+  assert.ifError(settingsError)
+
+  const result = await actors.admin.db.rpc('save_school_settings_with_policy', {
+    p_school_name: settings.school_name,
+    p_address: settings.address,
+    p_phone: settings.phone,
+    p_email: settings.email,
+    p_late_cutoff: settings.late_cutoff,
+    p_academic_year_id: settings.academic_year_id,
+    p_single_teacher_class_mode: enabled,
+  })
+  assert.ifError(result.error)
+}
+
 before(async () => {
   for (const [name, role] of [['admin', 'admin'], ['teacherA', 'teacher'], ['teacherB', 'teacher'], ['parentA', 'parent'], ['parentB', 'parent']]) {
     await createActor(name, role)
@@ -87,6 +107,8 @@ before(async () => {
   ]).select('id,student_id')
   assert.ifError(attendanceError)
   fixture.attendanceB = attendance.find((row) => row.student_id === b.id).id
+
+  await setSingleTeacherClassMode(true)
 })
 
 test('RLS membatasi Guru dan Wali ke kelas atau anaknya', async () => {
@@ -97,6 +119,54 @@ test('RLS membatasi Guru dan Wali ke kelas atau anaknya', async () => {
   }
   const { data: hidden } = await actors.teacherA.db.from('attendance_records').select('id').eq('id', fixture.attendanceB)
   assert.equal(hidden.length, 0)
+})
+
+test('saat mode 1 Guru = 1 Kelas OFF, Guru melihat dan mengelola seluruh murid', async () => {
+  await setSingleTeacherClassMode(false)
+
+  const { data: allStudents, error: allStudentsError } = await actors.teacherA.db
+    .from('students')
+    .select('id,full_name')
+    .order('full_name')
+  assert.ifError(allStudentsError)
+  assert.deepEqual(allStudents.map((row) => row.full_name), ['Murid A', 'Murid B'])
+
+  const { data: allClasses, error: allClassesError } = await actors.teacherA.db
+    .from('school_classes')
+    .select('id,name')
+    .order('name')
+  assert.ifError(allClassesError)
+  assert.deepEqual(allClasses.map((row) => row.name), ['Kelas A', 'Kelas B'])
+
+  const crossClassUpdate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_student_id: fixture.studentB,
+    p_full_name: 'Murid B Global',
+    p_class_name: 'Kelas B',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ifError(crossClassUpdate.error)
+  assert.equal(crossClassUpdate.data.full_name, 'Murid B Global')
+
+  const unassignedCreate = await actors.teacherA.db.rpc('save_student_with_guardians', {
+    p_full_name: 'Murid Tanpa Kelas',
+    p_academic_year: fixture.academicYearLabelA,
+    p_guardian_user_ids: [],
+  })
+  assert.ifError(unassignedCreate.error)
+  assert.equal(unassignedCreate.data.class_id, null)
+
+  assert.ifError((await service.from('students').update({ full_name: 'Murid B' }).eq('id', fixture.studentB)).error)
+  assert.ifError((await service.from('students').delete().eq('id', unassignedCreate.data.id)).error)
+
+  await setSingleTeacherClassMode(true)
+
+  const { data: scopedAgain, error: scopedAgainError } = await actors.teacherA.db
+    .from('students')
+    .select('full_name')
+    .order('full_name')
+  assert.ifError(scopedAgainError)
+  assert.deepEqual(scopedAgain.map((row) => row.full_name), ['Murid A'])
 })
 
 test('master data murid, relasi wali, dan jadwal hanya dapat ditulis Admin', async () => {
@@ -258,16 +328,16 @@ test('mode 1 Guru = 1 Kelas menolak penugasan yang bertabrakan', async () => {
   assert.ok(oneTeacherTwoClasses.error)
   assert.equal(oneTeacherTwoClasses.error.code, '23514')
 
-  const disableMode = await actors.admin.db.rpc('save_school_settings_with_policy', {
+  const keepModeEnabled = await actors.admin.db.rpc('save_school_settings_with_policy', {
     p_school_name: settings.school_name,
     p_address: settings.address,
     p_phone: settings.phone,
     p_email: settings.email,
     p_late_cutoff: settings.late_cutoff,
     p_academic_year_id: settings.academic_year_id,
-    p_single_teacher_class_mode: false,
+    p_single_teacher_class_mode: true,
   })
-  assert.ifError(disableMode.error)
+  assert.ifError(keepModeEnabled.error)
 })
 
 test('Auth tetap tertutup dan manajemen akun hanya untuk Admin', async () => {
