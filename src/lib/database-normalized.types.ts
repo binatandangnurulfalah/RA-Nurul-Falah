@@ -259,7 +259,19 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
     Views: Omit<BaseViews, 'audit_events_view'> & {
       audit_events_view: AuditEventsView
     }
-    Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
+    Functions: Omit<BaseFunctions,
+      | 'save_school_settings'
+      | 'save_student_charge'
+      | 'record_payment_transaction'
+      | 'void_payment_transaction'
+      | 'delete_student_charge'
+      | 'announcement_unread_count'
+      | 'mark_announcements_read'
+      | 'enqueue_school_document_storage_cleanup'
+      | 'append_account_audit_event'
+      | 'save_academic_year'
+      | 'save_student_with_guardians'
+    > & {
       save_school_settings: {
         Args: {
           p_school_name: string
