@@ -21,6 +21,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import { ProfileAvatar } from './components/ProfileAvatar'
 import { announcementUnreadCountOptions } from './data/queries/announcements'
 import { useAnnouncementRealtime } from './data/useAnnouncementRealtime'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
@@ -269,7 +270,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
             </div>
           ))}
         </nav>
-        <div className="v2-sidebar-profile"><span className="v2-avatar large">{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || roleLabel(currentProfile.role)}</strong><small>{roleLabel(currentProfile.role)}</small></div><button aria-label="Keluar" onClick={() => void logout()}><LogOut size={18} /></button></div>
+        <div className="v2-sidebar-profile"><ProfileAvatar profile={currentProfile} className="v2-avatar large" /><div><strong>{currentProfile.display_name || roleLabel(currentProfile.role)}</strong><small>{roleLabel(currentProfile.role)}</small></div><button aria-label="Keluar" onClick={() => void logout()}><LogOut size={18} /></button></div>
       </aside>
 
       <div className="v2-main">
@@ -278,7 +279,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
           <div className="v2-top-title"><h1 id="portal-page-title">{active.label}</h1><small>{roleLabel(currentProfile.role)}</small></div>
           <div className="v2-top-actions">
             <button className="v2-bell" onClick={() => go('announcements')} aria-label="Buka pengumuman" aria-current={active.id === 'announcements' ? 'page' : undefined}><Bell size={20} />{announcementCount > 0 && <i>{Math.min(announcementCount, 9)}</i>}</button>
-            <button className={`v2-top-profile ${active.id === 'profile' ? 'active' : ''}`} onClick={() => go('profile')} aria-label="Buka profil" aria-current={active.id === 'profile' ? 'page' : undefined}><span>{initials(currentProfile.display_name)}</span><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button>
+            <button className={`v2-top-profile ${active.id === 'profile' ? 'active' : ''}`} onClick={() => go('profile')} aria-label="Buka profil" aria-current={active.id === 'profile' ? 'page' : undefined}><ProfileAvatar profile={currentProfile} /><div><strong>{currentProfile.display_name || 'Pengguna'}</strong><small>{roleLabel(currentProfile.role)}</small></div></button>
           </div>
         </header>
 
@@ -330,6 +331,5 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
 
 function PageLoading() { return <div className="v5-page-loading" role="status" aria-live="polite"><span /><span /><span /><p>Memuat halaman…</p></div> }
 
-function initials(name?: string | null) { return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() }
 function roleLabel(role: AppRole) { return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Orang Tua / Wali' }
 function mobileLabel(label: string) { if (label === 'Dashboard') return 'Beranda'; if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Absen') return 'Absen'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; if (label === 'Penilaian & Rapor') return 'Rapor'; if (label === 'Rapor Anak') return 'Rapor'; if (label === 'Dokumen & Surat') return 'Dokumen'; return label.split(' ')[0] }

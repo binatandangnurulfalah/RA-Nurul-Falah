@@ -272,6 +272,7 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       | 'append_account_audit_event'
       | 'save_academic_year'
       | 'save_student_with_guardians'
+      | 'update_my_avatar'
     > & {
       save_school_settings: {
         Args: {
@@ -360,6 +361,10 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       save_student_with_guardians: {
         Args: BaseFunctions['save_student_with_guardians']['Args']
         Returns: StudentsTable['Row']
+      }
+      update_my_avatar: {
+        Args: { p_avatar_path?: string | null }
+        Returns: BaseTables['user_profiles']['Row']
       }
     }
   }

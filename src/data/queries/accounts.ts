@@ -3,7 +3,7 @@ import { type AppRole, supabase, type UserProfile } from '../../lib/supabase'
 import { getPageRange, sanitizeSearch } from '../../lib/data-utils.js'
 import { queryKeys } from '../queryKeys'
 
-export type AccountRow = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'is_active' | 'created_at'>
+export type AccountRow = Pick<UserProfile, 'id' | 'role' | 'display_name' | 'avatar_path' | 'is_active' | 'created_at' | 'updated_at'>
 export type AccountStats = { total: number; teachers: number; parents: number }
 
 export function accountPageOptions({ page, pageSize, search, roleFilter }: { page: number; pageSize: number; search: string; roleFilter: 'all' | AppRole }) {
@@ -14,7 +14,7 @@ export function accountPageOptions({ page, pageSize, search, roleFilter }: { pag
       const range = getPageRange(page, pageSize)
       let query = supabase
         .from('user_profiles')
-        .select('id,role,display_name,is_active,created_at', { count: 'exact' })
+        .select('id,role,display_name,avatar_path,is_active,created_at,updated_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(range.from, range.to)
       if (roleFilter !== 'all') query = query.eq('role', roleFilter)
