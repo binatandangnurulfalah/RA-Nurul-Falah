@@ -47,10 +47,10 @@ const ChildrenPage = lazy(() => import('./portal-v2/PortalPages').then((module) 
 const DashboardPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.DashboardPage })))
 const SettingsPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.SettingsPage })))
 const ProfilePageV3 = lazy(() => import('./portal-v2/ProfilePageV3').then((module) => ({ default: module.ProfilePageV3 })))
-const DocumentsPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.DocumentsPage })))
-const PaymentsPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.PaymentsPage })))
-const ReportsPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.ReportsPage })))
-const TeachersPage = lazy(() => import('./portal-v2/SchoolModules').then((module) => ({ default: module.TeachersPage })))
+const DocumentsPage = lazy(() => import('./portal-v2/DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
+const PaymentsPage = lazy(() => import('./portal-v2/PaymentsPage').then((module) => ({ default: module.PaymentsPage })))
+const ReportsPage = lazy(() => import('./portal-v2/ReportsPage').then((module) => ({ default: module.ReportsPage })))
+const TeachersPage = lazy(() => import('./portal-v2/TeachersPage').then((module) => ({ default: module.TeachersPage })))
 
 const menus: Record<AppRole, NavItem[]> = {
   admin: [
