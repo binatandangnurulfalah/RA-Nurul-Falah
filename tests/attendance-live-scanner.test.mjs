@@ -31,7 +31,9 @@ test('pergantian kamera tetap tersedia dan kamera depan dicerminkan hanya pada p
 })
 
 test('scanner tetap memproses token melalui edge function record-attendance', () => {
-  assert.match(scanner, /supabase\.functions\.invoke\('record-attendance'/)
+  assert.match(scanner, /invokeObservedFunction\('record-attendance'/)
+  const observedServices = readFileSync(new URL('../src/lib/observed-services.ts', import.meta.url), 'utf8')
+  assert.match(observedServices, /supabase\.functions\.invoke\(functionName/)
   assert.match(scanner, /busyRef\.current/)
   assert.match(scanner, /lastScanRef\.current/)
 })
