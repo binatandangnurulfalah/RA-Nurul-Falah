@@ -7,18 +7,21 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 const vite = read('vite.config.ts')
 const pwaStatus = read('src/components/PwaStatus.tsx')
 const main = read('src/main.tsx')
+const app = read('src/App.tsx')
+const queryClient = read('src/data/queryClient.ts')
 const packageJson = JSON.parse(read('package.json'))
 const manifest = JSON.parse(read('public/site.webmanifest'))
 const verifyBuild = read('scripts/verify-pwa-build.mjs')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 
 test('service worker dibuat dari output build dan precache seluruh bundle', () => {
-  assert.match(vite, /pwaBuildPlugin/)
-  assert.match(vite, /generateBundle/)
+  assert.match(vite, /buildServiceWorker/)
+  assert.match(vite, /closeBundle/)
   assert.match(vite, /GITHUB_SHA/)
   assert.match(vite, /cache\.addAll\(PRECACHE_URLS\)/)
   assert.match(vite, /url\.pathname\.includes\('\/assets\/'\)/)
   assert.match(vite, /request\.mode === 'navigate'/)
+  assert.match(vite, /writeFileSync\(resolve\('dist\/sw\.js'\)/)
   assert.equal(existsSync(new URL('../public/sw.js', import.meta.url)), false)
 })
 
@@ -40,19 +43,31 @@ test('update check selektif berjalan saat fokus online visible dan interval waja
   assert.match(pwaStatus, /30 \* 60 \* 1000/)
 })
 
-test('offline dan install UX tersedia tanpa mengubah data aplikasi', () => {
+test('offline dan install UX tersedia tanpa mengantre mutation', () => {
   assert.match(pwaStatus, /Anda sedang offline/)
   assert.match(pwaStatus, /beforeinstallprompt/)
   assert.match(pwaStatus, /appinstalled/)
   assert.match(pwaStatus, /display-mode: standalone/)
   assert.match(pwaStatus, /Pasang aplikasi RA Nurul Falah/)
   assert.match(pwaStatus, /Sinkronisasi dan penyimpanan membutuhkan internet/)
+  assert.match(queryClient, /networkMode: 'always'/)
+  assert.match(queryClient, /mutations:[\s\S]*retry: 0/)
 })
 
-test('main hanya me-mount PWA lifecycle component dan tidak mendaftarkan worker sendiri', () => {
+test('offline tidak dianggap akun nonaktif dan tidak memaksa sign-out', () => {
+  assert.match(app, /status: 'unavailable'/)
+  assert.match(app, /profileUnavailable/)
+  assert.match(app, /Koneksi diperlukan untuk membuka sesi/)
+  assert.match(app, /if \(document\.visibilityState !== 'visible' \|\| !navigator\.onLine\) return/)
+  assert.match(app, /error && isConnectivityError\(error\)/)
+  assert.match(app, /window\.addEventListener\('online', retryProfileWhenOnline\)/)
+})
+
+test('main hanya me-mount satu PWA lifecycle component', () => {
   assert.match(main, /PwaStatus/)
   assert.match(main, /pwa-status\.css/)
   assert.doesNotMatch(main, /navigator\.serviceWorker\.register/)
+  assert.doesNotMatch(main, /PwaExperience|registerPwa/)
 })
 
 test('manifest tetap standalone dan memiliki metadata install yang stabil', () => {
