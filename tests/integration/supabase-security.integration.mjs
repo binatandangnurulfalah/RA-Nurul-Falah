@@ -147,14 +147,72 @@ test('double checkout hanya memberi satu response sukses', async () => {
   assert.equal(stored.check_out_by, actors.teacherA.id)
 })
 
-test('Storage private dan policy pembayaran/pengumuman tetap dipaksa', async () => {
-  const path = 'stage11/dokumen-guru.pdf'
-  const bytes = new TextEncoder().encode('%PDF-1.4 stage-11')
+test('Storage private, metadata canonical, dan cleanup backend dipaksa', async () => {
+  const path = 'stage12/dokumen-guru.pdf'
+  const orphanPath = 'stage12/orphan.pdf'
+  const bytes = new TextEncoder().encode('%PDF-1.4 stage-12')
+
   assert.ifError((await actors.admin.db.storage.from('school-documents').upload(path, bytes, { contentType: 'application/pdf' })).error)
-  assert.ok((await actors.teacherA.db.storage.from('school-documents').upload('stage11/ditolak.pdf', bytes, { contentType: 'application/pdf' })).error)
-  assert.ifError((await actors.admin.db.from('school_documents').insert({ title: 'Dokumen Guru', category: 'Tes', file_url: path, audience: 'teacher', is_published: true, created_by: actors.admin.id })).error)
+  assert.ok((await actors.teacherA.db.storage.from('school-documents').upload('stage12/ditolak.pdf', bytes, { contentType: 'application/pdf' })).error)
+
+  const { data: document, error: documentError } = await actors.admin.db.from('school_documents').insert({
+    title: 'Dokumen Guru',
+    category: 'Tes',
+    storage_path: path,
+    original_file_name: 'dokumen-guru.pdf',
+    mime_type: 'application/pdf',
+    file_size_bytes: bytes.byteLength,
+    audience: 'teacher',
+    is_published: true,
+    created_by: actors.admin.id,
+  }).select('id,file_url,storage_path,external_url,original_file_name,mime_type,file_size_bytes').single()
+  assert.ifError(documentError)
+  assert.equal(document.storage_path, path)
+  assert.equal(document.file_url, path)
+  assert.equal(document.external_url, null)
+  assert.equal(document.original_file_name, 'dokumen-guru.pdf')
+  assert.equal(document.mime_type, 'application/pdf')
+  assert.equal(document.file_size_bytes, bytes.byteLength)
+
   assert.ifError((await actors.teacherA.db.storage.from('school-documents').download(path)).error)
   assert.ok((await actors.parentA.db.storage.from('school-documents').download(path)).error)
+  assert.ok((await actors.admin.db.storage.from('school-documents').remove([path])).error, 'client Admin tidak boleh menghapus object langsung')
+
+  const teacherCleanup = await invoke('process-document-storage-cleanup', actors.teacherA, {})
+  assert.equal(teacherCleanup.status, 403)
+
+  assert.ifError((await actors.admin.db.from('school_documents').delete().eq('id', document.id)).error)
+  const directQueueRead = await actors.admin.db.from('school_document_storage_cleanup').select('id')
+  assert.ok(directQueueRead.error, 'queue cleanup tidak boleh dibaca/diubah langsung oleh client')
+
+  const cleanup = await invoke('process-document-storage-cleanup', actors.admin, {})
+  assert.equal(cleanup.status, 200, JSON.stringify(cleanup.payload))
+  assert.equal(cleanup.payload.ok, true)
+  assert.ok(cleanup.payload.processed >= 1)
+  assert.ok((await service.storage.from('school-documents').download(path)).error)
+
+  assert.ifError((await actors.admin.db.storage.from('school-documents').upload(orphanPath, bytes, { contentType: 'application/pdf' })).error)
+  assert.ok((await actors.teacherA.db.rpc('enqueue_school_document_storage_cleanup', { p_object_path: orphanPath })).error)
+  assert.ifError((await actors.admin.db.rpc('enqueue_school_document_storage_cleanup', { p_object_path: orphanPath })).error)
+  const orphanCleanup = await invoke('process-document-storage-cleanup', actors.admin, {})
+  assert.equal(orphanCleanup.status, 200, JSON.stringify(orphanCleanup.payload))
+  assert.ok((await service.storage.from('school-documents').download(orphanPath)).error)
+
+  assert.ok((await actors.admin.db.from('school_documents').insert({
+    title: 'Sumber Ganda Ditolak',
+    storage_path: 'stage12/ganda.pdf',
+    external_url: 'https://example.com/ganda.pdf',
+    audience: 'admin',
+    created_by: actors.admin.id,
+  })).error)
+
+  assert.ok((await actors.admin.db.from('school_documents').insert({
+    title: 'Metadata Ukuran Ditolak',
+    storage_path: 'stage12/besar.pdf',
+    file_size_bytes: (10 * 1024 * 1024) + 1,
+    audience: 'admin',
+    created_by: actors.admin.id,
+  })).error)
 
   const { data: announcement, error: announcementError } = await actors.admin.db.from('announcements').insert({ title: 'Pengumuman Admin', body: 'Tetap aman', audience: 'all', created_by: actors.admin.id }).select('id').single()
   assert.ifError(announcementError)
@@ -162,5 +220,4 @@ test('Storage private dan policy pembayaran/pengumuman tetap dipaksa', async () 
   assert.ifError(attempted.error)
   assert.equal(attempted.data.length, 0)
   assert.ok((await actors.admin.db.from('student_payments').insert({ student_id: fixture.studentA, payment_type: 'SPP', amount: 100000, paid_amount: 150000, status: 'paid', created_by: actors.admin.id })).error)
-  assert.ifError((await actors.admin.db.storage.from('school-documents').remove([path])).error)
 })
