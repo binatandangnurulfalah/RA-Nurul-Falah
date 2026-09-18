@@ -7,11 +7,49 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      academic_years: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          is_active: boolean
+          is_current: boolean
+          label: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          is_active?: boolean
+          is_current?: boolean
+          label: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          is_active?: boolean
+          is_current?: boolean
+          label?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       account_allowlist: {
         Row: {
           created_at: string
@@ -47,6 +85,32 @@ export type Database = {
           used_at?: string | null
         }
         Relationships: []
+      }
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       announcements: {
         Row: {
@@ -149,10 +213,13 @@ export type Database = {
           actor_role: Database["public"]["Enums"]["app_role"] | null
           actor_user_id: string | null
           changed_at: string
+          changed_fields: string[]
+          event_name: string | null
           id: number
           new_data: Json | null
           old_data: Json | null
-          record_id: string
+          record_id: string | null
+          record_key: string
           table_name: string
         }
         Insert: {
@@ -160,10 +227,13 @@ export type Database = {
           actor_role?: Database["public"]["Enums"]["app_role"] | null
           actor_user_id?: string | null
           changed_at?: string
+          changed_fields?: string[]
+          event_name?: string | null
           id?: never
           new_data?: Json | null
           old_data?: Json | null
-          record_id: string
+          record_id?: string | null
+          record_key: string
           table_name: string
         }
         Update: {
@@ -171,13 +241,90 @@ export type Database = {
           actor_role?: Database["public"]["Enums"]["app_role"] | null
           actor_user_id?: string | null
           changed_at?: string
+          changed_fields?: string[]
+          event_name?: string | null
           id?: never
           new_data?: Json | null
           old_data?: Json | null
-          record_id?: string
+          record_id?: string | null
+          record_key?: string
           table_name?: string
         }
         Relationships: []
+      }
+      payment_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          notes: string | null
+          paid_at: string
+          payment_id: string
+          reference_no: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string
+          payment_id: string
+          reference_no?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string
+          payment_id?: string
+          reference_no?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transactions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "student_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transactions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "student_payments_search"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transactions_voided_by_fkey"
+            columns: ["voided_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       report_cards: {
         Row: {
@@ -238,6 +385,7 @@ export type Database = {
       school_classes: {
         Row: {
           academic_year: string
+          academic_year_id: string
           created_at: string
           created_by: string | null
           id: string
@@ -248,6 +396,7 @@ export type Database = {
         }
         Insert: {
           academic_year?: string
+          academic_year_id: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -258,6 +407,7 @@ export type Database = {
         }
         Update: {
           academic_year?: string
+          academic_year_id?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -266,13 +416,23 @@ export type Database = {
           teacher_name?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "school_classes_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       school_document_storage_cleanup: {
         Row: {
           attempts: number
           id: string
           last_error: string | null
+          locked_until: string | null
+          next_attempt_at: string
           object_path: string
           queued_at: string
         }
@@ -280,6 +440,8 @@ export type Database = {
           attempts?: number
           id?: string
           last_error?: string | null
+          locked_until?: string | null
+          next_attempt_at?: string
           object_path: string
           queued_at?: string
         }
@@ -287,6 +449,8 @@ export type Database = {
           attempts?: number
           id?: string
           last_error?: string | null
+          locked_until?: string | null
+          next_attempt_at?: string
           object_path?: string
           queued_at?: string
         }
@@ -301,10 +465,15 @@ export type Database = {
           description: string | null
           document_date: string | null
           document_number: string | null
+          external_url: string | null
+          file_size_bytes: number | null
           file_url: string | null
           id: string
           is_published: boolean
+          mime_type: string | null
+          original_file_name: string | null
           recipient: string | null
+          storage_path: string | null
           title: string
           updated_at: string
         }
@@ -316,10 +485,15 @@ export type Database = {
           description?: string | null
           document_date?: string | null
           document_number?: string | null
+          external_url?: string | null
+          file_size_bytes?: number | null
           file_url?: string | null
           id?: string
           is_published?: boolean
+          mime_type?: string | null
+          original_file_name?: string | null
           recipient?: string | null
+          storage_path?: string | null
           title: string
           updated_at?: string
         }
@@ -331,10 +505,15 @@ export type Database = {
           description?: string | null
           document_date?: string | null
           document_number?: string | null
+          external_url?: string | null
+          file_size_bytes?: number | null
           file_url?: string | null
           id?: string
           is_published?: boolean
+          mime_type?: string | null
+          original_file_name?: string | null
           recipient?: string | null
+          storage_path?: string | null
           title?: string
           updated_at?: string
         }
@@ -343,7 +522,9 @@ export type Database = {
       school_schedules: {
         Row: {
           academic_year: string
+          academic_year_id: string
           activity: string
+          class_id: string
           class_name: string
           created_at: string
           created_by: string | null
@@ -357,7 +538,9 @@ export type Database = {
         }
         Insert: {
           academic_year?: string
+          academic_year_id: string
           activity: string
+          class_id: string
           class_name: string
           created_at?: string
           created_by?: string | null
@@ -371,7 +554,9 @@ export type Database = {
         }
         Update: {
           academic_year?: string
+          academic_year_id?: string
           activity?: string
+          class_id?: string
           class_name?: string
           created_at?: string
           created_by?: string | null
@@ -383,11 +568,27 @@ export type Database = {
           teacher_name?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "school_schedules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "school_schedules_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "school_classes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       school_settings: {
         Row: {
           academic_year: string
+          academic_year_id: string
           address: string | null
           email: string | null
           id: number
@@ -400,6 +601,7 @@ export type Database = {
         }
         Insert: {
           academic_year?: string
+          academic_year_id: string
           address?: string | null
           email?: string | null
           id?: number
@@ -412,6 +614,7 @@ export type Database = {
         }
         Update: {
           academic_year?: string
+          academic_year_id?: string
           address?: string | null
           email?: string | null
           id?: number
@@ -422,7 +625,15 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "school_settings_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       student_guardians: {
         Row: {
@@ -460,6 +671,7 @@ export type Database = {
           created_by: string | null
           due_date: string | null
           id: string
+          is_waived: boolean
           notes: string | null
           paid_amount: number
           paid_at: string | null
@@ -475,6 +687,7 @@ export type Database = {
           created_by?: string | null
           due_date?: string | null
           id?: string
+          is_waived?: boolean
           notes?: string | null
           paid_amount?: number
           paid_at?: string | null
@@ -490,6 +703,7 @@ export type Database = {
           created_by?: string | null
           due_date?: string | null
           id?: string
+          is_waived?: boolean
           notes?: string | null
           paid_amount?: number
           paid_at?: string | null
@@ -512,8 +726,10 @@ export type Database = {
       students: {
         Row: {
           academic_year: string | null
+          academic_year_id: string
           birth_date: string | null
           birth_place: string | null
+          class_id: string | null
           class_name: string | null
           created_at: string
           created_by: string | null
@@ -529,8 +745,10 @@ export type Database = {
         }
         Insert: {
           academic_year?: string | null
+          academic_year_id: string
           birth_date?: string | null
           birth_place?: string | null
+          class_id?: string | null
           class_name?: string | null
           created_at?: string
           created_by?: string | null
@@ -546,8 +764,10 @@ export type Database = {
         }
         Update: {
           academic_year?: string | null
+          academic_year_id?: string
           birth_date?: string | null
           birth_place?: string | null
+          class_id?: string | null
           class_name?: string | null
           created_at?: string
           created_by?: string | null
@@ -561,7 +781,22 @@ export type Database = {
           qr_token?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "students_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "students_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "school_classes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teacher_class_assignments: {
         Row: {
@@ -738,10 +973,13 @@ export type Database = {
           actor_role: Database["public"]["Enums"]["app_role"] | null
           actor_user_id: string | null
           changed_at: string | null
+          changed_fields: string[] | null
+          event_name: string | null
           id: number | null
           new_data: Json | null
           old_data: Json | null
           record_id: string | null
+          record_key: string | null
           table_name: string | null
         }
         Relationships: []
@@ -836,6 +1074,15 @@ export type Database = {
       }
     }
     Functions: {
+      announcement_unread_count: { Args: never; Returns: number }
+      append_account_audit_event: {
+        Args: {
+          p_details?: Json
+          p_event_name: string
+          p_target_user_id: string
+        }
+        Returns: number
+      }
       attendance_summary_for_date: {
         Args: { p_date: string; p_student_id?: string }
         Returns: {
@@ -844,7 +1091,24 @@ export type Database = {
           total_records: number
         }[]
       }
+      claim_school_document_storage_cleanup: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          id: string
+          object_path: string
+        }[]
+      }
       dashboard_summary: { Args: never; Returns: Json }
+      delete_student_charge: { Args: { p_payment_id: string }; Returns: string }
+      enqueue_school_document_storage_cleanup: {
+        Args: { p_object_path: string }
+        Returns: string
+      }
+      mark_announcements_read: {
+        Args: { p_announcement_ids: string[] }
+        Returns: number
+      }
       payment_summary: {
         Args: { p_student_id?: string }
         Returns: {
@@ -853,6 +1117,26 @@ export type Database = {
           total_paid: number
         }[]
       }
+      record_payment_transaction: {
+        Args: {
+          p_amount: number
+          p_method: string
+          p_notes: string
+          p_paid_at: string
+          p_payment_id: string
+          p_reference_no: string
+        }
+        Returns: string
+      }
+      save_academic_year: {
+        Args: {
+          p_academic_year_id?: string
+          p_is_active?: boolean
+          p_is_current?: boolean
+          p_label?: string
+        }
+        Returns: string
+      }
       save_class_with_assignments: {
         Args: {
           p_academic_year?: string
@@ -860,6 +1144,30 @@ export type Database = {
           p_is_active?: boolean
           p_name?: string
           p_teacher_profile_ids?: string[]
+        }
+        Returns: string
+      }
+      save_school_settings: {
+        Args: {
+          p_academic_year_id: string
+          p_address: string
+          p_email: string
+          p_late_cutoff: string
+          p_phone: string
+          p_school_name: string
+        }
+        Returns: boolean
+      }
+      save_student_charge: {
+        Args: {
+          p_amount: number
+          p_due_date: string
+          p_is_waived: boolean
+          p_notes: string
+          p_payment_id: string
+          p_payment_type: string
+          p_period_label: string
+          p_student_id: string
         }
         Returns: string
       }
@@ -880,8 +1188,10 @@ export type Database = {
         }
         Returns: {
           academic_year: string | null
+          academic_year_id: string
           birth_date: string | null
           birth_place: string | null
+          class_id: string | null
           class_name: string | null
           created_at: string
           created_by: string | null
@@ -927,6 +1237,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      void_payment_transaction: {
+        Args: { p_reason: string; p_transaction_id: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "teacher" | "parent"
@@ -952,8 +1266,8 @@ export type Tables<
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  schema: keyof DatabaseWithoutInternals
+}
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
@@ -980,8 +1294,8 @@ export type TablesInsert<
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
@@ -1005,8 +1319,8 @@ export type TablesUpdate<
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
@@ -1030,8 +1344,8 @@ export type Enums<
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -1047,8 +1361,8 @@ export type CompositeTypes<
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
