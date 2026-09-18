@@ -26,21 +26,38 @@ function rolePath(role: AppRole) {
   return ROLE_PATHS[role]
 }
 
-async function fetchActiveProfile(userId: string): Promise<UserProfile | null> {
+type ActiveProfileResult =
+  | { status: 'active'; profile: UserProfile }
+  | { status: 'inactive' }
+  | { status: 'unavailable' }
+
+function isConnectivityError(error: unknown) {
+  if (!navigator.onLine) return true
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '')
+  return /fetch failed|failed to fetch|network|load failed|timeout|connection/i.test(message)
+}
+
+async function fetchActiveProfile(userId: string): Promise<ActiveProfileResult> {
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
     .eq('id', userId)
     .maybeSingle()
 
-  if (error || !data?.is_active) return null
-  return data as UserProfile
+  if (error) return { status: 'unavailable' }
+  if (!data?.is_active) return { status: 'inactive' }
+  return { status: 'active', profile: data as UserProfile }
 }
 
 function App() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileUnavailable, setProfileUnavailable] = useState(false)
   const isLocalPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
   const previewRoleParam = isLocalPreview ? new URLSearchParams(window.location.search).get('previewRole') : null
   const previewRole = isAppRole(previewRoleParam) ? previewRoleParam : null
@@ -56,18 +73,26 @@ function App() {
 
       if (!session?.user) {
         setProfile(null)
+        setProfileUnavailable(false)
         setLoading(false)
         return
       }
 
-      const activeProfile = await fetchActiveProfile(session.user.id)
+      const profileResult = await fetchActiveProfile(session.user.id)
       if (!mounted) return
 
-      if (!activeProfile) {
+      if (profileResult.status === 'unavailable') {
+        setProfileUnavailable(true)
+        setLoading(false)
+        return
+      }
+
+      setProfileUnavailable(false)
+      if (profileResult.status === 'inactive') {
         await supabase.auth.signOut()
         setProfile(null)
       } else {
-        setProfile(activeProfile)
+        setProfile(profileResult.profile)
       }
       setLoading(false)
     }
@@ -83,22 +108,30 @@ function App() {
       void loadProfile()
     })
     const verifyVisibleSession = () => {
-      if (document.visibilityState !== 'visible') return
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return
       void supabase.auth.getUser().then(async ({ data, error }) => {
         if (!mounted || (!error && data.user)) return
+        if (error && isConnectivityError(error)) return
         await supabase.auth.signOut()
         if (mounted) {
           setProfile(null)
+          setProfileUnavailable(false)
           setLoading(false)
         }
       })
     }
+    const retryProfileWhenOnline = () => {
+      if (!mounted) return
+      void loadProfile()
+    }
     document.addEventListener('visibilitychange', verifyVisibleSession)
+    window.addEventListener('online', retryProfileWhenOnline)
 
     return () => {
       mounted = false
       listener.subscription.unsubscribe()
       document.removeEventListener('visibilitychange', verifyVisibleSession)
+      window.removeEventListener('online', retryProfileWhenOnline)
     }
   }, [navigate])
 
@@ -123,6 +156,7 @@ function App() {
   }
 
   if (loading) return <CenteredMessage text="Memuat sistem..." />
+  if (profileUnavailable && !profile) return <OfflineSessionPage />
 
   return (
     <Suspense fallback={<CenteredMessage text="Memuat portal..." />}>
@@ -194,15 +228,20 @@ function LoginPage() {
       return
     }
 
-    const userProfile = await fetchActiveProfile(data.user.id)
-    if (!userProfile) {
+    const profileResult = await fetchActiveProfile(data.user.id)
+    if (profileResult.status === 'unavailable') {
+      setError('Profil belum dapat diverifikasi. Periksa koneksi internet lalu coba lagi.')
+      setBusy(false)
+      return
+    }
+    if (profileResult.status === 'inactive') {
       await supabase.auth.signOut()
       setError('Akun tidak aktif atau belum disiapkan oleh administrator.')
       setBusy(false)
       return
     }
 
-    navigate(rolePath(userProfile.role), { replace: true })
+    navigate(rolePath(profileResult.profile.role), { replace: true })
   }
 
   return (
@@ -422,6 +461,16 @@ function Field({
       </span>
     </label>
   )
+}
+
+function OfflineSessionPage() {
+  return <div className="centered-message offline-session">
+    <div>
+      <strong>Koneksi diperlukan untuk membuka sesi</strong>
+      <p>Sesi login tidak dihapus. Hubungkan perangkat ke internet agar status akun dapat diverifikasi dengan aman.</p>
+      <button type="button" className="primary-button" onClick={() => window.location.reload()}>Coba lagi</button>
+    </div>
+  </div>
 }
 
 function CenteredMessage({ text }: { text: string }) {
