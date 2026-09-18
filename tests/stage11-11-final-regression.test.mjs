@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const migration = read('supabase/migrations/20260918102000_stage11_11_global_audit_events.sql')
+const migration = read('supabase/migrations/20260917183405_stage11_11_global_audit_events.sql')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 const attendanceQuery = read('src/data/queries/attendance.ts')
 const attendanceManager = read('src/portal-v2/AttendancePages.tsx')
