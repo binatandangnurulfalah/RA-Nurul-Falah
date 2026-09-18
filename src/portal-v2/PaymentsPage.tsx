@@ -423,7 +423,7 @@ function VoidPaymentDialog({ transaction, onClose, onDone }: { transaction: Paym
     submitLabel="Batalkan Transaksi"
     busy={busy}
     error={errorText}
-    danger
+    submitVariant="danger"
     onSubmit={submit}
     onClose={() => { if (!busyRef.current) onClose() }}
   >
