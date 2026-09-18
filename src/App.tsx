@@ -227,6 +227,7 @@ function App() {
             id: 'preview',
             role: previewRole,
             display_name: PREVIEW_NAMES[previewRole],
+            avatar_path: null,
             phone: null,
             address: null,
             bio: null,
