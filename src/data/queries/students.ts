@@ -42,12 +42,15 @@ export function studentPageOptions(params: StudentPageParams) {
   })
 }
 
-export function studentLookupsOptions() {
+export function studentLookupsOptions({ includeParents = false }: { includeParents?: boolean } = {}) {
   return queryOptions({
-    queryKey: queryKeys.students.meta('lookups'),
+    queryKey: queryKeys.students.meta(`lookups:${includeParents ? 'manage' : 'read'}`),
     queryFn: async () => {
+      const parentsPromise = includeParents
+        ? supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name')
+        : Promise.resolve({ data: [] as StudentAccount[], error: null })
       const [parents, classes, academicYears] = await Promise.all([
-        supabase.from('user_profiles').select('id,role,display_name,is_active,created_at').eq('role', 'parent').eq('is_active', true).order('display_name'),
+        parentsPromise,
         supabase.from('school_classes').select('id,name,academic_year_id,academic_year,is_active').eq('is_active', true).order('academic_year', { ascending: false }).order('name'),
         supabase.from('academic_years').select('id,label,is_current,is_active').eq('is_active', true).order('start_date', { ascending: false }),
       ])
