@@ -14,6 +14,7 @@ const packageJson = JSON.parse(read('package.json'))
 const manifest = JSON.parse(read('public/site.webmanifest'))
 const verifyBuild = read('scripts/verify-pwa-build.mjs')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
+const errorBoundary = read('src/components/AppErrorBoundary.tsx')
 
 test('service worker dibuat dari output build dan precache seluruh bundle', () => {
   assert.match(vite, /buildServiceWorker/)
@@ -28,11 +29,15 @@ test('service worker dibuat dari output build dan precache seluruh bundle', () =
 
 test('service worker update menunggu keputusan user dan tidak skip waiting saat install', () => {
   assert.match(vite, /event\.data\?\.type === 'SKIP_WAITING'/)
+  assert.match(vite, /event\.data\?\.type === 'GET_VERSION'/)
+  assert.match(vite, /postMessage\(\{ buildId: BUILD_ID \}\)/)
   assert.doesNotMatch(vite, /self\.addEventListener\('install'[\s\S]{0,260}self\.skipWaiting\(\)/)
   assert.match(registerPwa, /registration\.waiting/)
   assert.match(registerPwa, /updatefound/)
   assert.match(registerPwa, /controllerchange/)
+  assert.match(registerPwa, /postMessage\(\{ type: 'GET_VERSION' \}/)
   assert.match(registerPwa, /postMessage\(\{ type: 'SKIP_WAITING' \}\)/)
+  assert.match(registerPwa, /applyWaitingPwaUpdate/)
   assert.match(registerPwa, /updateViaCache: 'none'/)
 })
 
@@ -70,6 +75,16 @@ test('offline session dipertahankan dan mutation tidak direplay diam-diam', () =
   assert.match(app, /error && isConnectivityError\(error\)/)
   assert.match(queryClient, /networkMode: 'always'/)
   assert.match(queryClient, /mutations:[\s\S]*retry: 0/)
+})
+
+
+test('stale lazy chunk menawarkan recovery versi terbaru tanpa reload paksa saat render', () => {
+  assert.match(errorBoundary, /Failed to fetch dynamically imported module/)
+  assert.match(errorBoundary, /Importing a module script failed/)
+  assert.match(errorBoundary, /ChunkLoadError/)
+  assert.match(errorBoundary, /applyWaitingPwaUpdate/)
+  assert.match(errorBoundary, /Muat Versi Terbaru/)
+  assert.doesNotMatch(errorBoundary, /componentDidCatch[\s\S]{0,300}window\.location\.reload\(\)/)
 })
 
 test('manifest tetap standalone dan memiliki metadata install yang stabil', () => {
