@@ -14,6 +14,9 @@ const ROLE_PATHS: Record<AppRole, string> = {
 
 const RECOVERY_SESSION_KEY = 'ra_password_recovery_ready'
 const PROFILE_RECHECK_MS = 5 * 60_000
+const IDLE_SESSION_MS = 8 * 60 * 60_000
+const LAST_ACTIVITY_KEY = 'ra_last_activity_at'
+const AUTH_NOTICE_KEY = 'ra_auth_notice'
 
 const PREVIEW_NAMES: Record<AppRole, string> = {
   admin: 'Administrator RA Nurul Falah',
@@ -81,10 +84,12 @@ function App() {
   useEffect(() => {
     let mounted = true
 
-    const clearLocalSession = async () => {
+    const clearLocalSession = async (notice?: string) => {
+      if (notice) sessionStorage.setItem(AUTH_NOTICE_KEY, notice)
       await supabase.auth.signOut({ scope: 'local' })
       if (!mounted) return
       clearRecoverySession()
+      localStorage.removeItem(LAST_ACTIVITY_KEY)
       setRecoveryReady(false)
       setProfile(null)
       setProfileUnavailable(false)
@@ -116,7 +121,7 @@ function App() {
           setLoading(false)
           return
         }
-        await clearLocalSession()
+        await clearLocalSession('Sesi login telah berakhir. Silakan masuk kembali.')
         return
       }
 
@@ -138,9 +143,21 @@ function App() {
           setProfile(null)
         }
       } else {
+        if (!localStorage.getItem(LAST_ACTIVITY_KEY)) localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()))
         setProfile(profileResult.profile)
       }
       setLoading(false)
+    }
+
+    const noteActivity = () => {
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()))
+    }
+    const checkIdleSession = async () => {
+      const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || Date.now())
+      if (!Number.isFinite(lastActivity) || Date.now() - lastActivity < IDLE_SESSION_MS) return
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      await clearLocalSession('Sesi berakhir karena tidak aktif terlalu lama. Silakan masuk kembali.')
     }
 
     void loadProfile()
@@ -166,8 +183,9 @@ function App() {
     })
 
     const verifyVisibleSession = () => {
-      if (document.visibilityState !== 'visible' || !navigator.onLine) return
-      void loadProfile()
+      if (document.visibilityState !== 'visible') return
+      void checkIdleSession()
+      if (navigator.onLine) void loadProfile()
     }
     const retryProfileWhenOnline = () => {
       if (!mounted) return
@@ -177,7 +195,14 @@ function App() {
       if (!mounted || document.visibilityState !== 'visible' || !navigator.onLine) return
       void loadProfile()
     }, PROFILE_RECHECK_MS)
+    const idleRecheck = window.setInterval(() => {
+      if (!mounted) return
+      void checkIdleSession()
+    }, 60_000)
 
+    for (const eventName of ['pointerdown', 'keydown', 'touchstart'] as const) {
+      window.addEventListener(eventName, noteActivity, { passive: true })
+    }
     document.addEventListener('visibilitychange', verifyVisibleSession)
     window.addEventListener('online', retryProfileWhenOnline)
 
@@ -185,6 +210,10 @@ function App() {
       mounted = false
       listener.subscription.unsubscribe()
       window.clearInterval(profileRecheck)
+      window.clearInterval(idleRecheck)
+      for (const eventName of ['pointerdown', 'keydown', 'touchstart'] as const) {
+        window.removeEventListener(eventName, noteActivity)
+      }
       document.removeEventListener('visibilitychange', verifyVisibleSession)
       window.removeEventListener('online', retryProfileWhenOnline)
     }
@@ -266,6 +295,11 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice] = useState(() => {
+    const value = sessionStorage.getItem(AUTH_NOTICE_KEY) ?? ''
+    sessionStorage.removeItem(AUTH_NOTICE_KEY)
+    return value
+  })
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -309,6 +343,7 @@ function LoginPage() {
             Lupa password?
           </button>
         </div>
+        {notice && <div className="alert success">{notice}</div>}
         {error && <div className="alert error">{error}</div>}
         <button className="primary-button" disabled={busy}>
           {busy ? 'Memeriksa...' : 'Masuk'}
