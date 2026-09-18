@@ -84,3 +84,31 @@
     scroll-behavior: auto;
   }
 }
+
+
+.offline-session {
+  padding: 24px;
+  text-align: center;
+}
+
+.offline-session > div {
+  width: min(420px, 100%);
+  padding: 26px;
+  border: 1px solid var(--color-border, #dce4df);
+  border-radius: 20px;
+  background: var(--color-surface, #fff);
+  box-shadow: var(--shadow-float, 0 14px 40px rgba(18, 31, 26, .12));
+}
+
+.offline-session strong {
+  display: block;
+  color: var(--color-text, #18211d);
+  font-size: 18px;
+}
+
+.offline-session p {
+  margin: 9px 0 18px;
+  color: var(--color-text-secondary, #68736d);
+  font-size: 13px;
+  line-height: 1.55;
+}
