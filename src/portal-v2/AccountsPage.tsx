@@ -1,6 +1,7 @@
 import { type FormEvent, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Edit3, KeyRound, Plus, Trash2, UserRound, UsersRound } from 'lucide-react'
+import { ProfileAvatar } from '../components/ProfileAvatar'
 import { DataListSkeleton, DataTable, type DataTableColumn, ErrorState, MobileDataCard, SearchFilterBar, StatCard, StatusBadge } from '../components/data'
 import { ConfirmDialog, FormDialog } from '../components/forms'
 import { Button, Dialog, EmptyState, PageHeader } from '../components/ui'
@@ -107,7 +108,7 @@ export function AccountsPage() {
     {
       key: 'account',
       header: 'Pengguna',
-      render: (account) => <div className="data-primary-cell"><span className="data-primary-cell__avatar">{initials(account.display_name)}</span><div className="data-primary-cell__copy"><strong>{account.display_name || 'Tanpa nama'}</strong><small>Dibuat {dateText(account.created_at)}</small></div></div>,
+      render: (account) => <div className="data-primary-cell"><ProfileAvatar profile={account} className="data-primary-cell__avatar" /><div className="data-primary-cell__copy"><strong>{account.display_name || 'Tanpa nama'}</strong><small>Dibuat {dateText(account.created_at)}</small></div></div>,
     },
     { key: 'role', header: 'Role', render: (account) => <StatusBadge tone={roleTone(account.role)}>{roleLabel(account.role)}</StatusBadge> },
     { key: 'status', header: 'Status', render: (account) => <StatusBadge tone={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge> },
@@ -166,7 +167,7 @@ export function AccountsPage() {
           {loading ? <DataListSkeleton /> : accounts.length ? <div className="mobile-data-list">{accounts.map((account) => (
             <MobileDataCard
               key={account.id}
-              leading={initials(account.display_name)}
+              leading={<ProfileAvatar profile={account} className="mobile-profile-avatar" />}
               title={account.display_name || 'Tanpa nama'}
               subtitle={roleLabel(account.role)}
               badges={<StatusBadge tone={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Aktif' : 'Nonaktif'}</StatusBadge>}
