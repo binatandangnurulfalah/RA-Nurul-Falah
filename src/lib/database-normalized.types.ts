@@ -198,7 +198,7 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
     }
     Functions: Omit<BaseFunctions, 'save_student_with_guardians'> & {
       announcement_unread_count: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: number
       }
       mark_announcements_read: {
