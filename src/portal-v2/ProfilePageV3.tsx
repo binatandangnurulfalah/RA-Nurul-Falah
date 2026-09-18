@@ -353,9 +353,6 @@ function InfoRow({ icon, label, value, filled }: { icon: ReactNode; label: strin
   return <div className="profile-v3-info-row"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div><i className={filled ? 'filled' : ''}>{filled ? <Check size={13} /> : '—'}</i></div>
 }
 
-function initials(name?: string | null) {
-  return (name || 'Pengguna').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
-}
 
 function roleLabel(role: UserProfile['role']) {
   return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Orang Tua / Wali'
