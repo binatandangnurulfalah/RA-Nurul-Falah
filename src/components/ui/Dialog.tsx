@@ -15,8 +15,11 @@ const focusableSelector = 'button:not([disabled]), [href], input:not([disabled])
 
 export function Dialog({ open, title, description, children, actions, closeLabel = 'Tutup dialog', onClose }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
   const titleId = useId()
   const descriptionId = useId()
+
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
@@ -35,7 +38,7 @@ export function Dialog({ open, title, description, children, actions, closeLabel
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !dialog) return
@@ -64,7 +67,7 @@ export function Dialog({ open, title, description, children, actions, closeLabel
       document.body.style.overflow = previousOverflow
       previousActive?.focus()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
