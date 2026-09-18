@@ -3,12 +3,10 @@ import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw, Shie
 import { Button, PageHeader } from '../components/ui'
 import { supabase } from '../lib/supabase'
 
-type AttendanceRecord = {
-  id: string
-  attendance_date: string
-  check_in: string | null
-  check_out: string | null
-  status: string
+type AttendanceSummary = {
+  total_records: number
+  checked_out_records: number
+  late_records: number
 }
 
 type Feedback = { tone: 'info' | 'success' | 'error'; text: string }
@@ -19,6 +17,7 @@ type CameraAttempt = { label: string; constraints: MediaTrackConstraints; device
 
 const JAKARTA = 'Asia/Jakarta'
 const SCAN_INTERVAL = 280
+const EMPTY_SUMMARY: AttendanceSummary = { total_records: 0, checked_out_records: 0, late_records: 0 }
 
 function jakartaDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
@@ -49,7 +48,7 @@ function isClearlyFrontCamera(label: string) {
 }
 
 export function AttendanceScannerNative() {
-  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [summary, setSummary] = useState<AttendanceSummary>(EMPTY_SUMMARY)
   const [active, setActive] = useState(false)
   const [starting, setStarting] = useState(false)
   const [cameraLabel, setCameraLabel] = useState('')
@@ -72,17 +71,13 @@ export function AttendanceScannerNative() {
   const lastScanRef = useRef<{ token: string; at: number } | null>(null)
 
   const load = async () => {
-    const { data, error } = await supabase
-      .from('attendance_records')
-      .select('id,attendance_date,check_in,check_out,status')
-      .order('created_at', { ascending: false })
-      .limit(40)
+    const { data, error } = await supabase.rpc('attendance_summary_for_date', { p_date: jakartaDate() })
     if (error) {
       setSummaryError('Ringkasan hari ini belum dapat dimuat.')
       return
     }
     setSummaryError('')
-    setRecords((data as AttendanceRecord[] | null) ?? [])
+    setSummary(((data as AttendanceSummary[] | null)?.[0]) ?? EMPTY_SUMMARY)
   }
 
   useEffect(() => {
@@ -368,7 +363,6 @@ export function AttendanceScannerNative() {
     await startCamera(next.deviceId)
   }
 
-  const todayRows = records.filter((row) => row.attendance_date === jakartaDate())
   const scannerLive = active && decoderAvailable
   const statusTitle = starting ? 'Membuka kamera' : scannerLive ? 'Scanner live aktif' : active ? 'Kamera aktif' : 'Scanner siap'
   const statusDetail = active
@@ -447,14 +441,14 @@ export function AttendanceScannerNative() {
           <div className="native-summary-heading">
             <div>
               <h3 id="scanner-summary-title">Ringkasan Hari Ini</h3>
-              <p>Aktivitas absensi terbaru pada perangkat ini.</p>
+              <p>Agregasi absensi hari ini sesuai akses akun yang sedang login.</p>
             </div>
           </div>
           {summaryError ? <p className="native-summary-error" role="status">{summaryError}</p> : null}
           <div className="v2-stat-grid one">
-            <SummaryStat label="Masuk" value={todayRows.filter((row) => row.check_in).length} />
-            <SummaryStat label="Pulang" value={todayRows.filter((row) => row.check_out).length} />
-            <SummaryStat label="Terlambat" value={todayRows.filter((row) => row.status === 'late').length} />
+            <SummaryStat label="Masuk" value={summary.total_records} />
+            <SummaryStat label="Pulang" value={summary.checked_out_records} />
+            <SummaryStat label="Terlambat" value={summary.late_records} />
           </div>
           <div className="v2-security-note"><ShieldCheck /><p>QR hanya diproses oleh Admin atau Guru yang sedang login.</p></div>
         </section>

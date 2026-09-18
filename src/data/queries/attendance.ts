@@ -19,7 +19,10 @@ export type AttendanceStudent = { id: string; full_name: string; nis: string | n
 export type AttendanceSummary = { total_records: number; checked_out_records: number; late_records: number }
 const EMPTY_SUMMARY: AttendanceSummary = { total_records: 0, checked_out_records: 0, late_records: 0 }
 const JAKARTA = 'Asia/Jakarta'
-const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
+
+function jakartaDate() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: JAKARTA }).format(new Date())
+}
 
 export type AttendancePageParams = {
   page: number
@@ -63,7 +66,7 @@ export function attendanceMetaOptions({ canManage, parentView, childId }: { canM
         canManage
           ? supabase.from('students').select('id,full_name,nis,class_name').eq('is_active', true).order('full_name')
           : Promise.resolve({ data: [] as AttendanceStudent[], error: null }),
-        supabase.rpc('attendance_summary_for_date', { p_date: TODAY, p_student_id: parentView ? childId || undefined : undefined }),
+        supabase.rpc('attendance_summary_for_date', { p_date: jakartaDate(), p_student_id: parentView ? childId || undefined : undefined }),
       ])
       const error = studentsResult.error || summaryResult.error
       if (error) throw new Error(error.message || 'Data pendukung absensi gagal dimuat.')

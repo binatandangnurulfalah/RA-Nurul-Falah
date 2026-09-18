@@ -46,15 +46,21 @@ jobs:
           source /tmp/ra-nurul-falah.env
           set +a
           AUTH_READY=false
-          for attempt in $(seq 1 20); do
+          AUTH_STABLE=0
+          for attempt in $(seq 1 30); do
             if curl --fail --silent --output /dev/null "$API_URL/auth/v1/health"; then
-              AUTH_READY=true
-              break
+              AUTH_STABLE=$((AUTH_STABLE + 1))
+              if [ "$AUTH_STABLE" -ge 3 ]; then
+                AUTH_READY=true
+                break
+              fi
+            else
+              AUTH_STABLE=0
             fi
             sleep 1
           done
           if [ "$AUTH_READY" != "true" ]; then
-            echo "Supabase Auth did not become ready before integration tests."
+            echo "Supabase Auth did not remain healthy before integration tests."
             exit 1
           fi
           SUPABASE_URL="$API_URL" \

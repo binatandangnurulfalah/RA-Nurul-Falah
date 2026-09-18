@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2.4.5/edge-runtime.d.ts";
 import { corsPreflight } from '../_shared/cors.ts'
-import { createPublicClient, requireAuthenticatedUser } from '../_shared/auth.ts'
+import { requireAuthenticatedUser, createPublicClient } from '../_shared/auth.ts'
+import { appendAccountAudit } from '../_shared/audit.ts'
 import { requireRole } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
 
@@ -101,6 +102,12 @@ Deno.serve(async (req: Request) => {
       }
       delivery = 'manual_link'
     }
+
+    await appendAccountAudit(context, created.user.id, 'ACCOUNT_CREATED', {
+      display_name: displayName,
+      role,
+      delivery,
+    })
 
     return jsonResponse({
       ok: true,
