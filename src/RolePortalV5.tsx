@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { ProfileAvatar } from './components/ProfileAvatar'
+import { useDialogFocus } from './components/ui/useDialogFocus'
 import { announcementUnreadCountOptions } from './data/queries/announcements'
 import { useAnnouncementRealtime } from './data/useAnnouncementRealtime'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
@@ -147,7 +148,6 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
   const [currentProfile, setCurrentProfile] = useState(profile)
   const [moreOpen, setMoreOpen] = useState(false)
   const contentRef = useRef<HTMLElement | null>(null)
-  const moreButtonRef = useRef<HTMLButtonElement | null>(null)
   const sheetRef = useRef<HTMLElement | null>(null)
   const unreadAnnouncementsQuery = useQuery(announcementUnreadCountOptions({ role: currentProfile.role, currentUserId: currentProfile.id }))
   const announcementCount = unreadAnnouncementsQuery.data ?? 0
@@ -199,47 +199,11 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
     })
   }, [active.label, location.pathname])
 
-  useEffect(() => {
-    if (!moreOpen) return
-
-    const dialog = sheetRef.current
-    const opener = moreButtonRef.current
-    const focusable = () => Array.from(
-      dialog?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) ?? [],
-    )
-
-    window.requestAnimationFrame(() => focusable()[0]?.focus())
-
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setMoreOpen(false)
-        return
-      }
-      if (event.key !== 'Tab') return
-
-      const items = focusable()
-      if (!items.length) return
-      const first = items[0]
-      const last = items[items.length - 1]
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeydown)
-    return () => {
-      window.removeEventListener('keydown', handleKeydown)
-      opener?.focus()
-    }
-  }, [moreOpen])
+  useDialogFocus({
+    active: moreOpen,
+    containerRef: sheetRef,
+    onClose: () => setMoreOpen(false),
+  })
 
   const go = (id: string) => {
     navigate(id === 'dashboard' ? base : `${base}/${id}`)
@@ -301,7 +265,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
             <small>{mobileLabel(item.label)}</small>
           </button>
         ))}
-        <button ref={moreButtonRef} className={moreIsActive || moreOpen ? 'active' : ''} aria-expanded={moreOpen} aria-controls="mobile-more-menu" aria-haspopup="dialog" onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
+        <button className={moreIsActive || moreOpen ? 'active' : ''} aria-expanded={moreOpen} aria-controls="mobile-more-menu" aria-haspopup="dialog" onClick={() => setMoreOpen(true)}><span><MoreHorizontal size={22} /></span><small>Lainnya</small></button>
       </nav>
 
       {moreOpen && <div className="v2-sheet-layer"><button className="v2-sheet-backdrop" aria-label="Tutup" onClick={() => setMoreOpen(false)} /><section ref={sheetRef} id="mobile-more-menu" className="v2-sheet" role="dialog" aria-modal="true" aria-label="Menu lainnya"><div className="v2-sheet-handle" /><header><div><small>NAVIGASI</small><h3>Menu lainnya</h3></div><button onClick={() => setMoreOpen(false)} aria-label="Tutup menu"><X size={19} /></button></header><div className="v5-sheet-scroll">{groupedSecondary.map((group) => <section className="v5-menu-group" key={group.label}><h4>{group.label}</h4><div className="v2-sheet-grid">{group.items.map((item) => <button key={item.id} className={active.id === item.id ? 'active' : ''} aria-current={active.id === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><small>Buka halaman</small></div></button>)}</div></section>)}<section className="v5-menu-group"><h4>Sesi</h4><div className="v2-sheet-grid"><button className="danger" onClick={() => void logout()}><span><LogOut size={21} /></span><div><strong>Keluar</strong><small>Akhiri sesi akun</small></div></button></div></section></div></section></div>}
