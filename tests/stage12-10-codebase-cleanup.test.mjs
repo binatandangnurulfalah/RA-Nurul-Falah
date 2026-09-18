@@ -36,7 +36,7 @@ test('all dialog-like focus traps share one lifecycle implementation', () => {
   assert.match(focusHook, /event\.key === 'Escape'/)
   assert.match(focusHook, /event\.key !== 'Tab'/)
   assert.match(focusHook, /previousActive\?\.focus\(\)/)
-  assert.doesNotMatch(legacyExperience, /returnFocusRef|addEventListener\('keydown'/)
+  assert.doesNotMatch(legacyExperience, /returnFocusRef|onCloseRef/)
   assert.doesNotMatch(portal, /handleKeydown|moreButtonRef/)
 })
 
