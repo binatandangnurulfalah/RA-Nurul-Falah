@@ -199,7 +199,6 @@ export function DocumentsPage({ role }: { role: AppRole }) {
     <PageHeader
       eyebrow="ARSIP SEKOLAH"
       title="Dokumen & Surat"
-      subtitle={canManage ? 'Kelola surat, arsip dan unggah dokumen resmi sekolah.' : 'Dokumen resmi yang dibagikan kepada akun Anda.'}
       actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Dokumen</Button> : undefined}
     />
     {message && <Notice {...message} />}

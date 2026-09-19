@@ -169,9 +169,8 @@ export default function ParentVerificationPage() {
   }
 
   return <div className="v2-stack verification-page">
-    <PageHeader eyebrow="VALIDASI DATA" title="Verifikasi Data Orang Tua" subtitle="Periksa data keluarga, penambahan anak, dan perubahan identitas sebelum menjadi data resmi sekolah." />
+    <PageHeader eyebrow="VALIDASI DATA" title="Verifikasi Data Orang Tua" />
     {message && <Notice {...message} />}
-    <section className="family-verification-note"><ShieldCheck size={21} /><div><strong>Guru menjadi pemeriksa data</strong><p>Untuk penambahan anak, cocokkan pengajuan dengan siswa resmi. Orang Tua tidak pernah melihat daftar siswa sekolah.</p></div></section>
 
     <section className="v2-panel">
       <div className="verification-toolbar">

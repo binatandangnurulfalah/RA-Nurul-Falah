@@ -107,7 +107,6 @@ export function TeachersPage() {
     <PageHeader
       eyebrow="TENAGA PENDIDIK"
       title="Data Guru"
-      subtitle="Kelola data Guru. Akun login dapat dihubungkan nanti setelah email tersedia."
       actions={<Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Guru</Button>}
     />
     {message && <Notice {...message} />}

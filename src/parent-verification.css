@@ -3,19 +3,6 @@
   --family-soft: color-mix(in srgb, var(--color-primary) 8%, #fff);
 }
 
-.family-verification-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  padding: 14px 16px;
-  background: var(--family-soft);
-}
-.family-verification-note > svg { flex: 0 0 auto; color: var(--color-primary); margin-top: 2px; }
-.family-verification-note strong { display: block; font-size: 13px; }
-.family-verification-note p { margin: 4px 0 0; color: var(--color-text-muted); font-size: 11px; line-height: 1.55; }
-
 
 .family-tabs {
   display: grid;

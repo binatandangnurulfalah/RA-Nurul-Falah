@@ -119,7 +119,6 @@ export function AttendanceDataManager({ canManage, parentView }: { canManage: bo
     <PageHeader
       eyebrow={parentView ? 'KEHADIRAN ANAK' : 'REKAP KEHADIRAN'}
       title="Data Absen"
-      subtitle={parentView ? 'Riwayat masuk, pulang, dan status kehadiran anak yang terhubung.' : 'Cari, filter, tambah, edit, dan koreksi data kehadiran.'}
       actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Manual</Button> : undefined}
     />
     {message && <Notice {...message} />}

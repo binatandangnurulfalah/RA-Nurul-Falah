@@ -18,7 +18,7 @@ test('student lookup loads the teacher-class mode setting', () => {
 test('teacher student UI switches between global and assigned-class modes', () => {
   assert.match(students, /const singleTeacherClassMode = lookupQuery\.data\?\.singleTeacherClassMode \?\? true/)
   assert.match(students, /const teacherNeedsAssignment = role === 'teacher' && singleTeacherClassMode/)
-  assert.match(students, /Mode 1 Guru = 1 Kelas nonaktif\. Anda dapat melihat seluruh murid di sistem/)
+  assert.match(students, /Mode 1 Guru = 1 Kelas sedang nonaktif/)
   assert.match(students, /role === 'teacher' && singleTeacherClassMode && !selectedClass/)
   assert.match(students, /role === 'teacher' && !singleTeacherClassMode/)
 })
