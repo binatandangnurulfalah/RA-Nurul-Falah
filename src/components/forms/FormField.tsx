@@ -23,8 +23,8 @@ export function FormSection({ title, description, children }: { title: string; d
   return (
     <fieldset className="form-section">
       <legend className="form-section__legend">{title}</legend>
-      <div className="form-section__header" aria-hidden="true">
-        <h3>{title}</h3>
+      <div className="form-section__header">
+        <h3 aria-hidden="true">{title}</h3>
         {description ? <p>{description}</p> : null}
       </div>
       <div className="form-section__grid">{children}</div>
