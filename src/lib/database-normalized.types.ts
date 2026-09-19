@@ -320,6 +320,7 @@ type ParentVerificationRequestsTable = {
     id: string
     parent_user_id: string
     parent_display_name: string
+    parent_seen_at: string | null
     request_type: 'family_profile' | 'child_link' | 'child_update'
     subject_key: string
     target_student_id: string | null
@@ -339,6 +340,7 @@ type ParentVerificationRequestsTable = {
     id?: string
     parent_user_id: string
     parent_display_name: string
+    parent_seen_at?: string | null
     request_type: 'family_profile' | 'child_link' | 'child_update'
     subject_key: string
     target_student_id?: string | null
