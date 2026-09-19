@@ -22,15 +22,6 @@ import { type AppRole, supabase, type UserProfile } from '../lib/supabase'
 import { LoadError, useChildSelection } from './AppExperience'
 
 
-type DashboardChild = {
-  id: string
-  full_name: string
-  nis: string | null
-  class_name: string | null
-  academic_year: string | null
-  qr_token: string
-}
-
 type SchoolSetting = {
   id: number
   school_name: string
