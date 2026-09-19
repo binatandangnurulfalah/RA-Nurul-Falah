@@ -376,6 +376,7 @@ export type Database = {
           id: string
           matched_student_id: string | null
           parent_display_name: string
+          parent_seen_at: string | null
           parent_user_id: string
           proposed_data: Json
           request_type: string
@@ -395,6 +396,7 @@ export type Database = {
           id?: string
           matched_student_id?: string | null
           parent_display_name: string
+          parent_seen_at?: string | null
           parent_user_id: string
           proposed_data?: Json
           request_type: string
@@ -414,6 +416,7 @@ export type Database = {
           id?: string
           matched_student_id?: string | null
           parent_display_name?: string
+          parent_seen_at?: string | null
           parent_user_id?: string
           proposed_data?: Json
           request_type?: string
@@ -447,6 +450,13 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_supersedes_request_id_fkey"
+            columns: ["supersedes_request_id"]
+            isOneToOne: false
+            referencedRelation: "parent_verification_request_summaries"
             referencedColumns: ["id"]
           },
           {
@@ -880,6 +890,72 @@ export type Database = {
           },
         ]
       }
+      student_parent_details: {
+        Row: {
+          allergies: string | null
+          birth_certificate_no: string | null
+          blood_type: string | null
+          created_at: string
+          document_paths: Json
+          health_notes: string | null
+          photo_path: string | null
+          residential_address: string | null
+          school_admin_data: Json
+          special_needs: string | null
+          student_id: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          allergies?: string | null
+          birth_certificate_no?: string | null
+          blood_type?: string | null
+          created_at?: string
+          document_paths?: Json
+          health_notes?: string | null
+          photo_path?: string | null
+          residential_address?: string | null
+          school_admin_data?: Json
+          special_needs?: string | null
+          student_id: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          allergies?: string | null
+          birth_certificate_no?: string | null
+          blood_type?: string | null
+          created_at?: string
+          document_paths?: Json
+          health_notes?: string | null
+          photo_path?: string | null
+          residential_address?: string | null
+          school_admin_data?: Json
+          special_needs?: string | null
+          student_id?: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_parent_details_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_parent_details_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_payments: {
         Row: {
           amount: number
@@ -1203,6 +1279,95 @@ export type Database = {
         }
         Relationships: []
       }
+      parent_verification_request_summaries: {
+        Row: {
+          changed_fields: string[] | null
+          id: string | null
+          is_unread: boolean | null
+          matched_student_id: string | null
+          parent_display_name: string | null
+          parent_seen_at: string | null
+          parent_user_id: string | null
+          request_label: string | null
+          request_type: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          status_label: string | null
+          subject_key: string | null
+          subject_name: string | null
+          submitted_at: string | null
+          target_student_id: string | null
+        }
+        Insert: {
+          changed_fields?: never
+          id?: string | null
+          is_unread?: never
+          matched_student_id?: string | null
+          parent_display_name?: string | null
+          parent_seen_at?: string | null
+          parent_user_id?: string | null
+          request_label?: never
+          request_type?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          status_label?: never
+          subject_key?: string | null
+          subject_name?: never
+          submitted_at?: string | null
+          target_student_id?: string | null
+        }
+        Update: {
+          changed_fields?: never
+          id?: string | null
+          is_unread?: never
+          matched_student_id?: string | null
+          parent_display_name?: string | null
+          parent_seen_at?: string | null
+          parent_user_id?: string | null
+          request_label?: never
+          request_type?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          status_label?: never
+          subject_key?: string | null
+          subject_name?: never
+          submitted_at?: string | null
+          target_student_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_verification_requests_matched_student_id_fkey"
+            columns: ["matched_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_parent_user_id_fkey"
+            columns: ["parent_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_target_student_id_fkey"
+            columns: ["target_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_cards_search: {
         Row: {
           academic_year: string | null
@@ -1327,6 +1492,10 @@ export type Database = {
       mark_announcements_read: {
         Args: { p_announcement_ids: string[] }
         Returns: number
+      }
+      mark_parent_verification_seen: {
+        Args: { p_request_id: string }
+        Returns: boolean
       }
       payment_summary: {
         Args: { p_student_id?: string }
