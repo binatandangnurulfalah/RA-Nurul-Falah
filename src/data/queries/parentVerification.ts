@@ -104,27 +104,44 @@ export function parentFamilyWorkspaceOptions(parentUserId: string) {
   return queryOptions({
     queryKey: queryKeys.verification.meta('parent-workspace', { parentUserId }),
     queryFn: async () => {
-      const [familyResult, requestResult, studentResult, guardianResult, detailResult] = await Promise.all([
+      const [familyResult, requestResult, guardianResult] = await Promise.all([
         supabase.from('parent_family_profiles').select('*').eq('guardian_user_id', parentUserId).maybeSingle(),
         supabase.from('parent_verification_requests')
           .select('id,parent_user_id,parent_display_name,request_type,subject_key,target_student_id,proposed_data,current_data,status,supersedes_request_id,reviewed_by,review_comment,matched_student_id,submitted_at,reviewed_at,parent_seen_at')
           .eq('parent_user_id', parentUserId)
           .order('submitted_at', { ascending: false }),
-        supabase.from('students')
-          .select('id,full_name,nik,nis,nisn,gender,birth_place,birth_date,class_name,academic_year,is_active')
-          .order('full_name'),
         supabase.from('student_guardians')
           .select('student_id,relationship')
           .eq('guardian_user_id', parentUserId),
-        supabase.from('student_parent_details').select('*'),
       ])
-      const error = familyResult.error || requestResult.error || studentResult.error || guardianResult.error || detailResult.error
-      if (error) throw new Error(error.message || 'Data keluarga belum dapat dimuat.')
+
+      const firstError = familyResult.error || requestResult.error || guardianResult.error
+      if (firstError) throw new Error(firstError.message || 'Data keluarga belum dapat dimuat.')
 
       const relationships = new Map((guardianResult.data ?? []).map((row) => [row.student_id, row.relationship]))
-      const details = new Map(
-        ((detailResult.data ?? []) as StudentParentDetailsRow[]).map((row) => [row.student_id, row]),
-      )
+      const childIds = [...relationships.keys()]
+      let students: StudentCandidateRow[] = []
+      let details: StudentParentDetailsRow[] = []
+
+      if (childIds.length) {
+        const [studentResult, detailResult] = await Promise.all([
+          supabase.from('students')
+            .select('id,full_name,nik,nis,nisn,gender,birth_place,birth_date,class_name,academic_year,is_active')
+            .in('id', childIds)
+            .order('full_name'),
+          supabase.from('student_parent_details')
+            .select('*')
+            .in('student_id', childIds),
+        ])
+
+        const childError = studentResult.error || detailResult.error
+        if (childError) throw new Error(childError.message || 'Data anak belum dapat dimuat.')
+
+        students = (studentResult.data as StudentCandidateRow[] | null) ?? []
+        details = (detailResult.data as StudentParentDetailsRow[] | null) ?? []
+      }
+
+      const detailsByStudent = new Map(details.map((row) => [row.student_id, row]))
       return {
         family: (familyResult.data as ParentFamilyProfileRow | null) ?? null,
         requests: ((requestResult.data ?? []) as Omit<VerificationRequestRow, 'proposed_data' | 'current_data'>[]).map((row) => ({
@@ -132,10 +149,10 @@ export function parentFamilyWorkspaceOptions(parentUserId: string) {
           proposed_data: payload((row as { proposed_data?: unknown }).proposed_data),
           current_data: (row as { current_data?: unknown }).current_data ? payload((row as { current_data?: unknown }).current_data) : null,
         })) as VerificationRequestRow[],
-        children: ((studentResult.data ?? []) as StudentCandidateRow[]).map((row) => ({
+        children: students.map((row) => ({
           ...row,
           relationship: relationships.get(row.id) ?? 'Wali',
-          parent_details: details.get(row.id) ?? null,
+          parent_details: detailsByStudent.get(row.id) ?? null,
         })) as ParentChildRow[],
       }
     },
