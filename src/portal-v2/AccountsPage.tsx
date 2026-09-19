@@ -250,7 +250,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
   return <FormDialog
     open
     title="Tambah Akun"
-    description="Pengguna menerima email berisi alamat akun, password sementara 8 karakter, dan tautan undangan untuk membuat password sendiri."
+    description="Pengguna menerima email berisi alamat akun, password sementara 8 karakter, dan tautan menuju halaman login."
     submitLabel="Buat & Kirim Undangan"
     busy={busy}
     error={errorText}
