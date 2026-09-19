@@ -6,11 +6,16 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 
 const migration = read('supabase/migrations/20260918192125_stage12_11_parent_family_verification.sql')
 const grantHardening = read('supabase/migrations/20260919003833_stage12_11_verification_grant_hardening.sql')
+const migrationV2 = read('supabase/migrations/20260919013756_stage12_11_parent_family_verification_v2.sql')
+const auditWhitelist = read('supabase/migrations/20260919013843_stage12_11_parent_verification_audit_whitelist.sql')
 const portal = read('src/RolePortalV5.tsx')
 const parentPage = read('src/portal-v2/ParentFamilyPage.tsx')
 const verificationPage = read('src/portal-v2/ParentVerificationPage.tsx')
+const verificationQuery = read('src/data/queries/parentVerification.ts')
+const verificationRealtime = read('src/data/useParentVerificationRealtime.ts')
 const profilePage = read('src/portal-v2/ProfilePageV3.tsx')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
+const generatedTypes = read('src/lib/database.types.ts')
 
 test('Tahap 12.11 menyediakan canonical family profile dan immutable-style verification queue', () => {
   assert.match(migration, /create table if not exists public\.parent_family_profiles/)
@@ -29,27 +34,75 @@ test('verification tables expose SELECT-only access to authenticated clients', (
   assert.doesNotMatch(grantHardening, /grant (insert|update|delete|truncate|trigger|references)/i)
 })
 
-test('Orang Tua hanya mengajukan perubahan dan tidak menulis canonical data langsung', () => {
+test('Tahap 12.11 v2 melengkapi detail anak, storage privat, unread status, dan audit aman', () => {
+  assert.match(migrationV2, /create table if not exists public\.student_parent_details/)
+  assert.match(migrationV2, /residential_address text/)
+  assert.match(migrationV2, /blood_type text/)
+  assert.match(migrationV2, /health_notes text/)
+  assert.match(migrationV2, /document_paths jsonb/)
+  assert.match(migrationV2, /parent-verification-files/)
+  assert.match(migrationV2, /parent_seen_at timestamptz/)
+  assert.match(migrationV2, /mark_parent_verification_seen/)
+  assert.match(migrationV2, /parent_verification_request_summaries/)
+  assert.match(migrationV2, /parent_verification_requests_capture_audit/)
+  assert.match(migrationV2, /student_parent_details_capture_audit/)
+  assert.match(migrationV2, /'proposed_data','current_data','review_comment'/)
+  assert.match(auditWhitelist, /'parent_verification_requests'::text/)
+  assert.match(auditWhitelist, /'student_parent_details'::text/)
+})
+
+test('child link hanya menghubungkan Orang Tua ke siswa resmi dan tidak menimpa identitas resmi', () => {
+  assert.match(migrationV2, /Linking a parent never overwrites official student identity/)
+  assert.match(migrationV2, /insert into public\.student_guardians/)
+  assert.match(migrationV2, /perform private\.apply_parent_student_details/)
+  assert.match(migrationV2, /elsif v_request\.request_type = 'child_update' then/)
+})
+
+test('Orang Tua hanya mengajukan perubahan dan UI v2 mendukung data kesehatan serta berkas privat', () => {
   assert.match(migration, /revoke insert, update, delete on table public\.parent_family_profiles from authenticated/)
-  assert.match(migration, /revoke insert, update, delete on table public\.parent_verification_requests from authenticated/)
   assert.match(migration, /submit_parent_family_verification/)
-  assert.match(migration, /submit_parent_child_verification/)
-  assert.match(migration, /guard_parent_profile_verified_fields/)
+  assert.match(migrationV2, /submit_parent_child_verification/)
   assert.match(parentPage, /Ajukan Verifikasi/)
   assert.match(parentPage, /Tambahkan Anak/)
   assert.match(parentPage, /Perbaiki & kirim ulang/)
+  assert.match(parentPage, /Alamat & kesehatan/)
+  assert.match(parentPage, /Golongan darah/)
+  assert.match(parentPage, /Catatan kesehatan/)
+  assert.match(parentPage, /Dokumen pendukung/)
+  assert.match(parentPage, /parent-verification-files/)
+  assert.match(parentPage, /type="file"/)
+  assert.match(parentPage, /markParentVerificationSeen/)
   assert.doesNotMatch(parentPage, /from\('students'\).*insert|from\('students'\).*update/)
 })
 
-test('Guru memverifikasi detail, dapat minta perbaikan/tolak, dan child link wajib dicocokkan ke siswa resmi', () => {
-  assert.match(migration, /review_parent_verification_request/)
-  assert.match(migration, /Pilih siswa resmi RA Nurul Falah yang sesuai/)
-  assert.match(migration, /private\.teacher_can_verify_student/)
+test('query verification v2 mempertahankan JSON bertingkat dan mengambil detail anak terverifikasi', () => {
+  assert.match(verificationQuery, /VerificationPayload = Record<string, Json \| undefined>/)
+  assert.match(verificationQuery, /student_parent_details/)
+  assert.match(verificationQuery, /parent_seen_at/)
+  assert.match(verificationQuery, /parent_verification_request_summaries/)
+  assert.match(verificationQuery, /mark_parent_verification_seen/)
+  assert.doesNotMatch(verificationQuery, /String\(item\)/)
+})
+
+test('Guru memverifikasi detail, dapat minta perbaikan atau tolak, dan child link wajib dicocokkan ke siswa resmi', () => {
+  assert.match(migrationV2, /review_parent_verification_request/)
+  assert.match(migrationV2, /Pilih siswa resmi RA Nurul Falah yang sesuai/)
+  assert.match(migrationV2, /private\.teacher_can_verify_student/)
   assert.match(verificationPage, /Setujui/)
   assert.match(verificationPage, /Minta Perbaikan/)
-  assert.match(verificationPage, /Tolak/)
+  assert.match(verificationPage, /Tolak Pengajuan/)
   assert.match(verificationPage, /Cocokkan dengan siswa resmi/)
+  assert.match(verificationPage, /Pencocokan hanya menghubungkan akun/)
+  assert.match(verificationPage, /createSignedUrl/)
   assert.match(verificationPage, /p_matched_student_id/)
+})
+
+test('status verification direfresh realtime dan badge unread ditampilkan pada navigasi Orang Tua', () => {
+  assert.match(verificationRealtime, /postgres_changes/)
+  assert.match(verificationRealtime, /parent_verification_requests/)
+  assert.match(portal, /verificationUnreadCountOptions/)
+  assert.match(portal, /verificationCount/)
+  assert.match(portal, /item\.id === 'children'/)
 })
 
 test('navigasi role menggunakan Data Keluarga untuk parent dan Verifikasi Data untuk teacher/admin', () => {
@@ -59,6 +112,13 @@ test('navigasi role menggunakan Data Keluarga untuk parent dan Verifikasi Data u
   assert.match(portal, /page === 'children' && role === 'parent'/)
   assert.match(portal, /ParentFamilyPage/)
   assert.match(portal, /ParentVerificationPage/)
+})
+
+test('types produksi sudah mengenal schema verification v2', () => {
+  assert.match(generatedTypes, /student_parent_details:/)
+  assert.match(generatedTypes, /parent_verification_request_summaries:/)
+  assert.match(generatedTypes, /parent_seen_at: string \| null/)
+  assert.match(generatedTypes, /mark_parent_verification_seen:/)
 })
 
 test('profil Orang Tua mengarahkan data resmi ke Data Keluarga', () => {
