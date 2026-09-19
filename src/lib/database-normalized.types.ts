@@ -250,6 +250,7 @@ type ParentFamilyProfilesTable = {
     account_display_name: string
     primary_phone: string | null
     family_card_no: string | null
+    family_card_path: string | null
     family_address: string | null
     father_name: string | null
     father_nik: string | null
@@ -283,6 +284,7 @@ type ParentFamilyProfilesTable = {
     account_display_name: string
     primary_phone?: string | null
     family_card_no?: string | null
+    family_card_path?: string | null
     family_address?: string | null
     father_name?: string | null
     father_nik?: string | null
