@@ -404,3 +404,219 @@
   .mobile-data-card__header { gap: var(--space-2); }
   .mobile-data-card__leading { width: 38px; height: 38px; }
 }
+
+
+/* Shared modern form system */
+.form-section {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--color-surface) 0%, color-mix(in srgb, var(--color-surface-soft) 70%, #fff) 100%);
+  box-shadow: 0 6px 18px rgba(31, 66, 53, .035);
+}
+
+.form-section__legend {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.form-section__header {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.form-section__header h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.form-section__header p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.form-section__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.form-field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+
+.form-field.full {
+  grid-column: 1 / -1;
+}
+
+.form-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.form-field__label b {
+  color: var(--color-danger);
+}
+
+.form-field__control {
+  min-width: 0;
+  display: block;
+}
+
+.form-field__control > :where(input, select, textarea) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 11px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+
+.form-field__control > :where(input, select) {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.form-field__control > textarea {
+  min-height: 92px;
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.form-field__control > :where(input, select, textarea):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border-strong));
+}
+
+.form-field__control > :where(input, select, textarea):focus {
+  outline: 0;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.form-field__control > input[type="file"] {
+  min-height: 0;
+  padding: 9px;
+  border-style: dashed;
+  background: var(--color-surface-soft);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.form-field__control > input[type="file"]::file-selector-button {
+  min-height: 34px;
+  margin-right: 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 9px;
+  padding: 0 11px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.form-field__helper,
+.form-field__error {
+  display: block;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.form-field__helper {
+  color: var(--color-text-muted);
+}
+
+.form-field__error {
+  color: var(--color-danger);
+}
+
+.form-field.has-error .form-field__control > :where(input, select, textarea) {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.form-dialog__form {
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .form-section {
+    padding: 14px;
+    border-radius: 15px;
+    box-shadow: none;
+  }
+
+  .form-section__header {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+
+  .form-section__header h3 {
+    font-size: 15px;
+  }
+
+  .form-section__header p {
+    font-size: 12px;
+  }
+
+  .form-section__grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-field.full {
+    grid-column: auto;
+  }
+
+  .form-field__label {
+    font-size: 12px;
+  }
+
+  .form-field__control > :where(input, select) {
+    min-height: 46px;
+    font-size: 14px;
+  }
+
+  .form-field__control > textarea {
+    min-height: 104px;
+    font-size: 14px;
+  }
+
+  .form-field__helper,
+  .form-field__error {
+    font-size: 11px;
+  }
+}
