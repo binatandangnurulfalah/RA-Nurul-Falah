@@ -1,10 +1,10 @@
 import { type FormEvent, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Baby, CheckCircle2, Clock3, Edit3, Plus, ShieldCheck, UsersRound } from 'lucide-react'
+import { Baby, CheckCircle2, Clock3, Edit3, FileText, HeartPulse, MapPin, Paperclip, Plus, ShieldCheck, UsersRound } from 'lucide-react'
 import { FormDialog, FormField, FormSection } from '../components/forms'
 import { StatusBadge } from '../components/data'
 import { Button, EmptyState, PageHeader } from '../components/ui'
-import { parentFamilyWorkspaceOptions, type ParentChildRow, type VerificationPayload, type VerificationRequestRow } from '../data/queries/parentVerification'
+import { markParentVerificationSeen, parentFamilyWorkspaceOptions, type ParentChildRow, type VerificationPayload, type VerificationRequestRow } from '../data/queries/parentVerification'
 import { queryKeys } from '../data/queryKeys'
 import { userErrorMessage } from '../lib/error-utils'
 import { supabase, type UserProfile } from '../lib/supabase'
@@ -47,6 +47,15 @@ type ChildForm = {
   birth_place: string
   birth_date: string
   relationship_to_child: string
+  residential_address: string
+  blood_type: '' | 'A' | 'B' | 'AB' | 'O'
+  allergies: string
+  health_notes: string
+  special_needs: string
+  birth_certificate_no: string
+  photo_path: string
+  document_paths: string[]
+  administrative_notes: string
 }
 
 type ChildEditor = {
@@ -54,6 +63,8 @@ type ChildEditor = {
   supersedesRequestId: string | null
   title: string
   form: ChildForm
+  photoFile: File | null
+  documentFiles: File[]
 }
 
 const emptyFamily = (profile: UserProfile): FamilyForm => ({
@@ -93,7 +104,40 @@ const emptyChild = (): ChildForm => ({
   birth_place: '',
   birth_date: '',
   relationship_to_child: 'Orang Tua',
+  residential_address: '',
+  blood_type: '',
+  allergies: '',
+  health_notes: '',
+  special_needs: '',
+  birth_certificate_no: '',
+  photo_path: '',
+  document_paths: [],
+  administrative_notes: '',
 })
+
+const VERIFICATION_BUCKET = 'parent-verification-files'
+
+function jsonText(value: unknown) {
+  return typeof value === 'string' ? value : value == null ? '' : String(value)
+}
+
+function jsonStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function adminNotes(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+  const notes = (value as Record<string, unknown>).administrative_notes
+  return typeof notes === 'string' ? notes : ''
+}
+
+function safeFileName(name: string) {
+  return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'file'
+}
+
+function requestUnread(request: VerificationRequestRow) {
+  return Boolean(request.reviewed_at && (!request.parent_seen_at || request.parent_seen_at < request.reviewed_at))
+}
 
 function stringValue(value: unknown) {
   return value == null ? '' : String(value)
@@ -107,14 +151,24 @@ function familyFromPayload(profile: UserProfile, payload: Record<string, unknown
 }
 
 function childFromPayload(payload: VerificationPayload): ChildForm {
+  const bloodType = jsonText(payload.blood_type)
   return {
-    full_name: stringValue(payload.full_name),
-    nik: stringValue(payload.nik),
-    nisn: stringValue(payload.nisn),
+    full_name: jsonText(payload.full_name),
+    nik: jsonText(payload.nik),
+    nisn: jsonText(payload.nisn),
     gender: payload.gender === 'L' || payload.gender === 'P' ? payload.gender : '',
-    birth_place: stringValue(payload.birth_place),
-    birth_date: stringValue(payload.birth_date),
-    relationship_to_child: stringValue(payload.relationship_to_child) || 'Orang Tua',
+    birth_place: jsonText(payload.birth_place),
+    birth_date: jsonText(payload.birth_date),
+    relationship_to_child: jsonText(payload.relationship_to_child) || 'Orang Tua',
+    residential_address: jsonText(payload.residential_address),
+    blood_type: bloodType === 'A' || bloodType === 'B' || bloodType === 'AB' || bloodType === 'O' ? bloodType : '',
+    allergies: jsonText(payload.allergies),
+    health_notes: jsonText(payload.health_notes),
+    special_needs: jsonText(payload.special_needs),
+    birth_certificate_no: jsonText(payload.birth_certificate_no),
+    photo_path: jsonText(payload.photo_path),
+    document_paths: jsonStringArray(payload.document_paths),
+    administrative_notes: adminNotes(payload.school_admin_data),
   }
 }
 
@@ -151,7 +205,18 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
 
   const verifiedFamilyPayload = useMemo(() => family ? familyFromPayload(profile, family as unknown as Record<string, unknown>) : emptyFamily(profile), [family, profile])
 
+  const markSeen = async (request: VerificationRequestRow) => {
+    if (!requestUnread(request)) return
+    try {
+      await markParentVerificationSeen(request.id)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.verification.all })
+    } catch {
+      // Reading the detail must stay usable even if acknowledgement cannot be persisted.
+    }
+  }
+
   const openFamily = (request?: VerificationRequestRow) => {
+    if (request) void markSeen(request)
     setFamilySupersedes(request?.id ?? null)
     setFamilyForm(request ? familyFromPayload(profile, request.proposed_data) : verifiedFamilyPayload)
     setFormError('')
@@ -159,7 +224,14 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   }
 
   const openNewChild = () => {
-    setChildEditor({ targetStudentId: null, supersedesRequestId: null, title: 'Tambahkan Anak', form: emptyChild() })
+    setChildEditor({
+      targetStudentId: null,
+      supersedesRequestId: null,
+      title: 'Tambahkan Anak',
+      form: emptyChild(),
+      photoFile: null,
+      documentFiles: [],
+    })
     setFormError('')
   }
 
@@ -176,7 +248,18 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
         birth_place: child.birth_place || '',
         birth_date: child.birth_date || '',
         relationship_to_child: child.relationship || 'Orang Tua',
+        residential_address: child.parent_details?.residential_address || '',
+        blood_type: (child.parent_details?.blood_type === 'A' || child.parent_details?.blood_type === 'B' || child.parent_details?.blood_type === 'AB' || child.parent_details?.blood_type === 'O') ? child.parent_details.blood_type : '',
+        allergies: child.parent_details?.allergies || '',
+        health_notes: child.parent_details?.health_notes || '',
+        special_needs: child.parent_details?.special_needs || '',
+        birth_certificate_no: child.parent_details?.birth_certificate_no || '',
+        photo_path: child.parent_details?.photo_path || '',
+        document_paths: jsonStringArray(child.parent_details?.document_paths),
+        administrative_notes: adminNotes(child.parent_details?.school_admin_data),
       },
+      photoFile: null,
+      documentFiles: [],
     })
     setFormError('')
   }
@@ -187,7 +270,10 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
       supersedesRequestId: request.id,
       title: request.request_type === 'child_link' ? 'Perbaiki Pengajuan Anak' : 'Perbaiki Perubahan Anak',
       form: childFromPayload(request.proposed_data),
+      photoFile: null,
+      documentFiles: [],
     })
+    void markSeen(request)
     setFormError('')
   }
 
@@ -215,16 +301,67 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     if (!childEditor || busy) return
     setBusy(true)
     setFormError('')
-    const { error } = await supabase.rpc('submit_parent_child_verification', {
-      p_target_student_id: childEditor.targetStudentId,
-      p_payload: childEditor.form,
-      p_supersedes_request_id: childEditor.supersedesRequestId,
-    })
-    setBusy(false)
-    if (error) {
+
+    const uploadedPaths: string[] = []
+    let photoPath = childEditor.form.photo_path
+    const documentPaths = [...childEditor.form.document_paths]
+
+    try {
+      const uploadRoot = `${profile.id}/children/${crypto.randomUUID()}`
+
+      if (childEditor.photoFile) {
+        const photoName = safeFileName(childEditor.photoFile.name)
+        photoPath = `${uploadRoot}/photo-${photoName}`
+        const { error } = await supabase.storage
+          .from(VERIFICATION_BUCKET)
+          .upload(photoPath, childEditor.photoFile, { contentType: childEditor.photoFile.type, upsert: false })
+        if (error) throw error
+        uploadedPaths.push(photoPath)
+      }
+
+      for (const [index, file] of childEditor.documentFiles.entries()) {
+        const path = `${uploadRoot}/documents/${index + 1}-${safeFileName(file.name)}`
+        const { error } = await supabase.storage
+          .from(VERIFICATION_BUCKET)
+          .upload(path, file, { contentType: file.type, upsert: false })
+        if (error) throw error
+        uploadedPaths.push(path)
+        documentPaths.push(path)
+      }
+
+      const { error } = await supabase.rpc('submit_parent_child_verification', {
+        p_target_student_id: childEditor.targetStudentId,
+        p_payload: {
+          full_name: childEditor.form.full_name,
+          nik: childEditor.form.nik,
+          nisn: childEditor.form.nisn,
+          gender: childEditor.form.gender,
+          birth_place: childEditor.form.birth_place,
+          birth_date: childEditor.form.birth_date,
+          relationship_to_child: childEditor.form.relationship_to_child,
+          residential_address: childEditor.form.residential_address,
+          blood_type: childEditor.form.blood_type,
+          allergies: childEditor.form.allergies,
+          health_notes: childEditor.form.health_notes,
+          special_needs: childEditor.form.special_needs,
+          birth_certificate_no: childEditor.form.birth_certificate_no,
+          photo_path: photoPath,
+          document_paths: documentPaths,
+          school_admin_data: { administrative_notes: childEditor.form.administrative_notes || null },
+        },
+        p_supersedes_request_id: childEditor.supersedesRequestId,
+      })
+      if (error) throw error
+    } catch (error) {
+      if (uploadedPaths.length) {
+        await supabase.storage.from(VERIFICATION_BUCKET).remove(uploadedPaths)
+      }
+      setBusy(false)
       setFormError(userErrorMessage(error, 'Pengajuan data anak gagal dikirim.'))
       return
     }
+
+    setBusy(false)
     setChildEditor(null)
     setMessage({ tone: 'success', text: 'Data anak berhasil diajukan dan menunggu verifikasi Guru.' })
     await queryClient.invalidateQueries({ queryKey: queryKeys.verification.all })
@@ -280,6 +417,11 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
             <div className="family-child-title"><h4>{child.full_name}</h4>{pendingUpdate && <StatusBadge tone="warning">Perubahan menunggu</StatusBadge>}</div>
             <p>{child.class_name || 'Kelompok belum ditentukan'} · {child.academic_year || 'Tahun ajaran belum tersedia'}</p>
             <small>{child.nis ? `NIS ${child.nis}` : 'NIS belum diisi'} · Hubungan: {child.relationship || 'Wali'}</small>
+            {child.parent_details && <div className="family-child-details">
+              {child.parent_details.residential_address && <span><MapPin size={12} /> Alamat tersedia</span>}
+              {(child.parent_details.blood_type || child.parent_details.health_notes || child.parent_details.allergies) && <span><HeartPulse size={12} /> Data kesehatan tersedia</span>}
+              {(child.parent_details.photo_path || jsonStringArray(child.parent_details.document_paths).length > 0) && <span><Paperclip size={12} /> Berkas terverifikasi</span>}
+            </div>}
             {correction && !pendingUpdate && <CorrectionNotice request={correction} onFix={() => reopenChildRequest(correction)} compact />}
           </div>
           <Button size="sm" variant="secondary" disabled={Boolean(pendingUpdate)} onClick={() => openChildUpdate(child)}><Edit3 size={15} /> Ajukan Perubahan</Button>
@@ -296,9 +438,10 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
       <header className="family-section-head"><div><small>RIWAYAT</small><h3>Riwayat verifikasi</h3></div></header>
       {requests.length ? <div className="family-history">{requests.slice(0, 12).map((request) => <article key={request.id}>
         <div><strong>{request.request_type === 'family_profile' ? 'Data keluarga' : request.request_type === 'child_link' ? `Tambah anak · ${request.proposed_data.full_name || ''}` : `Perubahan anak · ${request.proposed_data.full_name || ''}`}</strong><small>{new Date(request.submitted_at).toLocaleString('id-ID')}</small></div>
-        <StatusBadge tone={statusTone(request.status)}>{statusLabel(request.status)}</StatusBadge>
+        <div className="family-history-status"><StatusBadge tone={statusTone(request.status)}>{statusLabel(request.status)}</StatusBadge>{requestUnread(request) && <span className="verification-unread-dot">Baru</span>}</div>
         {request.review_comment ? <p>{request.review_comment}</p> : null}
         {(request.status === 'changes_requested' || request.status === 'rejected') && <Button size="sm" variant="secondary" onClick={() => request.request_type === 'family_profile' ? openFamily(request) : reopenChildRequest(request)}>Perbaiki & kirim ulang</Button>}
+        {requestUnread(request) && request.status === 'approved' && <Button size="sm" variant="secondary" onClick={() => void markSeen(request)}>Tandai dibaca</Button>}
       </article>)}</div> : <p className="helper-text">Belum ada riwayat pengajuan.</p>}
     </section>
 
@@ -307,7 +450,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     </FormDialog>
 
     <FormDialog open={Boolean(childEditor)} title={childEditor?.title || 'Data Anak'} description="Isi identitas anak. Anda tidak perlu memilih siswa dari daftar sekolah; Guru yang akan melakukan pencocokan." submitLabel="Ajukan Verifikasi" busy={busy} error={formError} onClose={() => setChildEditor(null)} onSubmit={submitChild}>
-      {childEditor && <ChildFormFields form={childEditor.form} setForm={(form) => setChildEditor({ ...childEditor, form })} />}
+      {childEditor && <ChildFormFields editor={childEditor} setEditor={setChildEditor} />}
     </FormDialog>
   </div>
 }
@@ -346,16 +489,42 @@ function PersonSection({ title, prefix, form, setForm, guardian = false }: { tit
   </FormSection>
 }
 
-function ChildFormFields({ form, setForm }: { form: ChildForm; setForm: (form: ChildForm) => void }) {
-  return <FormSection title="Identitas anak" description="Kelas, NIS dan tahun ajaran tetap berasal dari data resmi sekolah dan tidak dapat diubah dari akun Orang Tua.">
-    <FormField label="Nama lengkap" required><input required maxLength={120} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></FormField>
-    <FormField label="NIK"><input inputMode="numeric" maxLength={16} value={form.nik} onChange={(e) => setForm({ ...form, nik: e.target.value.replace(/\D/g, '') })} /></FormField>
-    <FormField label="NISN"><input inputMode="numeric" maxLength={20} value={form.nisn} onChange={(e) => setForm({ ...form, nisn: e.target.value.replace(/\D/g, '') })} /></FormField>
-    <FormField label="Jenis kelamin" required><select required value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as ChildForm['gender'] })}><option value="">Pilih</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></FormField>
-    <FormField label="Tempat lahir"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} /></FormField>
-    <FormField label="Tanggal lahir" required><input type="date" required value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} /></FormField>
-    <FormField label="Hubungan Anda dengan anak" required><select required value={form.relationship_to_child} onChange={(e) => setForm({ ...form, relationship_to_child: e.target.value })}><option>Orang Tua</option><option>Ayah</option><option>Ibu</option><option>Wali</option></select></FormField>
-  </FormSection>
+function ChildFormFields({ editor, setEditor }: { editor: ChildEditor; setEditor: (editor: ChildEditor) => void }) {
+  const form = editor.form
+  const setForm = (next: ChildForm) => setEditor({ ...editor, form: next })
+
+  return <>
+    <FormSection title="Identitas anak" description="Kelas, NIS dan tahun ajaran tetap berasal dari data resmi sekolah dan tidak dapat diubah dari akun Orang Tua.">
+      <FormField label="Nama lengkap" required><input required maxLength={120} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></FormField>
+      <FormField label="NIK"><input inputMode="numeric" maxLength={16} value={form.nik} onChange={(e) => setForm({ ...form, nik: e.target.value.replace(/\D/g, '') })} /></FormField>
+      <FormField label="NISN"><input inputMode="numeric" maxLength={20} value={form.nisn} onChange={(e) => setForm({ ...form, nisn: e.target.value.replace(/\D/g, '') })} /></FormField>
+      <FormField label="Jenis kelamin" required><select required value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as ChildForm['gender'] })}><option value="">Pilih</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></FormField>
+      <FormField label="Tempat lahir"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} /></FormField>
+      <FormField label="Tanggal lahir" required><input type="date" required value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} /></FormField>
+      <FormField label="Hubungan Anda dengan anak" required><select required value={form.relationship_to_child} onChange={(e) => setForm({ ...form, relationship_to_child: e.target.value })}><option>Orang Tua</option><option>Ayah</option><option>Ibu</option><option>Wali</option></select></FormField>
+    </FormSection>
+
+    <FormSection title="Alamat & kesehatan" description="Isi informasi dasar yang relevan untuk kebutuhan sekolah dan keadaan darurat.">
+      <FormField label="Alamat anak" full><textarea rows={3} maxLength={1000} value={form.residential_address} onChange={(e) => setForm({ ...form, residential_address: e.target.value })} /></FormField>
+      <FormField label="Golongan darah"><select value={form.blood_type} onChange={(e) => setForm({ ...form, blood_type: e.target.value as ChildForm['blood_type'] })}><option value="">Belum diketahui</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option></select></FormField>
+      <FormField label="Alergi" full><textarea rows={2} maxLength={1000} value={form.allergies} onChange={(e) => setForm({ ...form, allergies: e.target.value })} placeholder="Kosongkan jika tidak ada / belum diketahui." /></FormField>
+      <FormField label="Catatan kesehatan" full><textarea rows={3} maxLength={2000} value={form.health_notes} onChange={(e) => setForm({ ...form, health_notes: e.target.value })} /></FormField>
+      <FormField label="Kebutuhan khusus" full><textarea rows={2} maxLength={1000} value={form.special_needs} onChange={(e) => setForm({ ...form, special_needs: e.target.value })} /></FormField>
+    </FormSection>
+
+    <FormSection title="Administrasi & berkas" description="Berkas tersimpan privat dan hanya dapat dilihat Orang Tua/Wali pemilik, Guru, serta Admin yang berwenang.">
+      <FormField label="Nomor akta kelahiran"><input maxLength={80} value={form.birth_certificate_no} onChange={(e) => setForm({ ...form, birth_certificate_no: e.target.value })} /></FormField>
+      <FormField label="Catatan administrasi" full><textarea rows={3} maxLength={2000} value={form.administrative_notes} onChange={(e) => setForm({ ...form, administrative_notes: e.target.value })} placeholder="Informasi administrasi lain yang perlu diperiksa Guru." /></FormField>
+      <FormField label="Foto anak" full>
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setEditor({ ...editor, photoFile: e.target.files?.[0] ?? null })} />
+        <small className="family-file-hint">{editor.photoFile ? `Dipilih: ${editor.photoFile.name}` : form.photo_path ? 'Foto terverifikasi sebelumnya tetap digunakan jika tidak diganti.' : 'JPG, PNG, atau WebP. Maksimal 5 MB.'}</small>
+      </FormField>
+      <FormField label="Dokumen pendukung" full>
+        <input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setEditor({ ...editor, documentFiles: Array.from(e.target.files ?? []).slice(0, 10) })} />
+        <small className="family-file-hint"><FileText size={12} /> {editor.documentFiles.length ? `${editor.documentFiles.length} berkas baru dipilih` : form.document_paths.length ? `${form.document_paths.length} berkas terverifikasi sebelumnya tetap tersimpan` : 'Opsional · PDF/JPG/PNG/WebP · maksimal 10 berkas.'}</small>
+      </FormField>
+    </FormSection>
+  </>
 }
 
 function FamilyInfo({ label, value }: { label: string; value: string }) {
