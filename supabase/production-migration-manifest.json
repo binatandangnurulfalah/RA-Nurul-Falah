@@ -54,7 +54,7 @@
     "20260918112412_stage12_7_teacher_global_students_when_policy_off.sql",
     "20260918115932_stage12_8_profile_photo_upload.sql",
     "20260918192125_stage12_11_parent_family_verification.sql",
-    "20260919101500_stage12_11_verification_grant_hardening.sql"
+    "20260919003833_stage12_11_verification_grant_hardening.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
