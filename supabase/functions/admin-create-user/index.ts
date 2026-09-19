@@ -107,6 +107,7 @@ Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
 
     const { error: passwordError } = await context.adminClient.auth.admin.updateUserById(invited.user.id, {
       password: temporaryPassword,
+      email_confirm: true,
       user_metadata: {
         display_name: displayName,
         must_set_password: true,
