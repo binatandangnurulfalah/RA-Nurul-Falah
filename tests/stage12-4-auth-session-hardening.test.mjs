@@ -9,14 +9,25 @@ const profile = read('src/portal-v2/ProfilePageV3.tsx')
 const manageUser = read('supabase/functions/admin-manage-user/index.ts')
 const config = read('supabase/config.toml')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
+const createUser = read('supabase/functions/admin-create-user/index.ts')
+const supabaseClient = read('src/lib/supabase.ts')
+const emailLink = read('src/lib/auth-email-link.ts')
+const accounts = read('src/portal-v2/AccountsPage.tsx')
 
-test('forgot-password uses Supabase recovery flow, not passwordless sign-in', () => {
+test('forgot-password uses explicit Supabase recovery handling that does not collide with HashRouter', () => {
   assert.match(app, /resetPasswordForEmail/)
+  assert.match(app, /readEmailAuthLink/)
+  assert.match(app, /supabase\.auth\.setSession/)
+  assert.match(app, /clearEmailAuthLink/)
   assert.match(app, /PASSWORD_RECOVERY/)
   assert.doesNotMatch(app, /signInWithOtp/)
   assert.doesNotMatch(app, /verifyOtp\(\{ email, token, type: 'email'/)
-  assert.match(app, /Tautan pemulihan diperlukan/)
-  assert.match(app, /RECOVERY_SESSION_KEY/)
+  assert.match(app, /Tautan pengaturan password diperlukan/)
+  assert.match(app, /PASSWORD_SETUP_SESSION_KEY/)
+  assert.match(supabaseClient, /detectSessionInUrl: false/)
+  assert.match(emailLink, /type !== 'invite' && type !== 'recovery'/)
+  assert.match(emailLink, /access_token/)
+  assert.match(emailLink, /refresh_token/)
 })
 
 test('session lifecycle is server-verified and account profile is rechecked', () => {
@@ -61,4 +72,21 @@ test('scanner remains LIVE CAMERA ONLY', () => {
   assert.doesNotMatch(scanner, /type="file"|capture=|galeri|gallery|upload foto|unggah foto/i)
   assert.doesNotMatch(scanner, /\btorch\b|Flashlight|toggleTorch/i)
   assert.doesNotMatch(scanner, /setManual|Masukkan kode QR secara manual|Tempel kode QR/i)
+})
+
+
+test('akun baru memakai Invite User, bukan email reset password', () => {
+  assert.match(createUser, /inviteUserByEmail/)
+  assert.match(createUser, /must_set_password: true/)
+  assert.match(createUser, /delivery = 'invite_email'/)
+  assert.doesNotMatch(createUser, /randomBootstrapPassword/)
+  assert.doesNotMatch(createUser, /resetPasswordForEmail/)
+  assert.match(accounts, /email undangan telah dikirim/)
+  assert.match(accounts, /Pengguna menerima email undangan/)
+})
+
+test('halaman password membedakan undangan akun dan recovery', () => {
+  assert.match(app, /mode === 'invite' \? 'Buat password akun'/)
+  assert.match(app, /Selesaikan undangan akun dengan membuat password Anda sendiri/)
+  assert.match(app, /must_set_password: false/)
 })
