@@ -56,7 +56,6 @@ export function AuditTrailPage() {
     <PageHeader
       eyebrow="KEAMANAN & KONTROL"
       title="Catatan Aktivitas"
-      subtitle="Jejak perubahan penting lintas modul. Hanya Administrator yang dapat membaca audit trail ini."
     />
 
     <section className="v2-panel">
