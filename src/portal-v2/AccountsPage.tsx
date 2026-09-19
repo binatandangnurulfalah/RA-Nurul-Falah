@@ -132,7 +132,6 @@ export function AccountsPage() {
     <PageHeader
       eyebrow="AKSES PENGGUNA"
       title="Manajemen Akun"
-      subtitle="Tambah, edit, nonaktifkan, kirim reset password, atau hapus akun pengguna."
       actions={<Button onClick={() => setCreateOpen(true)}><Plus size={17} /> Tambah Akun</Button>}
     />
     {message && <Notice {...message} />}
