@@ -6,8 +6,21 @@ export type EmailAuthLink = {
   refreshToken: string
 }
 
+const DEFAULT_AUTH_REDIRECT_URL = 'https://binatandangnurulfalah.github.io/RA-Nurul-Falah/'
+
 export function authRedirectUrl() {
-  return new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+  const configured = String(import.meta.env.VITE_AUTH_REDIRECT_URL ?? '').trim()
+  if (!configured) return DEFAULT_AUTH_REDIRECT_URL
+
+  try {
+    const url = new URL(configured)
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
+      return DEFAULT_AUTH_REDIRECT_URL
+    }
+    return url.toString()
+  } catch {
+    return DEFAULT_AUTH_REDIRECT_URL
+  }
 }
 
 export function readEmailAuthLink(hash = window.location.hash): EmailAuthLink | null {
