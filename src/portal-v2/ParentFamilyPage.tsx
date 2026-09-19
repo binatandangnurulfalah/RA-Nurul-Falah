@@ -431,13 +431,13 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
 
     {pendingChildLinks.length ? <section className="v2-panel">
       <header className="family-section-head"><div><small>PENGAJUAN ANAK BARU</small><h3>Menunggu pencocokan Guru</h3></div></header>
-      <div className="family-pending-list">{pendingChildLinks.map((request) => <div key={request.id}><Baby size={18} /><div><strong>{request.proposed_data.full_name || 'Anak'}</strong><small>{request.proposed_data.birth_date || 'Tanggal lahir belum diisi'} · Guru akan mencocokkan dengan siswa resmi.</small></div><StatusBadge tone="warning">Menunggu</StatusBadge></div>)}</div>
+      <div className="family-pending-list">{pendingChildLinks.map((request) => <div key={request.id}><Baby size={18} /><div><strong>{jsonText(request.proposed_data.full_name) || 'Anak'}</strong><small>{jsonText(request.proposed_data.birth_date) || 'Tanggal lahir belum diisi'} · Guru akan mencocokkan dengan siswa resmi.</small></div><StatusBadge tone="warning">Menunggu</StatusBadge></div>)}</div>
     </section> : null}
 
     <section className="v2-panel">
       <header className="family-section-head"><div><small>RIWAYAT</small><h3>Riwayat verifikasi</h3></div></header>
       {requests.length ? <div className="family-history">{requests.slice(0, 12).map((request) => <article key={request.id}>
-        <div><strong>{request.request_type === 'family_profile' ? 'Data keluarga' : request.request_type === 'child_link' ? `Tambah anak · ${request.proposed_data.full_name || ''}` : `Perubahan anak · ${request.proposed_data.full_name || ''}`}</strong><small>{new Date(request.submitted_at).toLocaleString('id-ID')}</small></div>
+        <div><strong>{request.request_type === 'family_profile' ? 'Data keluarga' : request.request_type === 'child_link' ? `Tambah anak · ${jsonText(request.proposed_data.full_name)}` : `Perubahan anak · ${jsonText(request.proposed_data.full_name)}`}</strong><small>{new Date(request.submitted_at).toLocaleString('id-ID')}</small></div>
         <div className="family-history-status"><StatusBadge tone={statusTone(request.status)}>{statusLabel(request.status)}</StatusBadge>{requestUnread(request) && <span className="verification-unread-dot">Baru</span>}</div>
         {request.review_comment ? <p>{request.review_comment}</p> : null}
         {(request.status === 'changes_requested' || request.status === 'rejected') && <Button size="sm" variant="secondary" onClick={() => request.request_type === 'family_profile' ? openFamily(request) : reopenChildRequest(request)}>Perbaiki & kirim ulang</Button>}
