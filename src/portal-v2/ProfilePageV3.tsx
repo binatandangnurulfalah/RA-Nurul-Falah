@@ -339,16 +339,16 @@ export function ProfilePageV3({ profile, onProfileChange }: { profile: UserProfi
             </div>
             <KeyRound size={22} />
           </div>
-          <div className="profile-v3-security-note"><ShieldCheck size={18} /><div><strong>Akun terlindungi</strong><small>Password minimal 10 karakter, berisi huruf besar, huruf kecil, dan angka.</small></div></div>
+          <div className="profile-v3-security-note"><ShieldCheck size={18} /><div><strong>Akun terlindungi</strong><small>Password minimal 8 karakter dan wajib mengandung huruf serta angka.</small></div></div>
           <form className="v2-form" onSubmit={savePassword}>
             <label>Password saat ini
               <input type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Konfirmasi password saat ini" />
             </label>
             <label>Password baru
-              <input type="password" minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 10 karakter" />
+              <input type="password" minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 8 karakter" />
             </label>
             <label>Ulangi password
-              <input type="password" minLength={10} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <input type="password" minLength={8} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             </label>
             <button className="v2-primary" disabled={passwordBusy || !currentPassword || !password}><KeyRound size={17} /> {passwordBusy ? 'Memperbarui...' : 'Ubah Password'}</button>
           </form>
