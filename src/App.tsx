@@ -1,6 +1,7 @@
 import { lazy, Suspense, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
+import { authRedirectUrl, clearEmailAuthLink, readEmailAuthLink, type PasswordLinkType } from './lib/auth-email-link'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { validatePassword } from './lib/auth-utils.js'
 
@@ -12,7 +13,8 @@ const ROLE_PATHS: Record<AppRole, string> = {
   parent: '/orang-tua',
 }
 
-const RECOVERY_SESSION_KEY = 'ra_password_recovery_ready'
+const PASSWORD_SETUP_SESSION_KEY = 'ra_password_setup_mode'
+const LEGACY_RECOVERY_SESSION_KEY = 'ra_password_recovery_ready'
 const PROFILE_RECHECK_MS = 5 * 60_000
 const IDLE_SESSION_MS = 8 * 60 * 60_000
 const LAST_ACTIVITY_KEY = 'ra_last_activity_at'
@@ -32,16 +34,21 @@ function rolePath(role: AppRole) {
   return ROLE_PATHS[role]
 }
 
-function authRedirectUrl() {
-  return new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+function storedPasswordSetupMode(): PasswordLinkType | null {
+  const mode = sessionStorage.getItem(PASSWORD_SETUP_SESSION_KEY)
+  if (mode === 'invite' || mode === 'recovery') return mode
+  if (sessionStorage.getItem(LEGACY_RECOVERY_SESSION_KEY) === '1') return 'recovery'
+  return null
 }
 
 function clearRecoverySession() {
-  sessionStorage.removeItem(RECOVERY_SESSION_KEY)
+  sessionStorage.removeItem(PASSWORD_SETUP_SESSION_KEY)
+  sessionStorage.removeItem(LEGACY_RECOVERY_SESSION_KEY)
 }
 
-function markRecoverySession() {
-  sessionStorage.setItem(RECOVERY_SESSION_KEY, '1')
+function markRecoverySession(mode: PasswordLinkType) {
+  sessionStorage.setItem(PASSWORD_SETUP_SESSION_KEY, mode)
+  sessionStorage.removeItem(LEGACY_RECOVERY_SESSION_KEY)
 }
 
 type ActiveProfileResult =
@@ -76,13 +83,23 @@ function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileUnavailable, setProfileUnavailable] = useState(false)
-  const [recoveryReady, setRecoveryReady] = useState(() => sessionStorage.getItem(RECOVERY_SESSION_KEY) === '1')
+  const [passwordSetupMode, setPasswordSetupMode] = useState<PasswordLinkType | null>(() => storedPasswordSetupMode())
   const isLocalPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
   const previewRoleParam = isLocalPreview ? new URLSearchParams(window.location.search).get('previewRole') : null
   const previewRole = isAppRole(previewRoleParam) ? previewRoleParam : null
 
   useEffect(() => {
     let mounted = true
+    let handlingEmailLink = false
+
+    const enterPasswordSetup = (mode: PasswordLinkType) => {
+      markRecoverySession(mode)
+      setPasswordSetupMode(mode)
+      setProfile(null)
+      setProfileUnavailable(false)
+      setLoading(false)
+      navigate('/password-baru', { replace: true })
+    }
 
     const clearLocalSession = async (notice?: string) => {
       if (notice) sessionStorage.setItem(AUTH_NOTICE_KEY, notice)
@@ -90,7 +107,7 @@ function App() {
       if (!mounted) return
       clearRecoverySession()
       localStorage.removeItem(LAST_ACTIVITY_KEY)
-      setRecoveryReady(false)
+      setPasswordSetupMode(null)
       setProfile(null)
       setProfileUnavailable(false)
       setLoading(false)
@@ -139,7 +156,7 @@ function App() {
         await supabase.auth.signOut()
         if (mounted) {
           clearRecoverySession()
-          setRecoveryReady(false)
+          setPasswordSetupMode(null)
           setProfile(null)
         }
       } else {
@@ -147,6 +164,30 @@ function App() {
         setProfile(profileResult.profile)
       }
       setLoading(false)
+    }
+
+    const consumeEmailAuthLink = async () => {
+      const emailLink = readEmailAuthLink()
+      if (!emailLink) return false
+
+      handlingEmailLink = true
+      const { error } = await supabase.auth.setSession({
+        access_token: emailLink.accessToken,
+        refresh_token: emailLink.refreshToken,
+      })
+      clearEmailAuthLink()
+
+      if (!mounted) return true
+      if (error) {
+        handlingEmailLink = false
+        await clearLocalSession('Tautan email tidak valid atau sudah kedaluwarsa. Silakan minta tautan baru.')
+        navigate('/login', { replace: true })
+        return true
+      }
+
+      enterPasswordSetup(emailLink.type)
+      handlingEmailLink = false
+      return true
     }
 
     const noteActivity = () => {
@@ -160,20 +201,20 @@ function App() {
       await clearLocalSession('Sesi berakhir karena tidak aktif terlalu lama. Silakan masuk kembali.')
     }
 
-    void loadProfile()
+    void (async () => {
+      if (await consumeEmailAuthLink()) return
+      await loadProfile()
+    })()
 
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (handlingEmailLink) return
       if (event === 'PASSWORD_RECOVERY') {
-        markRecoverySession()
-        setRecoveryReady(true)
-        setProfile(null)
-        setLoading(false)
-        navigate('/password-baru', { replace: true })
+        enterPasswordSetup('recovery')
         return
       }
       if (event === 'SIGNED_OUT') {
         clearRecoverySession()
-        setRecoveryReady(false)
+        setPasswordSetupMode(null)
         setProfile(null)
         setProfileUnavailable(false)
         setLoading(false)
@@ -249,7 +290,7 @@ function App() {
         <Route path="/login" element={profile ? <RoleRedirect profile={profile} /> : <LoginPage />} />
         <Route path="/lupa-password" element={<ForgotPasswordPage />} />
         <Route path="/verifikasi-kode" element={<Navigate to="/lupa-password" replace />} />
-        <Route path="/password-baru" element={<NewPasswordPage recoveryReady={recoveryReady} onRecoveryComplete={() => { clearRecoverySession(); setRecoveryReady(false) }} />} />
+        <Route path="/password-baru" element={<NewPasswordPage mode={passwordSetupMode} onRecoveryComplete={() => { clearRecoverySession(); setPasswordSetupMode(null) }} />} />
         <Route
           path="/guru/*"
           element={
@@ -389,7 +430,7 @@ function ForgotPasswordPage() {
   )
 }
 
-function NewPasswordPage({ recoveryReady, onRecoveryComplete }: { recoveryReady: boolean; onRecoveryComplete: () => void }) {
+function NewPasswordPage({ mode, onRecoveryComplete }: { mode: PasswordLinkType | null; onRecoveryComplete: () => void }) {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -422,14 +463,19 @@ function NewPasswordPage({ recoveryReady, onRecoveryComplete }: { recoveryReady:
     }
 
     setBusy(true)
-    const { error: updateError } = await supabase.auth.updateUser({ password })
+    const attributes = mode === 'invite'
+      ? { password, data: { must_set_password: false } }
+      : { password }
+    const { error: updateError } = await supabase.auth.updateUser(attributes)
     if (updateError) {
       setError('Password gagal diperbarui. Gunakan password yang lebih kuat atau ulangi proses pemulihan.')
       setBusy(false)
       return
     }
 
-    setMessage('Password berhasil diperbarui. Sesi lama akan diakhiri dan Anda diarahkan ke login.')
+    setMessage(mode === 'invite'
+      ? 'Password akun berhasil dibuat. Anda akan diarahkan ke halaman login.'
+      : 'Password berhasil diperbarui. Sesi lama akan diakhiri dan Anda diarahkan ke login.')
     onRecoveryComplete()
     window.setTimeout(async () => {
       await supabase.auth.signOut()
@@ -437,11 +483,11 @@ function NewPasswordPage({ recoveryReady, onRecoveryComplete }: { recoveryReady:
     }, 1200)
   }
 
-  if (!recoveryReady) {
+  if (!mode) {
     return (
-      <AuthLayout title="Tautan pemulihan diperlukan" subtitle="Halaman ini hanya dapat dibuka dari tautan pemulihan password yang masih valid.">
+      <AuthLayout title="Tautan pengaturan password diperlukan" subtitle="Halaman ini hanya dapat dibuka dari tautan email yang masih valid.">
         <div className="form-stack">
-          <div className="alert error">Sesi pemulihan tidak tersedia atau sudah kedaluwarsa.</div>
+          <div className="alert error">Sesi pengaturan password tidak tersedia atau sudah kedaluwarsa.</div>
           <button type="button" className="primary-button" onClick={() => navigate('/lupa-password', { replace: true })}>
             Minta tautan baru
           </button>
@@ -454,7 +500,10 @@ function NewPasswordPage({ recoveryReady, onRecoveryComplete }: { recoveryReady:
   }
 
   return (
-    <AuthLayout title="Buat password baru" subtitle="Gunakan password baru yang aman dan mudah Anda ingat.">
+    <AuthLayout
+      title={mode === 'invite' ? 'Buat password akun' : 'Buat password baru'}
+      subtitle={mode === 'invite' ? 'Selesaikan undangan akun dengan membuat password Anda sendiri.' : 'Gunakan password baru yang aman dan mudah Anda ingat.'}
+    >
       <form onSubmit={submit} className="form-stack">
         <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 10 karakter" />
         <div className="strength">
