@@ -8,6 +8,7 @@ import { Button, Dialog, EmptyState, PageHeader } from '../components/ui'
 import { queryKeys } from '../data/queryKeys'
 import { accountPageOptions, accountStatsOptions, type AccountRow, type AccountStats } from '../data/queries/accounts'
 import { useDataFilters } from '../data/useDataFilters'
+import { authRedirectUrl } from '../lib/auth-email-link'
 import { userErrorMessage } from '../lib/error-utils'
 import { invokeObservedFunction } from '../lib/observed-services'
 import { type AppRole } from '../lib/supabase'
@@ -19,9 +20,6 @@ type Account = AccountRow
 type Message = { tone: 'success' | 'error'; text: string }
 type CreateResult = { manualLink: string | null }
 
-function authRedirectUrl() {
-  return new URL(import.meta.env.BASE_URL, window.location.origin).toString()
-}
 
 export function AccountsPage() {
   const queryClient = useQueryClient()
@@ -190,7 +188,7 @@ export function AccountsPage() {
           setOneTimeLink(manualLink)
           setMessage({ tone: 'success', text: 'Akun dibuat. Email belum tersedia, sehingga dibuat link pengaturan password sekali pakai.' })
         } else {
-          setMessage({ tone: 'success', text: 'Akun dibuat dan instruksi membuat password telah dikirim ke email pengguna.' })
+          setMessage({ tone: 'success', text: 'Akun dibuat dan email undangan telah dikirim agar pengguna membuat password sendiri.' })
         }
         await refreshAccounts()
       }}
@@ -252,7 +250,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
   return <FormDialog
     open
     title="Tambah Akun"
-    description="Pengguna menentukan password sendiri melalui email atau link sekali pakai. Administrator tidak melihat atau menyimpan password."
+    description="Pengguna menerima email undangan dan membuat password sendiri. Administrator tidak melihat atau menyimpan password."
     submitLabel="Buat & Kirim Undangan"
     busy={busy}
     error={errorText}
