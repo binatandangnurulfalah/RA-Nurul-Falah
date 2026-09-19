@@ -111,11 +111,6 @@ export default function StudentsPageV2({ role }: { role: 'admin' | 'teacher' }) 
     <PageHeader
       eyebrow="AKADEMIK"
       title="Data Murid"
-      subtitle={canManage
-        ? 'Tambah, edit, hubungkan satu atau beberapa wali, tampilkan QR, dan hapus data murid.'
-        : singleTeacherClassMode
-          ? 'Mode 1 Guru = 1 Kelas aktif. Anda hanya melihat dan mengelola murid pada kelas yang ditugaskan.'
-          : 'Mode 1 Guru = 1 Kelas nonaktif. Anda dapat melihat seluruh murid di sistem serta menambah atau mengedit data murid.'}
       actions={canEditStudents ? <Button disabled={teacherNeedsAssignment} onClick={() => setEditing('new')}><Plus size={17} /> Tambah Murid</Button> : undefined}
     />
     {message && <Notice {...message} />}
