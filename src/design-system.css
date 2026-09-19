@@ -230,3 +230,77 @@ body {
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
   scroll-margin: 96px;
 }
+
+
+/* Shared responsive dialog polish */
+.ds-dialog {
+  width: min(100%, 620px);
+}
+
+@media (max-width: 760px) {
+  .ds-dialog-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .ds-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: min(92dvh, 820px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 24px 24px 0 0;
+    overscroll-behavior: contain;
+    animation: ds-sheet-in .2s ease both;
+  }
+
+  .ds-dialog__header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 18px 16px 12px;
+    border-bottom: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  .ds-dialog__header h2 {
+    font-size: 21px;
+  }
+
+  .ds-dialog__header p {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .ds-dialog__close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ds-dialog__body {
+    padding: 14px 14px 20px;
+  }
+
+  .ds-dialog__actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--color-surface) 97%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  .ds-dialog__actions > .ds-button {
+    width: 100%;
+    min-height: 46px;
+  }
+}
+
+@keyframes ds-sheet-in {
+  from { transform: translateY(22px); opacity: .72; }
+  to { transform: translateY(0); opacity: 1; }
+}
