@@ -18,6 +18,7 @@ const verificationRealtime = read('src/data/useParentVerificationRealtime.ts')
 const profilePage = read('src/portal-v2/ProfilePageV3.tsx')
 const scanner = read('src/portal-v2/AttendanceScannerNative.tsx')
 const generatedTypes = read('src/lib/database.types.ts')
+const parentCss = read('src/parent-verification.css')
 
 test('Tahap 12.11 menyediakan canonical family profile dan immutable-style verification queue', () => {
   assert.match(migration, /create table if not exists public\.parent_family_profiles/)
@@ -87,6 +88,21 @@ test('Orang Tua hanya mengajukan perubahan dan UI v2 mendukung data kesehatan se
   assert.match(parentPage, /type="file"/)
   assert.match(parentPage, /markParentVerificationSeen/)
   assert.doesNotMatch(parentPage, /from\('students'\).*insert|from\('students'\).*update/)
+})
+
+test('menu Keluarga dipisah menjadi tab Orang Tua, Anak, dan Riwayat yang responsif', () => {
+  assert.match(parentPage, /role="tablist"/)
+  assert.match(parentPage, />Orang Tua</)
+  assert.match(parentPage, />Anak</)
+  assert.match(parentPage, />Riwayat</)
+  assert.match(parentPage, /activeTab === 'parents'/)
+  assert.match(parentPage, /activeTab === 'children'/)
+  assert.match(parentPage, /activeTab === 'history'/)
+  assert.match(parentPage, /family-tab-count/)
+  assert.match(parentPage, /family-tab-alert/)
+  assert.match(parentCss, /\.family-tabs \{/)
+  assert.match(parentCss, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/)
+  assert.match(parentCss, /@media \(max-width: 430px\)[\s\S]*\.family-tabs button/)
 })
 
 test('berkas keluarga dan anak memakai field spesifik, bukan dokumen generik untuk pengajuan baru', () => {
