@@ -18,6 +18,7 @@ const fieldLabels: Record<string, string> = {
   account_display_name: 'Nama pemilik akun',
   primary_phone: 'Telepon utama',
   family_card_no: 'Nomor KK',
+  family_card_path: 'Kartu Keluarga',
   family_address: 'Alamat keluarga',
   father_name: 'Nama Ayah',
   father_nik: 'NIK Ayah',
@@ -54,8 +55,9 @@ const fieldLabels: Record<string, string> = {
   health_notes: 'Catatan kesehatan',
   special_needs: 'Kebutuhan khusus',
   birth_certificate_no: 'Nomor akta kelahiran',
+  birth_certificate_path: 'Akta kelahiran',
   photo_path: 'Foto anak',
-  document_paths: 'Dokumen pendukung',
+  document_paths: 'Dokumen lama',
   school_admin_data: 'Catatan administrasi',
 }
 
@@ -201,12 +203,14 @@ export default function ParentVerificationPage() {
           return <div className={changed ? 'changed' : ''} key={key}><small>{fieldLabels[key] || key}</small><span><b>Sebelum</b>{displayValue(key, current)}</span><span><b>Diajukan</b>{displayValue(key, proposed)}</span></div>
         })}</div></section>
 
-        {(textValue(selected.proposed_data.photo_path) || documentPaths(selected.proposed_data.document_paths).length > 0) && <section>
+        {(textValue(selected.proposed_data.photo_path) || textValue(selected.proposed_data.birth_certificate_path) || textValue(selected.proposed_data.family_card_path) || documentPaths(selected.proposed_data.document_paths).length > 0) && <section>
           <h4>Berkas privat</h4>
           <p>Berkas hanya dibuka melalui tautan sementara dan tidak bersifat publik.</p>
           <div className="verification-secure-files">
-            {textValue(selected.proposed_data.photo_path) && <Button size="sm" variant="secondary" onClick={() => void openSecureFile(textValue(selected.proposed_data.photo_path))}><FileImage size={15} /> Lihat foto anak <ExternalLink size={13} /></Button>}
-            {documentPaths(selected.proposed_data.document_paths).map((path, index) => <Button key={path} size="sm" variant="secondary" onClick={() => void openSecureFile(path)}><FileText size={15} /> Dokumen {index + 1} <ExternalLink size={13} /></Button>)}
+            {textValue(selected.proposed_data.photo_path) && <Button size="sm" variant="secondary" onClick={() => void openSecureFile(textValue(selected.proposed_data.photo_path))}><FileImage size={15} /> Foto anak <ExternalLink size={13} /></Button>}
+            {textValue(selected.proposed_data.birth_certificate_path) && <Button size="sm" variant="secondary" onClick={() => void openSecureFile(textValue(selected.proposed_data.birth_certificate_path))}><FileText size={15} /> Akta kelahiran <ExternalLink size={13} /></Button>}
+            {textValue(selected.proposed_data.family_card_path) && <Button size="sm" variant="secondary" onClick={() => void openSecureFile(textValue(selected.proposed_data.family_card_path))}><FileText size={15} /> Kartu Keluarga <ExternalLink size={13} /></Button>}
+            {documentPaths(selected.proposed_data.document_paths).map((path, index) => <Button key={path} size="sm" variant="secondary" onClick={() => void openSecureFile(path)}><FileText size={15} /> Dokumen lama {index + 1} <ExternalLink size={13} /></Button>)}
           </div>
         </section>}
 
@@ -270,9 +274,11 @@ function displayValue(key: string, value: unknown) {
   if (value == null || value === '') return '—'
   if (key === 'gender') return value === 'L' ? 'Laki-laki' : value === 'P' ? 'Perempuan' : textValue(value)
   if (key === 'photo_path') return 'Foto anak terlampir'
+  if (key === 'birth_certificate_path') return 'Akta kelahiran terlampir'
+  if (key === 'family_card_path') return 'Kartu Keluarga terlampir'
   if (key === 'document_paths') {
     const count = documentPaths(value).length
-    return count ? `${count} dokumen terlampir` : '—'
+    return count ? `${count} dokumen lama terlampir` : '—'
   }
   if (key === 'school_admin_data' && typeof value === 'object' && !Array.isArray(value)) {
     const notes = (value as Record<string, unknown>).administrative_notes

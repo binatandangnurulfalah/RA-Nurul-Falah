@@ -32,6 +32,7 @@ export type ParentFamilyProfileRow = {
   account_display_name: string
   primary_phone: string | null
   family_card_no: string | null
+  family_card_path: string | null
   family_address: string | null
   father_name: string | null
   father_nik: string | null
@@ -69,6 +70,7 @@ export type StudentParentDetailsRow = {
   special_needs: string | null
   photo_path: string | null
   birth_certificate_no: string | null
+  birth_certificate_path: string | null
   school_admin_data: Json
   document_paths: Json
   verified_by: string | null

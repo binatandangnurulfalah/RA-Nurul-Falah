@@ -14,6 +14,7 @@ type FamilyForm = {
   account_display_name: string
   primary_phone: string
   family_card_no: string
+  family_card_path: string
   family_address: string
   father_name: string
   father_nik: string
@@ -53,8 +54,8 @@ type ChildForm = {
   health_notes: string
   special_needs: string
   birth_certificate_no: string
+  birth_certificate_path: string
   photo_path: string
-  document_paths: string[]
   administrative_notes: string
 }
 
@@ -64,13 +65,14 @@ type ChildEditor = {
   title: string
   form: ChildForm
   photoFile: File | null
-  documentFiles: File[]
+  birthCertificateFile: File | null
 }
 
 const emptyFamily = (profile: UserProfile): FamilyForm => ({
   account_display_name: profile.display_name || '',
   primary_phone: profile.phone || '',
   family_card_no: '',
+  family_card_path: '',
   family_address: profile.address || '',
   father_name: '',
   father_nik: '',
@@ -110,19 +112,24 @@ const emptyChild = (): ChildForm => ({
   health_notes: '',
   special_needs: '',
   birth_certificate_no: '',
+  birth_certificate_path: '',
   photo_path: '',
-  document_paths: [],
   administrative_notes: '',
 })
 
 const VERIFICATION_BUCKET = 'parent-verification-files'
+const MAX_PRIVATE_FILE_BYTES = 5 * 1024 * 1024
+const PRIVATE_DOCUMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+
+function validatePrivateFile(file: File, kind: 'photo' | 'document') {
+  if (file.size > MAX_PRIVATE_FILE_BYTES) return 'Ukuran berkas maksimal 5 MB.'
+  if (kind === 'photo' && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return 'Foto anak harus JPG, PNG, atau WebP.'
+  if (kind === 'document' && !PRIVATE_DOCUMENT_TYPES.has(file.type)) return 'Berkas harus PDF, JPG, PNG, atau WebP.'
+  return ''
+}
 
 function jsonText(value: unknown) {
   return typeof value === 'string' ? value : value == null ? '' : String(value)
-}
-
-function jsonStringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 function adminNotes(value: unknown) {
@@ -166,8 +173,8 @@ function childFromPayload(payload: VerificationPayload): ChildForm {
     health_notes: jsonText(payload.health_notes),
     special_needs: jsonText(payload.special_needs),
     birth_certificate_no: jsonText(payload.birth_certificate_no),
+    birth_certificate_path: jsonText(payload.birth_certificate_path),
     photo_path: jsonText(payload.photo_path),
-    document_paths: jsonStringArray(payload.document_paths),
     administrative_notes: adminNotes(payload.school_admin_data),
   }
 }
@@ -198,6 +205,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   const [familyOpen, setFamilyOpen] = useState(false)
   const [familySupersedes, setFamilySupersedes] = useState<string | null>(null)
   const [familyForm, setFamilyForm] = useState<FamilyForm>(() => emptyFamily(profile))
+  const [familyCardFile, setFamilyCardFile] = useState<File | null>(null)
   const [childEditor, setChildEditor] = useState<ChildEditor | null>(null)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
@@ -219,6 +227,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     if (request) void markSeen(request)
     setFamilySupersedes(request?.id ?? null)
     setFamilyForm(request ? familyFromPayload(profile, request.proposed_data) : verifiedFamilyPayload)
+    setFamilyCardFile(null)
     setFormError('')
     setFamilyOpen(true)
   }
@@ -230,7 +239,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
       title: 'Tambahkan Anak',
       form: emptyChild(),
       photoFile: null,
-      documentFiles: [],
+      birthCertificateFile: null,
     })
     setFormError('')
   }
@@ -254,12 +263,12 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
         health_notes: child.parent_details?.health_notes || '',
         special_needs: child.parent_details?.special_needs || '',
         birth_certificate_no: child.parent_details?.birth_certificate_no || '',
+        birth_certificate_path: child.parent_details?.birth_certificate_path || '',
         photo_path: child.parent_details?.photo_path || '',
-        document_paths: jsonStringArray(child.parent_details?.document_paths),
         administrative_notes: adminNotes(child.parent_details?.school_admin_data),
       },
       photoFile: null,
-      documentFiles: [],
+      birthCertificateFile: null,
     })
     setFormError('')
   }
@@ -271,7 +280,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
       title: request.request_type === 'child_link' ? 'Perbaiki Pengajuan Anak' : 'Perbaiki Perubahan Anak',
       form: childFromPayload(request.proposed_data),
       photoFile: null,
-      documentFiles: [],
+      birthCertificateFile: null,
     })
     void markSeen(request)
     setFormError('')
@@ -282,16 +291,39 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     if (busy) return
     setBusy(true)
     setFormError('')
-    const { error } = await supabase.rpc('submit_parent_family_verification', {
-      p_payload: familyForm,
-      p_supersedes_request_id: familySupersedes,
-    })
-    setBusy(false)
-    if (error) {
+
+    const uploadedPaths: string[] = []
+    let familyCardPath = familyForm.family_card_path
+
+    try {
+      if (familyCardFile) {
+        const validationError = validatePrivateFile(familyCardFile, 'document')
+        if (validationError) throw new Error(validationError)
+
+        const path = `${profile.id}/family/${crypto.randomUUID()}/family-card-${safeFileName(familyCardFile.name)}`
+        const { error } = await supabase.storage
+          .from(VERIFICATION_BUCKET)
+          .upload(path, familyCardFile, { contentType: familyCardFile.type, upsert: false })
+        if (error) throw error
+        uploadedPaths.push(path)
+        familyCardPath = path
+      }
+
+      const { error } = await supabase.rpc('submit_parent_family_verification', {
+        p_payload: { ...familyForm, family_card_path: familyCardPath },
+        p_supersedes_request_id: familySupersedes,
+      })
+      if (error) throw error
+    } catch (error) {
+      if (uploadedPaths.length) await supabase.storage.from(VERIFICATION_BUCKET).remove(uploadedPaths)
+      setBusy(false)
       setFormError(userErrorMessage(error, 'Pengajuan data keluarga gagal dikirim.'))
       return
     }
+
+    setBusy(false)
     setFamilyOpen(false)
+    setFamilyCardFile(null)
     setMessage({ tone: 'success', text: 'Data keluarga berhasil diajukan dan menunggu verifikasi Guru.' })
     await queryClient.invalidateQueries({ queryKey: queryKeys.verification.all })
   }
@@ -304,14 +336,16 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
 
     const uploadedPaths: string[] = []
     let photoPath = childEditor.form.photo_path
-    const documentPaths = [...childEditor.form.document_paths]
+    let birthCertificatePath = childEditor.form.birth_certificate_path
 
     try {
       const uploadRoot = `${profile.id}/children/${crypto.randomUUID()}`
 
       if (childEditor.photoFile) {
-        const photoName = safeFileName(childEditor.photoFile.name)
-        photoPath = `${uploadRoot}/photo-${photoName}`
+        const validationError = validatePrivateFile(childEditor.photoFile, 'photo')
+        if (validationError) throw new Error(validationError)
+
+        photoPath = `${uploadRoot}/photo-${safeFileName(childEditor.photoFile.name)}`
         const { error } = await supabase.storage
           .from(VERIFICATION_BUCKET)
           .upload(photoPath, childEditor.photoFile, { contentType: childEditor.photoFile.type, upsert: false })
@@ -319,14 +353,16 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
         uploadedPaths.push(photoPath)
       }
 
-      for (const [index, file] of childEditor.documentFiles.entries()) {
-        const path = `${uploadRoot}/documents/${index + 1}-${safeFileName(file.name)}`
+      if (childEditor.birthCertificateFile) {
+        const validationError = validatePrivateFile(childEditor.birthCertificateFile, 'document')
+        if (validationError) throw new Error(validationError)
+
+        birthCertificatePath = `${uploadRoot}/birth-certificate-${safeFileName(childEditor.birthCertificateFile.name)}`
         const { error } = await supabase.storage
           .from(VERIFICATION_BUCKET)
-          .upload(path, file, { contentType: file.type, upsert: false })
+          .upload(birthCertificatePath, childEditor.birthCertificateFile, { contentType: childEditor.birthCertificateFile.type, upsert: false })
         if (error) throw error
-        uploadedPaths.push(path)
-        documentPaths.push(path)
+        uploadedPaths.push(birthCertificatePath)
       }
 
       const { error } = await supabase.rpc('submit_parent_child_verification', {
@@ -345,17 +381,15 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
           health_notes: childEditor.form.health_notes,
           special_needs: childEditor.form.special_needs,
           birth_certificate_no: childEditor.form.birth_certificate_no,
+          birth_certificate_path: birthCertificatePath,
           photo_path: photoPath,
-          document_paths: documentPaths,
           school_admin_data: { administrative_notes: childEditor.form.administrative_notes || null },
         },
         p_supersedes_request_id: childEditor.supersedesRequestId,
       })
       if (error) throw error
     } catch (error) {
-      if (uploadedPaths.length) {
-        await supabase.storage.from(VERIFICATION_BUCKET).remove(uploadedPaths)
-      }
+      if (uploadedPaths.length) await supabase.storage.from(VERIFICATION_BUCKET).remove(uploadedPaths)
       setBusy(false)
       setFormError(userErrorMessage(error, 'Pengajuan data anak gagal dikirim.'))
       return
@@ -394,6 +428,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
       <div className="family-profile-grid">
         <FamilyInfo label="Pemilik akun" value={family?.account_display_name || profile.display_name || 'Belum diisi'} />
         <FamilyInfo label="Telepon utama" value={family?.primary_phone || profile.phone || 'Belum diisi'} />
+        <FamilyInfo label="Kartu Keluarga" value={family?.family_card_path ? 'Berkas tersedia' : 'Belum diunggah'} />
         <FamilyInfo label="Ayah" value={family?.father_name || 'Belum diisi'} />
         <FamilyInfo label="Ibu" value={family?.mother_name || 'Belum diisi'} />
         <FamilyInfo label="Wali lain" value={family?.guardian_name || 'Tidak ada / belum diisi'} />
@@ -420,7 +455,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
             {child.parent_details && <div className="family-child-details">
               {child.parent_details.residential_address && <span><MapPin size={12} /> Alamat tersedia</span>}
               {(child.parent_details.blood_type || child.parent_details.health_notes || child.parent_details.allergies) && <span><HeartPulse size={12} /> Data kesehatan tersedia</span>}
-              {(child.parent_details.photo_path || jsonStringArray(child.parent_details.document_paths).length > 0) && <span><Paperclip size={12} /> Berkas terverifikasi</span>}
+              {(child.parent_details.photo_path || child.parent_details.birth_certificate_path) && <span><Paperclip size={12} /> Berkas terverifikasi</span>}
             </div>}
             {correction && !pendingUpdate && <CorrectionNotice request={correction} onFix={() => reopenChildRequest(correction)} compact />}
           </div>
@@ -446,7 +481,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     </section>
 
     <FormDialog open={familyOpen} title="Data Keluarga" description="Data akan dikirim ke Guru untuk diverifikasi sebelum menjadi data resmi." submitLabel="Ajukan Verifikasi" busy={busy} error={formError} onClose={() => setFamilyOpen(false)} onSubmit={submitFamily}>
-      <FamilyFormFields form={familyForm} setForm={setFamilyForm} />
+      <FamilyFormFields form={familyForm} setForm={setFamilyForm} familyCardFile={familyCardFile} setFamilyCardFile={setFamilyCardFile} />
     </FormDialog>
 
     <FormDialog open={Boolean(childEditor)} title={childEditor?.title || 'Data Anak'} description="Isi identitas anak. Anda tidak perlu memilih siswa dari daftar sekolah; Guru yang akan melakukan pencocokan." submitLabel="Ajukan Verifikasi" busy={busy} error={formError} onClose={() => setChildEditor(null)} onSubmit={submitChild}>
@@ -455,12 +490,16 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   </div>
 }
 
-function FamilyFormFields({ form, setForm }: { form: FamilyForm; setForm: (form: FamilyForm) => void }) {
+function FamilyFormFields({ form, setForm, familyCardFile, setFamilyCardFile }: { form: FamilyForm; setForm: (form: FamilyForm) => void; familyCardFile: File | null; setFamilyCardFile: (file: File | null) => void }) {
   return <>
     <FormSection title="Kontak keluarga" description="Identitas pemilik akun dan alamat resmi keluarga.">
       <FormField label="Nama pemilik akun" required><input required maxLength={120} value={form.account_display_name} onChange={(e) => setForm({ ...form, account_display_name: e.target.value })} /></FormField>
       <FormField label="Nomor telepon utama" required><input required inputMode="tel" maxLength={25} value={form.primary_phone} onChange={(e) => setForm({ ...form, primary_phone: e.target.value })} /></FormField>
       <FormField label="Nomor KK"><input inputMode="numeric" maxLength={30} value={form.family_card_no} onChange={(e) => setForm({ ...form, family_card_no: e.target.value.replace(/\D/g, '') })} /></FormField>
+      <FormField label="Kartu Keluarga" full>
+        <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFamilyCardFile(e.target.files?.[0] ?? null)} />
+        <small className="family-file-hint"><FileText size={12} /> {familyCardFile ? `Dipilih: ${familyCardFile.name}` : form.family_card_path ? 'Kartu Keluarga terverifikasi sebelumnya tetap digunakan jika tidak diganti.' : 'Opsional · PDF/JPG/PNG/WebP · maksimal 5 MB.'}</small>
+      </FormField>
       <FormField label="Alamat keluarga" required full><textarea required rows={3} maxLength={1000} value={form.family_address} onChange={(e) => setForm({ ...form, family_address: e.target.value })} /></FormField>
     </FormSection>
     <PersonSection title="Data Ayah" prefix="father" form={form} setForm={setForm} />
@@ -512,16 +551,16 @@ function ChildFormFields({ editor, setEditor }: { editor: ChildEditor; setEditor
       <FormField label="Kebutuhan khusus" full><textarea rows={2} maxLength={1000} value={form.special_needs} onChange={(e) => setForm({ ...form, special_needs: e.target.value })} /></FormField>
     </FormSection>
 
-    <FormSection title="Administrasi & berkas" description="Berkas tersimpan privat dan hanya dapat dilihat Orang Tua/Wali pemilik, Guru, serta Admin yang berwenang.">
+    <FormSection title="Administrasi & berkas" description="Untuk berkas anak cukup foto anak dan akta kelahiran. Akta kelahiran bersifat opsional dan semua berkas tersimpan privat.">
       <FormField label="Nomor akta kelahiran"><input maxLength={80} value={form.birth_certificate_no} onChange={(e) => setForm({ ...form, birth_certificate_no: e.target.value })} /></FormField>
       <FormField label="Catatan administrasi" full><textarea rows={3} maxLength={2000} value={form.administrative_notes} onChange={(e) => setForm({ ...form, administrative_notes: e.target.value })} placeholder="Informasi administrasi lain yang perlu diperiksa Guru." /></FormField>
       <FormField label="Foto anak" full>
         <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setEditor({ ...editor, photoFile: e.target.files?.[0] ?? null })} />
-        <small className="family-file-hint">{editor.photoFile ? `Dipilih: ${editor.photoFile.name}` : form.photo_path ? 'Foto terverifikasi sebelumnya tetap digunakan jika tidak diganti.' : 'JPG, PNG, atau WebP. Maksimal 5 MB.'}</small>
+        <small className="family-file-hint">{editor.photoFile ? `Dipilih: ${editor.photoFile.name}` : form.photo_path ? 'Foto terverifikasi sebelumnya tetap digunakan jika tidak diganti.' : 'JPG, PNG, atau WebP · maksimal 5 MB.'}</small>
       </FormField>
-      <FormField label="Dokumen pendukung" full>
-        <input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setEditor({ ...editor, documentFiles: Array.from(e.target.files ?? []).slice(0, 10) })} />
-        <small className="family-file-hint"><FileText size={12} /> {editor.documentFiles.length ? `${editor.documentFiles.length} berkas baru dipilih` : form.document_paths.length ? `${form.document_paths.length} berkas terverifikasi sebelumnya tetap tersimpan` : 'Opsional · PDF/JPG/PNG/WebP · maksimal 10 berkas.'}</small>
+      <FormField label="Akta kelahiran" full>
+        <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setEditor({ ...editor, birthCertificateFile: e.target.files?.[0] ?? null })} />
+        <small className="family-file-hint"><FileText size={12} /> {editor.birthCertificateFile ? `Dipilih: ${editor.birthCertificateFile.name}` : form.birth_certificate_path ? 'Akta terverifikasi sebelumnya tetap digunakan jika tidak diganti.' : 'Opsional · PDF/JPG/PNG/WebP · maksimal 5 MB.'}</small>
       </FormField>
     </FormSection>
   </>

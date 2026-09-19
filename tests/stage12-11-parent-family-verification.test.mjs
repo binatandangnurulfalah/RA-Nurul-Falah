@@ -9,6 +9,7 @@ const grantHardening = read('supabase/migrations/20260919003833_stage12_11_verif
 const migrationV2 = read('supabase/migrations/20260919013756_stage12_11_parent_family_verification_v2.sql')
 const auditWhitelist = read('supabase/migrations/20260919013843_stage12_11_parent_verification_audit_whitelist.sql')
 const parentRlsFix = read('supabase/migrations/20260919020013_stage12_11_parent_details_rls_execute_fix.sql')
+const refinedFiles = read('supabase/migrations/20260919023814_refine_parent_child_file_uploads.sql')
 const portal = read('src/RolePortalV5.tsx')
 const parentPage = read('src/portal-v2/ParentFamilyPage.tsx')
 const verificationPage = read('src/portal-v2/ParentVerificationPage.tsx')
@@ -76,11 +77,27 @@ test('Orang Tua hanya mengajukan perubahan dan UI v2 mendukung data kesehatan se
   assert.match(parentPage, /Alamat & kesehatan/)
   assert.match(parentPage, /Golongan darah/)
   assert.match(parentPage, /Catatan kesehatan/)
-  assert.match(parentPage, /Dokumen pendukung/)
+  assert.match(parentPage, /Kartu Keluarga/)
+  assert.match(parentPage, /Akta kelahiran/)
+  assert.match(parentPage, /birth_certificate_path/)
+  assert.match(parentPage, /family_card_path/)
+  assert.doesNotMatch(parentPage, /Dokumen pendukung/)
+  assert.doesNotMatch(parentPage, /documentFiles/)
   assert.match(parentPage, /parent-verification-files/)
   assert.match(parentPage, /type="file"/)
   assert.match(parentPage, /markParentVerificationSeen/)
   assert.doesNotMatch(parentPage, /from\('students'\).*insert|from\('students'\).*update/)
+})
+
+test('berkas keluarga dan anak memakai field spesifik, bukan dokumen generik untuk pengajuan baru', () => {
+  assert.match(refinedFiles, /add column if not exists family_card_path text/)
+  assert.match(refinedFiles, /add column if not exists birth_certificate_path text/)
+  assert.match(refinedFiles, /'family_card_path', v_existing\.family_card_path/)
+  assert.match(refinedFiles, /'birth_certificate_path', v_details\.birth_certificate_path/)
+  assert.match(refinedFiles, /birth_certificate_path = excluded\.birth_certificate_path/)
+  assert.match(refinedFiles, /family_card_path = excluded\.family_card_path/)
+  assert.match(verificationPage, /Kartu Keluarga/)
+  assert.match(verificationPage, /Akta kelahiran/)
 })
 
 test('query verification v2 mempertahankan JSON bertingkat dan mengambil detail anak terverifikasi', () => {
@@ -124,6 +141,8 @@ test('navigasi role menggunakan Data Keluarga untuk parent dan Verifikasi Data u
 
 test('types produksi sudah mengenal schema verification v2', () => {
   assert.match(generatedTypes, /student_parent_details:/)
+  assert.match(generatedTypes, /family_card_path: string \\| null/)
+  assert.match(generatedTypes, /birth_certificate_path: string \\| null/)
   assert.match(generatedTypes, /parent_verification_request_summaries:/)
   assert.match(generatedTypes, /parent_seen_at: string \| null/)
   assert.match(generatedTypes, /mark_parent_verification_seen:/)

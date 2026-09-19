@@ -260,6 +260,7 @@ export type Database = {
           emergency_contact_phone: string | null
           family_address: string | null
           family_card_no: string | null
+          family_card_path: string | null
           father_birth_date: string | null
           father_birth_place: string | null
           father_education: string | null
@@ -293,6 +294,7 @@ export type Database = {
           emergency_contact_phone?: string | null
           family_address?: string | null
           family_card_no?: string | null
+          family_card_path?: string | null
           father_birth_date?: string | null
           father_birth_place?: string | null
           father_education?: string | null
@@ -326,6 +328,7 @@ export type Database = {
           emergency_contact_phone?: string | null
           family_address?: string | null
           family_card_no?: string | null
+          family_card_path?: string | null
           father_birth_date?: string | null
           father_birth_place?: string | null
           father_education?: string | null
@@ -894,6 +897,7 @@ export type Database = {
         Row: {
           allergies: string | null
           birth_certificate_no: string | null
+          birth_certificate_path: string | null
           blood_type: string | null
           created_at: string
           document_paths: Json
@@ -910,6 +914,7 @@ export type Database = {
         Insert: {
           allergies?: string | null
           birth_certificate_no?: string | null
+          birth_certificate_path?: string | null
           blood_type?: string | null
           created_at?: string
           document_paths?: Json
@@ -926,6 +931,7 @@ export type Database = {
         Update: {
           allergies?: string | null
           birth_certificate_no?: string | null
+          birth_certificate_path?: string | null
           blood_type?: string | null
           created_at?: string
           document_paths?: Json
