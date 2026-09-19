@@ -8,6 +8,7 @@ const migration = read('supabase/migrations/20260918192125_stage12_11_parent_fam
 const grantHardening = read('supabase/migrations/20260919003833_stage12_11_verification_grant_hardening.sql')
 const migrationV2 = read('supabase/migrations/20260919013756_stage12_11_parent_family_verification_v2.sql')
 const auditWhitelist = read('supabase/migrations/20260919013843_stage12_11_parent_verification_audit_whitelist.sql')
+const parentRlsFix = read('supabase/migrations/20260919020013_stage12_11_parent_details_rls_execute_fix.sql')
 const portal = read('src/RolePortalV5.tsx')
 const parentPage = read('src/portal-v2/ParentFamilyPage.tsx')
 const verificationPage = read('src/portal-v2/ParentVerificationPage.tsx')
@@ -49,6 +50,13 @@ test('Tahap 12.11 v2 melengkapi detail anak, storage privat, unread status, dan 
   assert.match(migrationV2, /'proposed_data','current_data','review_comment'/)
   assert.match(auditWhitelist, /'parent_verification_requests'::text/)
   assert.match(auditWhitelist, /'student_parent_details'::text/)
+})
+
+test('RLS detail anak dapat dievaluasi akun authenticated tanpa membuka akses lintas keluarga', () => {
+  assert.match(parentRlsFix, /grant execute on function private\.teacher_can_verify_student\(uuid\) to authenticated/)
+  assert.match(verificationQuery, /\.in\('id', childIds\)/)
+  assert.match(verificationQuery, /\.in\('student_id', childIds\)/)
+  assert.match(verificationQuery, /const childIds = \[\.\.\.relationships\.keys\(\)\]/)
 })
 
 test('child link hanya menghubungkan Orang Tua ke siswa resmi dan tidak menimpa identitas resmi', () => {
