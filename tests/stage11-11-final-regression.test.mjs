@@ -75,10 +75,11 @@ test('audit payload menyimpan diff aman dan membuang nilai sensitif', () => {
 
 test('account management menulis event eksplisit tanpa recovery link atau email pada payload audit', () => {
   assert.match(migration, /append_account_audit_event/)
-  assert.match(createUser, /appendAccountAudit\(context, created\.user\.id, 'ACCOUNT_CREATED'/)
+  assert.match(createUser, /appendAccountAudit\(context, invited\.user\.id, 'ACCOUNT_CREATED'/)
   assert.match(manageUser, /'ACCOUNT_UPDATED'/)
   assert.match(manageUser, /'ACCOUNT_DELETED'/)
   assert.match(manageUser, /'PASSWORD_RESET_REQUESTED'/)
+  assert.match(createUser, /delivery = 'invite_email'/)
   assert.doesNotMatch(createUser, /appendAccountAudit\([^)]*email/s)
   assert.doesNotMatch(manageUser, /appendAccountAudit\([^)]*manualLink/s)
 })

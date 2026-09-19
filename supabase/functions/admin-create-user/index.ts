@@ -1,16 +1,10 @@
 import "jsr:@supabase/functions-js@2.4.5/edge-runtime.d.ts";
 import { corsPreflight } from '../_shared/cors.ts'
-import { requireAuthenticatedUser, createPublicClient } from '../_shared/auth.ts'
+import { requireAuthenticatedUser } from '../_shared/auth.ts'
 import { appendAccountAudit } from '../_shared/audit.ts'
 import { requireRole } from '../_shared/authorization.ts'
 import { jsonResponse } from '../_shared/response.ts'
 import { observeEdgeFunction } from '../_shared/observability.ts'
-
-function randomBootstrapPassword() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32))
-  const random = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-  return `Nf!${random}aA7`
-}
 
 function safeRedirect(value: unknown) {
   const raw = String(value ?? '').trim()
@@ -71,40 +65,29 @@ Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
       }, 400)
     }
 
-    const { data: created, error: createError } = await context.adminClient.auth.admin.createUser({
+    const inviteOptions = {
+      data: {
+        display_name: displayName,
+        must_set_password: true,
+      },
+      ...(redirectTo ? { redirectTo } : {}),
+    }
+    const { data: invited, error: inviteError } = await context.adminClient.auth.admin.inviteUserByEmail(
       email,
-      password: randomBootstrapPassword(),
-      email_confirm: true,
-      user_metadata: { display_name: displayName },
-    })
+      inviteOptions,
+    )
 
-    if (createError || !created.user) {
+    if (inviteError || !invited.user) {
       await context.adminClient.from('account_allowlist').delete().eq('id', allow.id)
-      return jsonResponse({ ok: false, error: 'Akun gagal dibuat. Periksa kembali email pengguna.' }, 400)
+      return jsonResponse({
+        ok: false,
+        error: 'Undangan akun gagal dikirim. Periksa alamat email dan konfigurasi email Supabase.',
+      }, 503)
     }
 
-    const publicClient = createPublicClient()
-    const resetOptions = redirectTo ? { redirectTo } : undefined
-    const { error: resetError } = await publicClient.auth.resetPasswordForEmail(email, resetOptions)
+    const delivery = 'invite_email'
 
-    let manualLink: string | null = null
-    let delivery: 'email' | 'manual_link' = 'email'
-
-    if (resetError) {
-      const { data: generated, error: linkError } = await context.adminClient.auth.admin.generateLink({
-        type: 'recovery',
-        email,
-      })
-      manualLink = generated?.properties?.action_link ?? null
-      if (linkError || !manualLink) {
-        await context.adminClient.auth.admin.deleteUser(created.user.id)
-        await context.adminClient.from('account_allowlist').delete().eq('id', allow.id)
-        return jsonResponse({ ok: false, error: 'Akun tidak dapat mengirim alur pembuatan password. Konfigurasi email perlu diperiksa.' }, 503)
-      }
-      delivery = 'manual_link'
-    }
-
-    await appendAccountAudit(context, created.user.id, 'ACCOUNT_CREATED', {
+    await appendAccountAudit(context, invited.user.id, 'ACCOUNT_CREATED', {
       display_name: displayName,
       role,
       delivery,
@@ -113,10 +96,10 @@ Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
     return jsonResponse({
       ok: true,
       delivery,
-      manual_link: manualLink,
+      manual_link: null,
       user: {
-        id: created.user.id,
-        email: created.user.email,
+        id: invited.user.id,
+        email: invited.user.email,
         role,
         display_name: displayName,
       },
