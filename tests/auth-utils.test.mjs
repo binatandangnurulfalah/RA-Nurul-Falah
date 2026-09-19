@@ -2,16 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { validatePassword } from '../src/lib/auth-utils.js'
 
-test('password di bawah 10 karakter ditolak', () => {
-  assert.match(validatePassword('Aa123456!'), /10 karakter/)
+test('password di bawah 8 karakter ditolak', () => {
+  assert.match(validatePassword('Abc1234'), /8 karakter/)
 })
 
-test('password panjang tetapi terlalu lemah ditolak', () => {
-  assert.match(validatePassword('abcdefghij'), /minimal 3 jenis/)
-  assert.match(validatePassword('1234567890'), /minimal 3 jenis/)
+test('password tanpa kombinasi huruf dan angka ditolak', () => {
+  assert.match(validatePassword('abcdefgh'), /huruf dan satu angka/)
+  assert.match(validatePassword('12345678'), /huruf dan satu angka/)
 })
 
-test('password minimal 10 karakter dengan kombinasi kuat diterima', () => {
-  assert.equal(validatePassword('NurulFalah2026'), '')
-  assert.equal(validatePassword('Aman!Sekali1'), '')
+test('password minimal 8 karakter dengan huruf dan angka diterima', () => {
+  assert.equal(validatePassword('Nurul123'), '')
+  assert.equal(validatePassword('aman2026'), '')
 })

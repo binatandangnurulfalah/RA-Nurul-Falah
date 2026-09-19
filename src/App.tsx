@@ -439,11 +439,10 @@ function NewPasswordPage({ mode, onRecoveryComplete }: { mode: PasswordLinkType 
   const [error, setError] = useState('')
 
   const strength = useMemo(() => {
-    const groups = [/[a-z]/.test(password), /[A-Z]/.test(password), /\d/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length
     let score = 0
-    if (password.length >= 10) score++
-    if (groups >= 3) score++
-    if (password.length >= 14 && groups >= 4) score++
+    if (password.length >= 8) score++
+    if (/[A-Za-z]/.test(password) && /\d/.test(password)) score++
+    if (password.length >= 12 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[^A-Za-z0-9]/.test(password)) score++
     return score
   }, [password])
 
@@ -505,14 +504,14 @@ function NewPasswordPage({ mode, onRecoveryComplete }: { mode: PasswordLinkType 
       subtitle={mode === 'invite' ? 'Selesaikan undangan akun dengan membuat password Anda sendiri.' : 'Gunakan password baru yang aman dan mudah Anda ingat.'}
     >
       <form onSubmit={submit} className="form-stack">
-        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 10 karakter" />
+        <Field icon={<KeyRound size={18} />} label="Password baru" type="password" value={password} onChange={setPassword} placeholder="Minimal 8 karakter" />
         <div className="strength">
           <span className={strength >= 1 ? 'filled' : ''} />
           <span className={strength >= 2 ? 'filled' : ''} />
           <span className={strength >= 3 ? 'filled' : ''} />
         </div>
         <Field icon={<ShieldCheck size={18} />} label="Ulangi password baru" type="password" value={confirm} onChange={setConfirm} placeholder="Ketik ulang password" />
-        <p className="helper-text">Minimal 10 karakter dan gunakan sedikitnya 3 jenis karakter: huruf besar, huruf kecil, angka, atau simbol.</p>
+        <p className="helper-text">Minimal 8 karakter dan wajib mengandung huruf serta angka.</p>
         {error && <div className="alert error">{error}</div>}
         {message && <div className="alert success">{message}</div>}
         <button className="primary-button" disabled={busy || Boolean(message)}>

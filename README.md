@@ -59,7 +59,7 @@ Hardening yang diterapkan:
 - Koreksi manual menyimpan `correction_reason` dan `last_corrected_at`.
 - Authorization Edge Function dipusatkan melalui helper shared.
 - Akun baru tidak lagi memakai password yang dipilih atau diketahui Admin.
-- Password aplikasi minimal 10 karakter dan wajib menggunakan minimal 3 kelompok karakter.
+- Password aplikasi minimal 8 karakter dan wajib mengandung minimal satu huruf serta satu angka.
 - Admin tetap dibatasi oleh role, status akun aktif, RLS, dan authorization Edge Function tanpa mewajibkan MFA.
 
 ### Leaked Password Protection
