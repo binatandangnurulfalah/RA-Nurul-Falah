@@ -25,19 +25,22 @@ test('frontend dan backend memakai minimum password 8 karakter dengan huruf dan 
   assert.match(config, /password_requirements = "letters_digits"/)
 })
 
-test('admin tidak lagi menerima atau menetapkan password pengguna', () => {
+test('admin membuat password sementara acak tanpa mengirimkannya ke browser', () => {
   const createUser = read('supabase/functions/admin-create-user/index.ts')
   const manageUser = read('supabase/functions/admin-manage-user/index.ts')
   const accounts = read('src/portal-v2/AccountsPage.tsx')
 
   assert.doesNotMatch(createUser, /payload\.password/)
-  assert.doesNotMatch(createUser, /randomBootstrapPassword\(\)/)
+  assert.match(createUser, /function randomTemporaryPassword\(\)/)
+  assert.match(createUser, /crypto\.getRandomValues/)
+  assert.match(createUser, /while \(chars\.length < 8\)/)
   assert.doesNotMatch(createUser, /resetPasswordForEmail/)
   assert.doesNotMatch(createUser, /auth\.admin\.createUser/)
   assert.match(createUser, /auth\.admin\.inviteUserByEmail/)
+  assert.match(createUser, /password: temporaryPassword/)
   assert.match(createUser, /must_set_password: true/)
   assert.doesNotMatch(manageUser, /new_password/)
   assert.match(manageUser, /send_password_reset/)
-  assert.doesNotMatch(accounts, /Password sementara/)
+  assert.match(accounts, /password sementara 8 karakter/)
   assert.doesNotMatch(accounts, /new_password/)
 })

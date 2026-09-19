@@ -1,7 +1,7 @@
 import { lazy, Suspense, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
-import { authRedirectUrl, clearEmailAuthLink, readEmailAuthLink, type PasswordLinkType } from './lib/auth-email-link'
+import { authRedirectUrl, clearEmailAuthLink, readEmailAuthLink, readEmailAuthLinkError, type PasswordLinkType } from './lib/auth-email-link'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { validatePassword } from './lib/auth-utils.js'
 
@@ -167,6 +167,13 @@ function App() {
     }
 
     const consumeEmailAuthLink = async () => {
+      const linkError = readEmailAuthLinkError()
+      if (linkError) {
+        clearEmailAuthLink()
+        await clearLocalSession(linkError.message || 'Tautan email tidak valid atau sudah kedaluwarsa. Silakan minta tautan baru.')
+        navigate('/login', { replace: true })
+        return true
+      }
       const emailLink = readEmailAuthLink()
       if (!emailLink) return false
 
@@ -407,7 +414,7 @@ function ForgotPasswordPage() {
     setBusy(true)
 
     await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: authRedirectUrl(),
+      redirectTo: authRedirectUrl('recovery'),
     })
 
     setMessage('Jika email terdaftar, tautan pemulihan password akan dikirim. Buka tautan tersebut pada perangkat ini untuk melanjutkan.')

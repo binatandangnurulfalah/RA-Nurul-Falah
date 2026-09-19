@@ -28,6 +28,8 @@ test('forgot-password uses explicit Supabase recovery handling that does not col
   assert.match(emailLink, /type !== 'invite' && type !== 'recovery'/)
   assert.match(emailLink, /access_token/)
   assert.match(emailLink, /refresh_token/)
+  assert.match(emailLink, /readEmailAuthLinkError/)
+  assert.match(emailLink, /auth_flow/)
 })
 
 test('session lifecycle is server-verified and account profile is rechecked', () => {
@@ -79,10 +81,23 @@ test('akun baru memakai Invite User, bukan email reset password', () => {
   assert.match(createUser, /inviteUserByEmail/)
   assert.match(createUser, /must_set_password: true/)
   assert.match(createUser, /delivery = 'invite_email'/)
-  assert.doesNotMatch(createUser, /randomBootstrapPassword/)
+  assert.match(createUser, /randomTemporaryPassword/)
+  assert.match(createUser, /password: temporaryPassword/)
   assert.doesNotMatch(createUser, /resetPasswordForEmail/)
   assert.match(accounts, /email undangan telah dikirim/)
-  assert.match(accounts, /Pengguna menerima email undangan/)
+  assert.match(accounts, /password sementara 8 karakter/)
+})
+
+test('template email mengarah ke halaman khusus dan memuat data undangan', () => {
+  const inviteTemplate = read('supabase/templates/invite.html')
+  const recoveryTemplate = read('supabase/templates/recovery.html')
+  assert.match(inviteTemplate, /\{\{ \.Email \}\}/)
+  assert.match(inviteTemplate, /\{\{ \.Data\.temporary_password \}\}/)
+  assert.match(inviteTemplate, /\{\{ \.ConfirmationURL \}\}/)
+  assert.match(recoveryTemplate, /\{\{ \.Email \}\}/)
+  assert.match(recoveryTemplate, /\{\{ \.ConfirmationURL \}\}/)
+  assert.match(config, /auth\.email\.template\.invite/)
+  assert.match(config, /auth\.email\.template\.recovery/)
 })
 
 test('halaman password membedakan undangan akun dan recovery', () => {
