@@ -128,7 +128,6 @@ export function PaymentsPage({ role }: { role: 'admin' | 'parent' }) {
     <PageHeader
       eyebrow="KEUANGAN SEKOLAH"
       title="Pembayaran"
-      subtitle={canManage ? 'Kelola tagihan dan transaksi pembayaran secara terpisah agar histori keuangan tetap utuh.' : 'Pantau tagihan dan riwayat pembayaran anak yang terhubung.'}
       actions={canManage ? <Button onClick={() => setEditing('new')}><Plus size={17} /> Tambah Tagihan</Button> : undefined}
     />
     {message && <Notice {...message} />}
