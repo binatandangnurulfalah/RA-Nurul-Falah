@@ -1,11 +1,12 @@
 import { queryOptions } from '@tanstack/react-query'
+import type { Json } from '../../lib/database.types'
 import { supabase } from '../../lib/supabase'
 import { sanitizeSearch } from '../../lib/data-utils.js'
 import { queryKeys } from '../queryKeys'
 
 export type VerificationStatus = 'pending' | 'approved' | 'changes_requested' | 'rejected'
 export type VerificationType = 'family_profile' | 'child_link' | 'child_update'
-export type VerificationPayload = Record<string, string | null>
+export type VerificationPayload = Record<string, Json | undefined>
 
 export type VerificationRequestRow = {
   id: string
@@ -23,6 +24,7 @@ export type VerificationRequestRow = {
   matched_student_id: string | null
   submitted_at: string
   reviewed_at: string | null
+  parent_seen_at: string | null
 }
 
 export type ParentFamilyProfileRow = {
@@ -58,6 +60,23 @@ export type ParentFamilyProfileRow = {
   updated_at: string
 }
 
+export type StudentParentDetailsRow = {
+  student_id: string
+  residential_address: string | null
+  blood_type: string | null
+  allergies: string | null
+  health_notes: string | null
+  special_needs: string | null
+  photo_path: string | null
+  birth_certificate_no: string | null
+  school_admin_data: Json
+  document_paths: Json
+  verified_by: string | null
+  verified_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type ParentChildRow = {
   id: string
   full_name: string
@@ -70,25 +89,25 @@ export type ParentChildRow = {
   class_name: string | null
   academic_year: string | null
   is_active: boolean
+  relationship?: string
+  parent_details?: StudentParentDetailsRow | null
 }
 
-export type StudentCandidateRow = ParentChildRow
+export type StudentCandidateRow = Omit<ParentChildRow, 'relationship' | 'parent_details'>
 
 function payload(value: unknown): VerificationPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, item == null ? null : String(item)]),
-  )
+  return { ...(value as VerificationPayload) }
 }
 
 export function parentFamilyWorkspaceOptions(parentUserId: string) {
   return queryOptions({
     queryKey: queryKeys.verification.meta('parent-workspace', { parentUserId }),
     queryFn: async () => {
-      const [familyResult, requestResult, studentResult, guardianResult] = await Promise.all([
+      const [familyResult, requestResult, studentResult, guardianResult, detailResult] = await Promise.all([
         supabase.from('parent_family_profiles').select('*').eq('guardian_user_id', parentUserId).maybeSingle(),
         supabase.from('parent_verification_requests')
-          .select('id,parent_user_id,parent_display_name,request_type,subject_key,target_student_id,proposed_data,current_data,status,supersedes_request_id,reviewed_by,review_comment,matched_student_id,submitted_at,reviewed_at')
+          .select('id,parent_user_id,parent_display_name,request_type,subject_key,target_student_id,proposed_data,current_data,status,supersedes_request_id,reviewed_by,review_comment,matched_student_id,submitted_at,reviewed_at,parent_seen_at')
           .eq('parent_user_id', parentUserId)
           .order('submitted_at', { ascending: false }),
         supabase.from('students')
@@ -97,11 +116,15 @@ export function parentFamilyWorkspaceOptions(parentUserId: string) {
         supabase.from('student_guardians')
           .select('student_id,relationship')
           .eq('guardian_user_id', parentUserId),
+        supabase.from('student_parent_details').select('*'),
       ])
-      const error = familyResult.error || requestResult.error || studentResult.error || guardianResult.error
+      const error = familyResult.error || requestResult.error || studentResult.error || guardianResult.error || detailResult.error
       if (error) throw new Error(error.message || 'Data keluarga belum dapat dimuat.')
 
       const relationships = new Map((guardianResult.data ?? []).map((row) => [row.student_id, row.relationship]))
+      const details = new Map(
+        ((detailResult.data ?? []) as StudentParentDetailsRow[]).map((row) => [row.student_id, row]),
+      )
       return {
         family: (familyResult.data as ParentFamilyProfileRow | null) ?? null,
         requests: ((requestResult.data ?? []) as Omit<VerificationRequestRow, 'proposed_data' | 'current_data'>[]).map((row) => ({
@@ -109,12 +132,14 @@ export function parentFamilyWorkspaceOptions(parentUserId: string) {
           proposed_data: payload((row as { proposed_data?: unknown }).proposed_data),
           current_data: (row as { current_data?: unknown }).current_data ? payload((row as { current_data?: unknown }).current_data) : null,
         })) as VerificationRequestRow[],
-        children: ((studentResult.data ?? []) as ParentChildRow[]).map((row) => ({
+        children: ((studentResult.data ?? []) as StudentCandidateRow[]).map((row) => ({
           ...row,
           relationship: relationships.get(row.id) ?? 'Wali',
-        })),
+          parent_details: details.get(row.id) ?? null,
+        })) as ParentChildRow[],
       }
     },
+    enabled: Boolean(parentUserId),
     staleTime: 20_000,
   })
 }
@@ -124,7 +149,7 @@ export function verificationQueueOptions(status: VerificationStatus | 'all') {
     queryKey: queryKeys.verification.list({ status }),
     queryFn: async () => {
       let query = supabase.from('parent_verification_requests')
-        .select('id,parent_user_id,parent_display_name,request_type,subject_key,target_student_id,proposed_data,current_data,status,supersedes_request_id,reviewed_by,review_comment,matched_student_id,submitted_at,reviewed_at')
+        .select('id,parent_user_id,parent_display_name,request_type,subject_key,target_student_id,proposed_data,current_data,status,supersedes_request_id,reviewed_by,review_comment,matched_student_id,submitted_at,reviewed_at,parent_seen_at')
         .order('submitted_at', { ascending: false })
         .limit(200)
       if (status !== 'all') query = query.eq('status', status)
@@ -160,4 +185,29 @@ export function verificationCandidatesOptions(search: string, enabled: boolean) 
     enabled,
     staleTime: 15_000,
   })
+}
+
+export function verificationUnreadCountOptions(parentUserId: string) {
+  return queryOptions({
+    queryKey: queryKeys.verification.meta('unread', { parentUserId }),
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('parent_verification_request_summaries')
+        .select('id', { count: 'exact', head: true })
+        .eq('parent_user_id', parentUserId)
+        .eq('is_unread', true)
+      if (error) throw new Error(error.message || 'Status verifikasi belum dibaca gagal dimuat.')
+      return count ?? 0
+    },
+    enabled: Boolean(parentUserId),
+    staleTime: 15_000,
+  })
+}
+
+export async function markParentVerificationSeen(requestId: string) {
+  const { error } = await supabase.rpc('mark_parent_verification_seen', {
+    p_request_id: requestId,
+  })
+  if (error) throw new Error(error.message || 'Status pengajuan gagal ditandai sudah dibaca.')
+  return true
 }
