@@ -243,10 +243,127 @@ type AuditEventsView = Omit<BaseViews['audit_events_view'], 'Row'> & {
   }
 }
 
+
+type ParentFamilyProfilesTable = {
+  Row: {
+    guardian_user_id: string
+    account_display_name: string
+    primary_phone: string | null
+    family_card_no: string | null
+    family_address: string | null
+    father_name: string | null
+    father_nik: string | null
+    father_birth_place: string | null
+    father_birth_date: string | null
+    father_phone: string | null
+    father_education: string | null
+    father_occupation: string | null
+    mother_name: string | null
+    mother_nik: string | null
+    mother_birth_place: string | null
+    mother_birth_date: string | null
+    mother_phone: string | null
+    mother_education: string | null
+    mother_occupation: string | null
+    guardian_name: string | null
+    guardian_nik: string | null
+    guardian_relationship: string | null
+    guardian_phone: string | null
+    guardian_education: string | null
+    guardian_occupation: string | null
+    emergency_contact_name: string | null
+    emergency_contact_phone: string | null
+    verified_by: string | null
+    verified_at: string | null
+    created_at: string
+    updated_at: string
+  }
+  Insert: {
+    guardian_user_id: string
+    account_display_name: string
+    primary_phone?: string | null
+    family_card_no?: string | null
+    family_address?: string | null
+    father_name?: string | null
+    father_nik?: string | null
+    father_birth_place?: string | null
+    father_birth_date?: string | null
+    father_phone?: string | null
+    father_education?: string | null
+    father_occupation?: string | null
+    mother_name?: string | null
+    mother_nik?: string | null
+    mother_birth_place?: string | null
+    mother_birth_date?: string | null
+    mother_phone?: string | null
+    mother_education?: string | null
+    mother_occupation?: string | null
+    guardian_name?: string | null
+    guardian_nik?: string | null
+    guardian_relationship?: string | null
+    guardian_phone?: string | null
+    guardian_education?: string | null
+    guardian_occupation?: string | null
+    emergency_contact_name?: string | null
+    emergency_contact_phone?: string | null
+    verified_by?: string | null
+    verified_at?: string | null
+    created_at?: string
+    updated_at?: string
+  }
+  Update: Partial<ParentFamilyProfilesTable['Insert']>
+  Relationships: []
+}
+
+type ParentVerificationRequestsTable = {
+  Row: {
+    id: string
+    parent_user_id: string
+    parent_display_name: string
+    request_type: 'family_profile' | 'child_link' | 'child_update'
+    subject_key: string
+    target_student_id: string | null
+    proposed_data: Json
+    current_data: Json | null
+    status: 'pending' | 'approved' | 'changes_requested' | 'rejected'
+    supersedes_request_id: string | null
+    reviewed_by: string | null
+    review_comment: string | null
+    matched_student_id: string | null
+    submitted_at: string
+    reviewed_at: string | null
+    created_at: string
+    updated_at: string
+  }
+  Insert: {
+    id?: string
+    parent_user_id: string
+    parent_display_name: string
+    request_type: 'family_profile' | 'child_link' | 'child_update'
+    subject_key: string
+    target_student_id?: string | null
+    proposed_data: Json
+    current_data?: Json | null
+    status?: 'pending' | 'approved' | 'changes_requested' | 'rejected'
+    supersedes_request_id?: string | null
+    reviewed_by?: string | null
+    review_comment?: string | null
+    matched_student_id?: string | null
+    submitted_at?: string
+    reviewed_at?: string | null
+    created_at?: string
+    updated_at?: string
+  }
+  Update: Partial<ParentVerificationRequestsTable['Insert']>
+  Relationships: []
+}
+
 export type Database = Omit<GeneratedDatabase, 'public'> & {
   public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views' | 'Functions'> & {
-    Tables: Omit<BaseTables, 'academic_years' | 'audit_events' | 'school_classes' | 'school_documents' | 'student_payments' | 'payment_transactions' | 'students' | 'school_schedules' | 'school_settings'> & {
+    Tables: Omit<BaseTables, 'academic_years' | 'audit_events' | 'parent_family_profiles' | 'parent_verification_requests' | 'school_classes' | 'school_documents' | 'student_payments' | 'payment_transactions' | 'students' | 'school_schedules' | 'school_settings'> & {
       academic_years: AcademicYearsTable
+      parent_family_profiles: ParentFamilyProfilesTable
+      parent_verification_requests: ParentVerificationRequestsTable
       audit_events: AuditEventsTable
       school_classes: SchoolClassesTable
       school_documents: SchoolDocumentsTable
@@ -273,6 +390,9 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       | 'save_academic_year'
       | 'save_student_with_guardians'
       | 'update_my_avatar'
+      | 'submit_parent_family_verification'
+      | 'submit_parent_child_verification'
+      | 'review_parent_verification_request'
     > & {
       save_school_settings: {
         Args: {
@@ -365,6 +485,19 @@ export type Database = Omit<GeneratedDatabase, 'public'> & {
       update_my_avatar: {
         Args: { p_avatar_path?: string | null }
         Returns: BaseTables['user_profiles']['Row']
+      }
+
+      submit_parent_family_verification: {
+        Args: { p_payload: Json; p_supersedes_request_id?: string | null }
+        Returns: string
+      }
+      submit_parent_child_verification: {
+        Args: { p_target_student_id: string | null; p_payload: Json; p_supersedes_request_id?: string | null }
+        Returns: string
+      }
+      review_parent_verification_request: {
+        Args: { p_request_id: string; p_action: string; p_comment?: string | null; p_matched_student_id?: string | null }
+        Returns: Json
       }
     }
   }

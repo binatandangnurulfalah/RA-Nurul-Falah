@@ -509,3 +509,195 @@ test('Storage private, metadata canonical, dan cleanup backend dipaksa', async (
   assert.equal(attempted.data.length, 0)
   assert.ok((await actors.admin.db.from('student_payments').insert({ student_id: fixture.studentA, payment_type: 'SPP', amount: 100000, paid_amount: 150000, status: 'paid', created_by: actors.admin.id })).error)
 })
+
+test('parent family changes require teacher verification before canonical profile update', async () => {
+  const bypass = await actors.parentA.db
+    .from('user_profiles')
+    .update({ display_name: 'Bypass Parent Ditolak' })
+    .eq('id', actors.parentA.id)
+    .select('id')
+  assert.ok(bypass.error)
+  assert.equal(bypass.error.code, '42501')
+
+  const first = await actors.parentA.db.rpc('submit_parent_family_verification', {
+    p_payload: {
+      account_display_name: 'Wali Tahap 12.11',
+      primary_phone: '081234567890',
+      family_card_no: '3201010101010001',
+      family_address: 'Alamat Keluarga Tahap 12.11',
+      father_name: 'Ayah Tahap 12.11',
+      mother_name: 'Ibu Tahap 12.11',
+      emergency_contact_name: 'Kontak Darurat',
+      emergency_contact_phone: '081200000001',
+    },
+  })
+  assert.ifError(first.error)
+
+  const { data: canonicalBefore, error: canonicalBeforeError } = await service
+    .from('parent_family_profiles')
+    .select('guardian_user_id')
+    .eq('guardian_user_id', actors.parentA.id)
+  assert.ifError(canonicalBeforeError)
+  assert.equal(canonicalBefore.length, 0)
+
+  const { data: hiddenFromOtherParent, error: hiddenError } = await actors.parentB.db
+    .from('parent_verification_requests')
+    .select('id')
+    .eq('id', first.data)
+  assert.ifError(hiddenError)
+  assert.equal(hiddenFromOtherParent.length, 0)
+
+  const { data: teacherVisible, error: teacherVisibleError } = await actors.teacherA.db
+    .from('parent_verification_requests')
+    .select('id,status')
+    .eq('id', first.data)
+    .single()
+  assert.ifError(teacherVisibleError)
+  assert.equal(teacherVisible.status, 'pending')
+
+  const noReason = await actors.teacherA.db.rpc('review_parent_verification_request', {
+    p_request_id: first.data,
+    p_action: 'request_changes',
+  })
+  assert.ok(noReason.error)
+  assert.equal(noReason.error.code, '22023')
+
+  const requestChanges = await actors.teacherA.db.rpc('review_parent_verification_request', {
+    p_request_id: first.data,
+    p_action: 'request_changes',
+    p_comment: 'Nomor telepon utama perlu diperiksa kembali.',
+  })
+  assert.ifError(requestChanges.error)
+
+  const resubmit = await actors.parentA.db.rpc('submit_parent_family_verification', {
+    p_supersedes_request_id: first.data,
+    p_payload: {
+      account_display_name: 'Wali Tahap 12.11 Terverifikasi',
+      primary_phone: '081234567899',
+      family_card_no: '3201010101010001',
+      family_address: 'Alamat Keluarga Tahap 12.11',
+      father_name: 'Ayah Tahap 12.11',
+      mother_name: 'Ibu Tahap 12.11',
+    },
+  })
+  assert.ifError(resubmit.error)
+
+  const approve = await actors.teacherA.db.rpc('review_parent_verification_request', {
+    p_request_id: resubmit.data,
+    p_action: 'approve',
+  })
+  assert.ifError(approve.error)
+
+  const { data: family, error: familyError } = await service
+    .from('parent_family_profiles')
+    .select('account_display_name,primary_phone,verified_by')
+    .eq('guardian_user_id', actors.parentA.id)
+    .single()
+  assert.ifError(familyError)
+  assert.equal(family.account_display_name, 'Wali Tahap 12.11 Terverifikasi')
+  assert.equal(family.primary_phone, '081234567899')
+  assert.equal(family.verified_by, actors.teacherA.id)
+
+  const { data: profile, error: profileError } = await service
+    .from('user_profiles')
+    .select('display_name,phone,address')
+    .eq('id', actors.parentA.id)
+    .single()
+  assert.ifError(profileError)
+  assert.equal(profile.display_name, 'Wali Tahap 12.11 Terverifikasi')
+  assert.equal(profile.phone, '081234567899')
+  assert.equal(profile.address, 'Alamat Keluarga Tahap 12.11')
+})
+
+test('new child verification requires official student matching and preserves school-owned fields', async () => {
+  const { data: candidate, error: candidateError } = await service.from('students').insert({
+    full_name: 'Calon Anak Tahap 12.11',
+    nis: 'ST1211-C',
+    gender: 'P',
+    birth_place: 'Sumedang',
+    birth_date: '2021-04-05',
+    class_id: fixture.classA,
+    class_name: 'Kelas A',
+    academic_year_id: fixture.academicYearA,
+    academic_year: fixture.academicYearLabelA,
+    created_by: actors.admin.id,
+  }).select('id,nis,class_id,class_name').single()
+  assert.ifError(candidateError)
+
+  const submit = await actors.parentA.db.rpc('submit_parent_child_verification', {
+    p_target_student_id: null,
+    p_payload: {
+      full_name: 'Calon Anak Tahap 12.11',
+      nik: '3201010202020001',
+      nisn: '0123456789',
+      gender: 'P',
+      birth_place: 'Sumedang',
+      birth_date: '2021-04-05',
+      relationship_to_child: 'Ayah',
+    },
+  })
+  assert.ifError(submit.error)
+
+  const wrongScope = await actors.teacherA.db.rpc('review_parent_verification_request', {
+    p_request_id: submit.data,
+    p_action: 'approve',
+    p_matched_student_id: fixture.studentB,
+  })
+  assert.ok(wrongScope.error)
+  assert.equal(wrongScope.error.code, '42501')
+
+  const approveLink = await actors.teacherA.db.rpc('review_parent_verification_request', {
+    p_request_id: submit.data,
+    p_action: 'approve',
+    p_matched_student_id: candidate.id,
+  })
+  assert.ifError(approveLink.error)
+
+  const { data: link, error: linkError } = await service.from('student_guardians')
+    .select('relationship')
+    .eq('student_id', candidate.id)
+    .eq('guardian_user_id', actors.parentA.id)
+    .single()
+  assert.ifError(linkError)
+  assert.equal(link.relationship, 'Ayah')
+
+  const updateRequest = await actors.parentA.db.rpc('submit_parent_child_verification', {
+    p_target_student_id: candidate.id,
+    p_payload: {
+      full_name: 'Calon Anak Tahap 12.11 Diperbarui',
+      nik: '3201010202020001',
+      nisn: '0123456789',
+      gender: 'P',
+      birth_place: 'Darmaraja',
+      birth_date: '2021-04-05',
+      relationship_to_child: 'Ayah',
+    },
+  })
+  assert.ifError(updateRequest.error)
+
+  const { data: beforeApproval, error: beforeApprovalError } = await service.from('students')
+    .select('full_name,birth_place,nis,class_id,class_name')
+    .eq('id', candidate.id)
+    .single()
+  assert.ifError(beforeApprovalError)
+  assert.equal(beforeApproval.full_name, 'Calon Anak Tahap 12.11')
+  assert.equal(beforeApproval.birth_place, 'Sumedang')
+
+  const approveUpdate = await actors.teacherA.db.rpc('review_parent_verification_request', {
+    p_request_id: updateRequest.data,
+    p_action: 'approve',
+  })
+  assert.ifError(approveUpdate.error)
+
+  const { data: afterApproval, error: afterApprovalError } = await service.from('students')
+    .select('full_name,birth_place,nis,class_id,class_name')
+    .eq('id', candidate.id)
+    .single()
+  assert.ifError(afterApprovalError)
+  assert.equal(afterApproval.full_name, 'Calon Anak Tahap 12.11 Diperbarui')
+  assert.equal(afterApproval.birth_place, 'Darmaraja')
+  assert.equal(afterApproval.nis, 'ST1211-C')
+  assert.equal(afterApproval.class_id, fixture.classA)
+  assert.equal(afterApproval.class_name, 'Kelas A')
+})
+

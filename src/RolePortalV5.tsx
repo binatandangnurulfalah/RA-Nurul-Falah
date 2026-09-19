@@ -17,6 +17,7 @@ import {
   MoreHorizontal,
   QrCode,
   Settings,
+  ShieldCheck,
   UserRound,
   UsersRound,
   X,
@@ -32,6 +33,7 @@ import './portal-v2-polish.css'
 import './school-modules.css'
 import './scanner-native.css'
 import './navigation-shell.css'
+import './parent-verification.css'
 
 type NavItem = { id: string; label: string; icon: typeof Home }
 type NavGroupDefinition = { label: string; ids: readonly string[] }
@@ -44,10 +46,11 @@ const SchedulePage = lazy(() => import('./portal-v2/SchedulePage'))
 const StudentsPage = lazy(() => import('./portal-v2/StudentsPageV2'))
 const AttendanceDataManager = lazy(() => import('./portal-v2/AttendancePages').then((module) => ({ default: module.AttendanceDataManager })))
 const AttendanceScannerNative = lazy(() => import('./portal-v2/AttendanceScannerNative').then((module) => ({ default: module.AttendanceScannerNative })))
-const ChildrenPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.ChildrenPage })))
 const DashboardPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.DashboardPage })))
 const SettingsPage = lazy(() => import('./portal-v2/PortalPages').then((module) => ({ default: module.SettingsPage })))
 const ProfilePageV3 = lazy(() => import('./portal-v2/ProfilePageV3').then((module) => ({ default: module.ProfilePageV3 })))
+const ParentFamilyPage = lazy(() => import('./portal-v2/ParentFamilyPage'))
+const ParentVerificationPage = lazy(() => import('./portal-v2/ParentVerificationPage'))
 const DocumentsPage = lazy(() => import('./portal-v2/DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
 const PaymentsPage = lazy(() => import('./portal-v2/PaymentsPage').then((module) => ({ default: module.PaymentsPage })))
 const ReportsPage = lazy(() => import('./portal-v2/ReportsPage').then((module) => ({ default: module.ReportsPage })))
@@ -57,6 +60,7 @@ const menus: Record<AppRole, NavItem[]> = {
   admin: [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'accounts', label: 'Manajemen Akun', icon: UsersRound },
+    { id: 'verification', label: 'Verifikasi Data', icon: ShieldCheck },
     { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'students', label: 'Data Murid', icon: GraduationCap },
     { id: 'teachers', label: 'Data Guru', icon: ContactRound },
@@ -76,6 +80,7 @@ const menus: Record<AppRole, NavItem[]> = {
     { id: 'attendance', label: 'Scan Absensi', icon: QrCode },
     { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'students', label: 'Data Murid', icon: UsersRound },
+    { id: 'verification', label: 'Verifikasi Data', icon: ShieldCheck },
     { id: 'reports', label: 'Penilaian & Rapor', icon: BookOpenCheck },
     { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
     { id: 'announcements', label: 'Pengumuman', icon: Megaphone },
@@ -84,7 +89,7 @@ const menus: Record<AppRole, NavItem[]> = {
   ],
   parent: [
     { id: 'dashboard', label: 'Beranda', icon: Home },
-    { id: 'children', label: 'Data Anak', icon: UsersRound },
+    { id: 'children', label: 'Data Keluarga', icon: UsersRound },
     { id: 'attendance-data', label: 'Data Absen', icon: ClipboardCheck },
     { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
     { id: 'reports', label: 'Rapor Anak', icon: BookOpenCheck },
@@ -101,11 +106,11 @@ const desktopNavGroups: Record<AppRole, readonly NavGroupDefinition[]> = {
     { label: 'Akademik', ids: ['students', 'teachers', 'classes', 'schedule', 'reports'] },
     { label: 'Kehadiran', ids: ['attendance', 'attendance-data'] },
     { label: 'Administrasi', ids: ['payments', 'documents', 'announcements'] },
-    { label: 'Sistem', ids: ['accounts', 'audit', 'settings'] },
+    { label: 'Sistem', ids: ['accounts', 'verification', 'audit', 'settings'] },
   ],
   teacher: [
     { label: 'Ringkasan', ids: ['dashboard'] },
-    { label: 'Akademik', ids: ['students', 'schedule', 'reports'] },
+    { label: 'Akademik', ids: ['students', 'schedule', 'reports', 'verification'] },
     { label: 'Kehadiran', ids: ['attendance', 'attendance-data'] },
     { label: 'Administrasi', ids: ['documents', 'announcements'] },
   ],
@@ -130,7 +135,7 @@ const mobileMoreGroups: Record<AppRole, readonly NavGroupDefinition[]> = {
   ],
   teacher: [
     { label: 'Akademik', ids: ['schedule', 'reports'] },
-    { label: 'Informasi', ids: ['documents', 'announcements'] },
+    { label: 'Informasi', ids: ['verification', 'documents', 'announcements'] },
   ],
   parent: [
     { label: 'Aktivitas Anak', ids: ['attendance-data', 'schedule'] },
@@ -278,6 +283,7 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
   if (page === 'attendance-data') return <AttendanceDataManager canManage={role !== 'parent'} parentView={role === 'parent'} />
   if (page === 'attendance' && role !== 'parent') return <AttendanceScannerNative />
   if (page === 'accounts' && role === 'admin') return <AccountsPage />
+  if (page === 'verification' && role !== 'parent') return <ParentVerificationPage />
   if (page === 'students' && role !== 'parent') return <StudentsPage role={role} />
   if (page === 'teachers' && role === 'admin') return <TeachersPage />
   if (page === 'reports') return <ReportsPage role={role} />
@@ -288,7 +294,7 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
   if (page === 'announcements') return <AnnouncementsPage role={role} currentUserId={profile.id} />
   if (page === 'audit' && role === 'admin') return <AuditTrailPage />
   if (page === 'settings' && role === 'admin') return <SettingsPage />
-  if (page === 'children' && role === 'parent') return <ChildrenPage />
+  if (page === 'children' && role === 'parent') return <ParentFamilyPage profile={profile} />
   if (page === 'profile') return <ProfilePageV3 profile={profile} onProfileChange={setProfile} />
   return <DashboardPage role={role} profile={profile} go={go} />
 }
@@ -296,4 +302,4 @@ function PageRouter({ role, page, profile, setProfile, go }: { role: AppRole; pa
 function PageLoading() { return <div className="v5-page-loading" role="status" aria-live="polite"><span /><span /><span /><p>Memuat halaman…</p></div> }
 
 function roleLabel(role: AppRole) { return role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Guru' : 'Orang Tua / Wali' }
-function mobileLabel(label: string) { if (label === 'Dashboard') return 'Beranda'; if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Absen') return 'Absen'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Anak') return 'Anak'; if (label === 'Scan Absensi') return 'Scan'; if (label === 'Penilaian & Rapor') return 'Rapor'; if (label === 'Rapor Anak') return 'Rapor'; if (label === 'Dokumen & Surat') return 'Dokumen'; return label.split(' ')[0] }
+function mobileLabel(label: string) { if (label === 'Dashboard') return 'Beranda'; if (label === 'Manajemen Akun') return 'Akun'; if (label === 'Data Absen') return 'Absen'; if (label === 'Data Murid') return 'Murid'; if (label === 'Data Anak') return 'Anak'; if (label === 'Data Keluarga') return 'Keluarga'; if (label === 'Scan Absensi') return 'Scan'; if (label === 'Penilaian & Rapor') return 'Rapor'; if (label === 'Rapor Anak') return 'Rapor'; if (label === 'Dokumen & Surat') return 'Dokumen'; return label.split(' ')[0] }

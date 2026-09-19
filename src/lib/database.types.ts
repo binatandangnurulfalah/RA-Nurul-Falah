@@ -252,6 +252,219 @@ export type Database = {
         }
         Relationships: []
       }
+      parent_family_profiles: {
+        Row: {
+          account_display_name: string
+          created_at: string
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          family_address: string | null
+          family_card_no: string | null
+          father_birth_date: string | null
+          father_birth_place: string | null
+          father_education: string | null
+          father_name: string | null
+          father_nik: string | null
+          father_occupation: string | null
+          father_phone: string | null
+          guardian_education: string | null
+          guardian_name: string | null
+          guardian_nik: string | null
+          guardian_occupation: string | null
+          guardian_phone: string | null
+          guardian_relationship: string | null
+          guardian_user_id: string
+          mother_birth_date: string | null
+          mother_birth_place: string | null
+          mother_education: string | null
+          mother_name: string | null
+          mother_nik: string | null
+          mother_occupation: string | null
+          mother_phone: string | null
+          primary_phone: string | null
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          account_display_name: string
+          created_at?: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          family_address?: string | null
+          family_card_no?: string | null
+          father_birth_date?: string | null
+          father_birth_place?: string | null
+          father_education?: string | null
+          father_name?: string | null
+          father_nik?: string | null
+          father_occupation?: string | null
+          father_phone?: string | null
+          guardian_education?: string | null
+          guardian_name?: string | null
+          guardian_nik?: string | null
+          guardian_occupation?: string | null
+          guardian_phone?: string | null
+          guardian_relationship?: string | null
+          guardian_user_id: string
+          mother_birth_date?: string | null
+          mother_birth_place?: string | null
+          mother_education?: string | null
+          mother_name?: string | null
+          mother_nik?: string | null
+          mother_occupation?: string | null
+          mother_phone?: string | null
+          primary_phone?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          account_display_name?: string
+          created_at?: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          family_address?: string | null
+          family_card_no?: string | null
+          father_birth_date?: string | null
+          father_birth_place?: string | null
+          father_education?: string | null
+          father_name?: string | null
+          father_nik?: string | null
+          father_occupation?: string | null
+          father_phone?: string | null
+          guardian_education?: string | null
+          guardian_name?: string | null
+          guardian_nik?: string | null
+          guardian_occupation?: string | null
+          guardian_phone?: string | null
+          guardian_relationship?: string | null
+          guardian_user_id?: string
+          mother_birth_date?: string | null
+          mother_birth_place?: string | null
+          mother_education?: string | null
+          mother_name?: string | null
+          mother_nik?: string | null
+          mother_occupation?: string | null
+          mother_phone?: string | null
+          primary_phone?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_family_profiles_guardian_user_id_fkey"
+            columns: ["guardian_user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_family_profiles_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parent_verification_requests: {
+        Row: {
+          created_at: string
+          current_data: Json | null
+          id: string
+          matched_student_id: string | null
+          parent_display_name: string
+          parent_user_id: string
+          proposed_data: Json
+          request_type: string
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          subject_key: string
+          submitted_at: string
+          supersedes_request_id: string | null
+          target_student_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_data?: Json | null
+          id?: string
+          matched_student_id?: string | null
+          parent_display_name: string
+          parent_user_id: string
+          proposed_data?: Json
+          request_type: string
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          subject_key: string
+          submitted_at?: string
+          supersedes_request_id?: string | null
+          target_student_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_data?: Json | null
+          id?: string
+          matched_student_id?: string | null
+          parent_display_name?: string
+          parent_user_id?: string
+          proposed_data?: Json
+          request_type?: string
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          subject_key?: string
+          submitted_at?: string
+          supersedes_request_id?: string | null
+          target_student_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_verification_requests_matched_student_id_fkey"
+            columns: ["matched_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_parent_user_id_fkey"
+            columns: ["parent_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_supersedes_request_id_fkey"
+            columns: ["supersedes_request_id"]
+            isOneToOne: false
+            referencedRelation: "parent_verification_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_verification_requests_target_student_id_fkey"
+            columns: ["target_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_transactions: {
         Row: {
           amount: number
@@ -1134,6 +1347,15 @@ export type Database = {
         }
         Returns: string
       }
+      review_parent_verification_request: {
+        Args: {
+          p_action: string
+          p_comment?: string
+          p_matched_student_id?: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       save_academic_year: {
         Args: {
           p_academic_year_id?: string
@@ -1229,6 +1451,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      submit_parent_child_verification: {
+        Args: {
+          p_payload: Json
+          p_supersedes_request_id?: string
+          p_target_student_id: string
+        }
+        Returns: string
+      }
+      submit_parent_family_verification: {
+        Args: { p_payload: Json; p_supersedes_request_id?: string }
+        Returns: string
       }
       update_my_avatar: {
         Args: { p_avatar_path?: string }
