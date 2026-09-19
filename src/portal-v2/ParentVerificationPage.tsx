@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ChevronRight, ExternalLink, FileImage, FileText, Search, ShieldCheck, UserRound, XCircle } from 'lucide-react'
-import { FormDialog } from '../components/forms'
+import { FormDialog, FormField } from '../components/forms'
 import { StatusBadge } from '../components/data'
 import { Button, EmptyState, PageHeader } from '../components/ui'
 import { queryKeys } from '../data/queryKeys'
@@ -252,7 +252,7 @@ export default function ParentVerificationPage() {
       onClose={() => setReviewMode(null)}
       onSubmit={submitReview}
     >
-      <label className="form-field"><span className="form-field__label">Komentar / alasan <b>*</b></span><textarea rows={5} maxLength={1500} required value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} placeholder="Contoh: Nama anak belum sesuai dengan akta kelahiran. Silakan perbaiki dan kirim ulang." /></label>
+      <FormField label="Komentar / alasan" required full><textarea rows={5} maxLength={1500} required value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} placeholder="Contoh: Nama anak belum sesuai dengan akta kelahiran. Silakan perbaiki dan kirim ulang." /></FormField>
     </FormDialog>
   </div>
 }
