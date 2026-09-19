@@ -79,7 +79,7 @@ export function AccountsPage() {
     const { data, error } = await invokeObservedFunction('admin-manage-user', {
         action: 'send_password_reset',
         user_id: account.id,
-        redirect_to: authRedirectUrl(),
+        redirect_to: authRedirectUrl('recovery'),
       })
     resetRef.current = false
     setResettingId(null)
@@ -236,7 +236,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
         email: form.email.trim().toLowerCase(),
         display_name: form.name.trim(),
         role: form.role,
-        redirect_to: authRedirectUrl(),
+        redirect_to: authRedirectUrl('invite'),
       })
     busyRef.current = false
     setBusy(false)
@@ -250,7 +250,7 @@ function CreateAccountModal({ onClose, onDone }: { onClose: () => void; onDone: 
   return <FormDialog
     open
     title="Tambah Akun"
-    description="Pengguna menerima email undangan dan membuat password sendiri. Administrator tidak melihat atau menyimpan password."
+    description="Pengguna menerima email berisi alamat akun, password sementara 8 karakter, dan tautan undangan untuk membuat password sendiri."
     submitLabel="Buat & Kirim Undangan"
     busy={busy}
     error={errorText}

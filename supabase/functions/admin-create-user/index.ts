@@ -18,6 +18,24 @@ function safeRedirect(value: unknown) {
   }
 }
 
+function randomTemporaryPassword() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  const digits = '23456789'
+  const all = letters + digits
+  const randomIndex = (length: number) => {
+    const value = new Uint32Array(1)
+    crypto.getRandomValues(value)
+    return value[0] % length
+  }
+  const chars = [letters[randomIndex(letters.length)], digits[randomIndex(digits.length)]]
+  while (chars.length < 8) chars.push(all[randomIndex(all.length)])
+  for (let index = chars.length - 1; index > 0; index--) {
+    const swapIndex = randomIndex(index + 1)
+    ;[chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]]
+  }
+  return chars.join('')
+}
+
 Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
   const preflight = corsPreflight(req)
   if (preflight) return preflight
@@ -65,10 +83,12 @@ Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
       }, 400)
     }
 
+    const temporaryPassword = randomTemporaryPassword()
     const inviteOptions = {
       data: {
         display_name: displayName,
         must_set_password: true,
+        temporary_password: temporaryPassword,
       },
       ...(redirectTo ? { redirectTo } : {}),
     }
@@ -83,6 +103,20 @@ Deno.serve(observeEdgeFunction('admin-create-user', async (req: Request) => {
         ok: false,
         error: 'Undangan akun gagal dikirim. Periksa alamat email dan konfigurasi email Supabase.',
       }, 503)
+    }
+
+    const { error: passwordError } = await context.adminClient.auth.admin.updateUserById(invited.user.id, {
+      password: temporaryPassword,
+      user_metadata: {
+        display_name: displayName,
+        must_set_password: true,
+        temporary_password: null,
+      },
+    })
+    if (passwordError) {
+      await context.adminClient.auth.admin.deleteUser(invited.user.id)
+      await context.adminClient.from('account_allowlist').delete().eq('id', allow.id)
+      return jsonResponse({ ok: false, error: 'Akun gagal diamankan dengan password sementara.' }, 503)
     }
 
     const delivery = 'invite_email'

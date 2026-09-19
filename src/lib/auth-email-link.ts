@@ -6,27 +6,34 @@ export type EmailAuthLink = {
   refreshToken: string
 }
 
+export type EmailAuthLinkError = {
+  message: string
+}
+
 const DEFAULT_AUTH_REDIRECT_URL = 'https://binatandangnurulfalah.github.io/RA-Nurul-Falah/'
 
-export function authRedirectUrl() {
+export function authRedirectUrl(flow?: PasswordLinkType) {
   const configured = String(import.meta.env.VITE_AUTH_REDIRECT_URL ?? '').trim()
-  if (!configured) return DEFAULT_AUTH_REDIRECT_URL
+  const fallback = new URL(DEFAULT_AUTH_REDIRECT_URL)
 
   try {
-    const url = new URL(configured)
+    const url = configured ? new URL(configured) : fallback
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
       return DEFAULT_AUTH_REDIRECT_URL
     }
+    if (flow) url.searchParams.set('auth_flow', flow)
     return url.toString()
   } catch {
-    return DEFAULT_AUTH_REDIRECT_URL
+    if (flow) fallback.searchParams.set('auth_flow', flow)
+    return fallback.toString()
   }
 }
 
-export function readEmailAuthLink(hash = window.location.hash): EmailAuthLink | null {
+export function readEmailAuthLink(hash = window.location.hash, search = window.location.search): EmailAuthLink | null {
   const fragment = hash.startsWith('#') ? hash.slice(1) : hash
   const params = new URLSearchParams(fragment)
-  const type = params.get('type')
+  const query = new URLSearchParams(search)
+  const type = params.get('type') ?? query.get('auth_flow')
   const accessToken = params.get('access_token')
   const refreshToken = params.get('refresh_token')
 
@@ -34,8 +41,16 @@ export function readEmailAuthLink(hash = window.location.hash): EmailAuthLink | 
   return { type, accessToken, refreshToken }
 }
 
+export function readEmailAuthLinkError(hash = window.location.hash): EmailAuthLinkError | null {
+  const fragment = hash.startsWith('#') ? hash.slice(1) : hash
+  const params = new URLSearchParams(fragment)
+  if (!params.get('error') && !params.get('error_code')) return null
+  return { message: params.get('error_description') ?? 'Tautan email tidak valid atau sudah kedaluwarsa.' }
+}
+
 export function clearEmailAuthLink() {
   const cleanUrl = new URL(window.location.href)
   cleanUrl.hash = ''
+  cleanUrl.searchParams.delete('auth_flow')
   window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search)
 }
