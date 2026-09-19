@@ -68,6 +68,8 @@ type ChildEditor = {
   birthCertificateFile: File | null
 }
 
+type FamilyTab = 'parents' | 'children' | 'history'
+
 const emptyFamily = (profile: UserProfile): FamilyForm => ({
   account_display_name: profile.display_name || '',
   primary_phone: profile.phone || '',
@@ -201,7 +203,14 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   const pendingChildLinks = requests.filter((item) => item.request_type === 'child_link' && item.status === 'pending')
   const latestFamilyRequest = requests.find((item) => item.request_type === 'family_profile')
   const latestFamilyCorrection = latestFamilyRequest && (latestFamilyRequest.status === 'changes_requested' || latestFamilyRequest.status === 'rejected') ? latestFamilyRequest : null
+  const childAttentionCount = requests.filter((item) =>
+    item.request_type !== 'family_profile'
+    && (item.status === 'pending' || item.status === 'changes_requested' || item.status === 'rejected')
+  ).length
+  const unreadHistoryCount = requests.filter(requestUnread).length
+  const parentNeedsAttention = Boolean(pendingFamily || latestFamilyCorrection)
 
+  const [activeTab, setActiveTab] = useState<FamilyTab>('parents')
   const [familyOpen, setFamilyOpen] = useState(false)
   const [familySupersedes, setFamilySupersedes] = useState<string | null>(null)
   const [familyForm, setFamilyForm] = useState<FamilyForm>(() => emptyFamily(profile))
@@ -224,6 +233,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   }
 
   const openFamily = (request?: VerificationRequestRow) => {
+    setActiveTab('parents')
     if (request) void markSeen(request)
     setFamilySupersedes(request?.id ?? null)
     setFamilyForm(request ? familyFromPayload(profile, request.proposed_data) : verifiedFamilyPayload)
@@ -233,6 +243,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   }
 
   const openNewChild = () => {
+    setActiveTab('children')
     setChildEditor({
       targetStudentId: null,
       supersedesRequestId: null,
@@ -245,6 +256,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   }
 
   const openChildUpdate = (child: (typeof children)[number]) => {
+    setActiveTab('children')
     setChildEditor({
       targetStudentId: child.id,
       supersedesRequestId: null,
@@ -274,6 +286,7 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   }
 
   const reopenChildRequest = (request: VerificationRequestRow) => {
+    setActiveTab('children')
     setChildEditor({
       targetStudentId: request.target_student_id,
       supersedesRequestId: request.id,
@@ -409,76 +422,130 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
     <PageHeader
       eyebrow="KELUARGA"
       title="Data Keluarga"
-      subtitle="Lengkapi data Ayah, Ibu/Wali, dan anak. Perubahan baru menjadi data resmi setelah diverifikasi Guru."
-      actions={<Button onClick={openNewChild}><Plus size={17} /> Tambahkan Anak</Button>}
+      subtitle="Kelola data Orang Tua/Wali, anak, dan riwayat verifikasi dalam satu tempat."
     />
 
     {message && <Notice {...message} />}
     <section className="family-verification-note"><ShieldCheck size={21} /><div><strong>Data resmi dilindungi proses verifikasi</strong><p>Pengajuan Anda tidak langsung mengubah data sekolah. Guru akan memeriksa kecocokan terlebih dahulu.</p></div></section>
 
-    <section className="v2-panel family-profile-card">
-      <header className="family-section-head">
-        <div><small>DATA ORANG TUA / WALI</small><h3>Profil keluarga</h3></div>
-        {pendingFamily
-          ? <StatusBadge tone="warning"><Clock3 size={14} /> Menunggu verifikasi</StatusBadge>
-          : family
-            ? <StatusBadge tone="success"><CheckCircle2 size={14} /> Terverifikasi</StatusBadge>
-            : <StatusBadge tone="neutral">Belum dilengkapi</StatusBadge>}
-      </header>
-      <div className="family-profile-grid">
-        <FamilyInfo label="Pemilik akun" value={family?.account_display_name || profile.display_name || 'Belum diisi'} />
-        <FamilyInfo label="Telepon utama" value={family?.primary_phone || profile.phone || 'Belum diisi'} />
-        <FamilyInfo label="Kartu Keluarga" value={family?.family_card_path ? 'Berkas tersedia' : 'Belum diunggah'} />
-        <FamilyInfo label="Ayah" value={family?.father_name || 'Belum diisi'} />
-        <FamilyInfo label="Ibu" value={family?.mother_name || 'Belum diisi'} />
-        <FamilyInfo label="Wali lain" value={family?.guardian_name || 'Tidak ada / belum diisi'} />
-        <FamilyInfo label="Alamat keluarga" value={family?.family_address || profile.address || 'Belum diisi'} />
-      </div>
-      {latestFamilyCorrection && !pendingFamily && <CorrectionNotice request={latestFamilyCorrection} onFix={() => openFamily(latestFamilyCorrection)} />}
-      <div className="family-card-actions">
-        <Button variant="secondary" disabled={Boolean(pendingFamily)} onClick={() => openFamily()}><Edit3 size={16} /> {family ? 'Ajukan Perubahan' : 'Lengkapi Data Keluarga'}</Button>
-      </div>
-    </section>
+    <nav className="family-tabs" role="tablist" aria-label="Bagian Data Keluarga">
+      <button
+        type="button"
+        role="tab"
+        id="family-tab-parents"
+        aria-controls="family-panel-parents"
+        aria-selected={activeTab === 'parents'}
+        className={activeTab === 'parents' ? 'active' : ''}
+        onClick={() => setActiveTab('parents')}
+      >
+        <UsersRound size={17} />
+        <span>Orang Tua</span>
+        {parentNeedsAttention && <span className="family-tab-alert" aria-label="Ada status yang perlu diperhatikan" />}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="family-tab-children"
+        aria-controls="family-panel-children"
+        aria-selected={activeTab === 'children'}
+        className={activeTab === 'children' ? 'active' : ''}
+        onClick={() => setActiveTab('children')}
+      >
+        <Baby size={17} />
+        <span>Anak</span>
+        {(children.length + pendingChildLinks.length) > 0 && <span className="family-tab-count">{children.length + pendingChildLinks.length}</span>}
+        {childAttentionCount > 0 && <span className="family-tab-alert" aria-label="Ada pengajuan anak yang perlu diperhatikan" />}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="family-tab-history"
+        aria-controls="family-panel-history"
+        aria-selected={activeTab === 'history'}
+        className={activeTab === 'history' ? 'active' : ''}
+        onClick={() => setActiveTab('history')}
+      >
+        <Clock3 size={17} />
+        <span>Riwayat</span>
+        {unreadHistoryCount > 0 && <span className="family-tab-count unread">{Math.min(unreadHistoryCount, 99)}</span>}
+      </button>
+    </nav>
 
-    <section className="v2-panel">
-      <header className="family-section-head"><div><small>ANAK</small><h3>Anak terhubung</h3></div><span>{children.length} siswa resmi</span></header>
-      {workspaceQuery.isPending ? <p>Memuat data anak...</p> : children.length ? <div className="family-child-grid">{children.map((child) => {
-        const latestUpdate = requests.find((request) => request.request_type === 'child_update' && request.target_student_id === child.id)
-        const pendingUpdate = latestUpdate?.status === 'pending' ? latestUpdate : null
-        const correction = latestUpdate && (latestUpdate.status === 'changes_requested' || latestUpdate.status === 'rejected') ? latestUpdate : null
-        return <article className="family-child-card" key={child.id}>
-          <span className="family-child-avatar"><Baby size={21} /></span>
-          <div className="family-child-main">
-            <div className="family-child-title"><h4>{child.full_name}</h4>{pendingUpdate && <StatusBadge tone="warning">Perubahan menunggu</StatusBadge>}</div>
-            <p>{child.class_name || 'Kelompok belum ditentukan'} · {child.academic_year || 'Tahun ajaran belum tersedia'}</p>
-            <small>{child.nis ? `NIS ${child.nis}` : 'NIS belum diisi'} · Hubungan: {child.relationship || 'Wali'}</small>
-            {child.parent_details && <div className="family-child-details">
-              {child.parent_details.residential_address && <span><MapPin size={12} /> Alamat tersedia</span>}
-              {(child.parent_details.blood_type || child.parent_details.health_notes || child.parent_details.allergies) && <span><HeartPulse size={12} /> Data kesehatan tersedia</span>}
-              {(child.parent_details.photo_path || child.parent_details.birth_certificate_path) && <span><Paperclip size={12} /> Berkas terverifikasi</span>}
-            </div>}
-            {correction && !pendingUpdate && <CorrectionNotice request={correction} onFix={() => reopenChildRequest(correction)} compact />}
+    {activeTab === 'parents' && <div id="family-panel-parents" role="tabpanel" aria-labelledby="family-tab-parents" className="family-tab-panel">
+      <section className="v2-panel family-profile-card">
+        <header className="family-section-head">
+          <div><small>DATA ORANG TUA / WALI</small><h3>Profil keluarga</h3></div>
+          {pendingFamily
+            ? <StatusBadge tone="warning"><Clock3 size={14} /> Menunggu verifikasi</StatusBadge>
+            : family
+              ? <StatusBadge tone="success"><CheckCircle2 size={14} /> Terverifikasi</StatusBadge>
+              : <StatusBadge tone="neutral">Belum dilengkapi</StatusBadge>}
+        </header>
+        <div className="family-profile-grid">
+          <FamilyInfo label="Pemilik akun" value={family?.account_display_name || profile.display_name || 'Belum diisi'} />
+          <FamilyInfo label="Telepon utama" value={family?.primary_phone || profile.phone || 'Belum diisi'} />
+          <FamilyInfo label="Kartu Keluarga" value={family?.family_card_path ? 'Berkas tersedia' : 'Belum diunggah'} />
+          <FamilyInfo label="Ayah" value={family?.father_name || 'Belum diisi'} />
+          <FamilyInfo label="Ibu" value={family?.mother_name || 'Belum diisi'} />
+          <FamilyInfo label="Wali lain" value={family?.guardian_name || 'Tidak ada / belum diisi'} />
+          <FamilyInfo label="Alamat keluarga" value={family?.family_address || profile.address || 'Belum diisi'} />
+        </div>
+        {latestFamilyCorrection && !pendingFamily && <CorrectionNotice request={latestFamilyCorrection} onFix={() => openFamily(latestFamilyCorrection)} />}
+        <div className="family-card-actions">
+          <Button variant="secondary" disabled={Boolean(pendingFamily)} onClick={() => openFamily()}><Edit3 size={16} /> {family ? 'Ajukan Perubahan' : 'Lengkapi Data Keluarga'}</Button>
+        </div>
+      </section>
+    </div>}
+
+    {activeTab === 'children' && <div id="family-panel-children" role="tabpanel" aria-labelledby="family-tab-children" className="family-tab-panel">
+      <section className="v2-panel">
+        <header className="family-section-head">
+          <div><small>ANAK</small><h3>Anak terhubung</h3></div>
+          <div className="family-section-actions">
+            <span>{children.length} siswa resmi</span>
+            <Button size="sm" onClick={openNewChild}><Plus size={15} /> Tambahkan Anak</Button>
           </div>
-          <Button size="sm" variant="secondary" disabled={Boolean(pendingUpdate)} onClick={() => openChildUpdate(child)}><Edit3 size={15} /> Ajukan Perubahan</Button>
-        </article>
-      })}</div> : <EmptyState icon={<UsersRound size={24} />} title="Belum ada anak terhubung" description="Tambahkan data anak untuk diajukan. Guru akan mencocokkannya dengan siswa resmi RA Nurul Falah." action={<Button onClick={openNewChild}><Plus size={16} /> Tambahkan Anak</Button>} />}
-    </section>
+        </header>
+        {workspaceQuery.isPending ? <p>Memuat data anak...</p> : children.length ? <div className="family-child-grid">{children.map((child) => {
+          const latestUpdate = requests.find((request) => request.request_type === 'child_update' && request.target_student_id === child.id)
+          const pendingUpdate = latestUpdate?.status === 'pending' ? latestUpdate : null
+          const correction = latestUpdate && (latestUpdate.status === 'changes_requested' || latestUpdate.status === 'rejected') ? latestUpdate : null
+          return <article className="family-child-card" key={child.id}>
+            <span className="family-child-avatar"><Baby size={21} /></span>
+            <div className="family-child-main">
+              <div className="family-child-title"><h4>{child.full_name}</h4>{pendingUpdate && <StatusBadge tone="warning">Perubahan menunggu</StatusBadge>}</div>
+              <p>{child.class_name || 'Kelompok belum ditentukan'} · {child.academic_year || 'Tahun ajaran belum tersedia'}</p>
+              <small>{child.nis ? `NIS ${child.nis}` : 'NIS belum diisi'} · Hubungan: {child.relationship || 'Wali'}</small>
+              {child.parent_details && <div className="family-child-details">
+                {child.parent_details.residential_address && <span><MapPin size={12} /> Alamat tersedia</span>}
+                {(child.parent_details.blood_type || child.parent_details.health_notes || child.parent_details.allergies) && <span><HeartPulse size={12} /> Data kesehatan tersedia</span>}
+                {(child.parent_details.photo_path || child.parent_details.birth_certificate_path) && <span><Paperclip size={12} /> Berkas terverifikasi</span>}
+              </div>}
+              {correction && !pendingUpdate && <CorrectionNotice request={correction} onFix={() => reopenChildRequest(correction)} compact />}
+            </div>
+            <Button size="sm" variant="secondary" disabled={Boolean(pendingUpdate)} onClick={() => openChildUpdate(child)}><Edit3 size={15} /> Ajukan Perubahan</Button>
+          </article>
+        })}</div> : <EmptyState icon={<UsersRound size={24} />} title="Belum ada anak terhubung" description="Tambahkan data anak untuk diajukan. Guru akan mencocokkannya dengan siswa resmi RA Nurul Falah." action={<Button onClick={openNewChild}><Plus size={16} /> Tambahkan Anak</Button>} />}
+      </section>
 
-    {pendingChildLinks.length ? <section className="v2-panel">
-      <header className="family-section-head"><div><small>PENGAJUAN ANAK BARU</small><h3>Menunggu pencocokan Guru</h3></div></header>
-      <div className="family-pending-list">{pendingChildLinks.map((request) => <div key={request.id}><Baby size={18} /><div><strong>{jsonText(request.proposed_data.full_name) || 'Anak'}</strong><small>{jsonText(request.proposed_data.birth_date) || 'Tanggal lahir belum diisi'} · Guru akan mencocokkan dengan siswa resmi.</small></div><StatusBadge tone="warning">Menunggu</StatusBadge></div>)}</div>
-    </section> : null}
+      {pendingChildLinks.length ? <section className="v2-panel">
+        <header className="family-section-head"><div><small>PENGAJUAN ANAK BARU</small><h3>Menunggu pencocokan Guru</h3></div></header>
+        <div className="family-pending-list">{pendingChildLinks.map((request) => <div key={request.id}><Baby size={18} /><div><strong>{jsonText(request.proposed_data.full_name) || 'Anak'}</strong><small>{jsonText(request.proposed_data.birth_date) || 'Tanggal lahir belum diisi'} · Guru akan mencocokkan dengan siswa resmi.</small></div><StatusBadge tone="warning">Menunggu</StatusBadge></div>)}</div>
+      </section> : null}
+    </div>}
 
-    <section className="v2-panel">
-      <header className="family-section-head"><div><small>RIWAYAT</small><h3>Riwayat verifikasi</h3></div></header>
-      {requests.length ? <div className="family-history">{requests.slice(0, 12).map((request) => <article key={request.id}>
-        <div><strong>{request.request_type === 'family_profile' ? 'Data keluarga' : request.request_type === 'child_link' ? `Tambah anak · ${jsonText(request.proposed_data.full_name)}` : `Perubahan anak · ${jsonText(request.proposed_data.full_name)}`}</strong><small>{new Date(request.submitted_at).toLocaleString('id-ID')}</small></div>
-        <div className="family-history-status"><StatusBadge tone={statusTone(request.status)}>{statusLabel(request.status)}</StatusBadge>{requestUnread(request) && <span className="verification-unread-dot">Baru</span>}</div>
-        {request.review_comment ? <p>{request.review_comment}</p> : null}
-        {(request.status === 'changes_requested' || request.status === 'rejected') && <Button size="sm" variant="secondary" onClick={() => request.request_type === 'family_profile' ? openFamily(request) : reopenChildRequest(request)}>Perbaiki & kirim ulang</Button>}
-        {requestUnread(request) && request.status === 'approved' && <Button size="sm" variant="secondary" onClick={() => void markSeen(request)}>Tandai dibaca</Button>}
-      </article>)}</div> : <p className="helper-text">Belum ada riwayat pengajuan.</p>}
-    </section>
+    {activeTab === 'history' && <div id="family-panel-history" role="tabpanel" aria-labelledby="family-tab-history" className="family-tab-panel">
+      <section className="v2-panel">
+        <header className="family-section-head"><div><small>RIWAYAT</small><h3>Riwayat verifikasi</h3></div><span>{requests.length} pengajuan</span></header>
+        {requests.length ? <div className="family-history">{requests.slice(0, 12).map((request) => <article key={request.id}>
+          <div><strong>{request.request_type === 'family_profile' ? 'Data keluarga' : request.request_type === 'child_link' ? `Tambah anak · ${jsonText(request.proposed_data.full_name)}` : `Perubahan anak · ${jsonText(request.proposed_data.full_name)}`}</strong><small>{new Date(request.submitted_at).toLocaleString('id-ID')}</small></div>
+          <div className="family-history-status"><StatusBadge tone={statusTone(request.status)}>{statusLabel(request.status)}</StatusBadge>{requestUnread(request) && <span className="verification-unread-dot">Baru</span>}</div>
+          {request.review_comment ? <p>{request.review_comment}</p> : null}
+          {(request.status === 'changes_requested' || request.status === 'rejected') && <Button size="sm" variant="secondary" onClick={() => request.request_type === 'family_profile' ? openFamily(request) : reopenChildRequest(request)}>Perbaiki & kirim ulang</Button>}
+          {requestUnread(request) && request.status === 'approved' && <Button size="sm" variant="secondary" onClick={() => void markSeen(request)}>Tandai dibaca</Button>}
+        </article>)}</div> : <EmptyState icon={<Clock3 size={24} />} title="Belum ada riwayat" description="Pengajuan dan hasil verifikasi akan tampil di sini." />}
+      </section>
+    </div>}
 
     <FormDialog open={familyOpen} title="Data Keluarga" description="Data akan dikirim ke Guru untuk diverifikasi sebelum menjadi data resmi." submitLabel="Ajukan Verifikasi" busy={busy} error={formError} onClose={() => setFamilyOpen(false)} onSubmit={submitFamily}>
       <FamilyFormFields form={familyForm} setForm={setFamilyForm} familyCardFile={familyCardFile} setFamilyCardFile={setFamilyCardFile} />
