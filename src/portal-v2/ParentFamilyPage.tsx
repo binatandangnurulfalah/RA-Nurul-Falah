@@ -1,6 +1,6 @@
 import { type FormEvent, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Baby, CheckCircle2, Clock3, Edit3, FileText, HeartPulse, MapPin, Paperclip, Plus, ShieldCheck, UsersRound } from 'lucide-react'
+import { Baby, CheckCircle2, Clock3, Edit3, FileText, HeartPulse, MapPin, Paperclip, Plus, UsersRound } from 'lucide-react'
 import { FormDialog, FormField, FormSection } from '../components/forms'
 import { StatusBadge } from '../components/data'
 import { Button, EmptyState, PageHeader } from '../components/ui'
@@ -415,19 +415,16 @@ export default function ParentFamilyPage({ profile }: { profile: UserProfile }) 
   }
 
   if (workspaceQuery.isError) {
-    return <div className="v2-stack"><PageHeader eyebrow="KELUARGA" title="Data Keluarga" subtitle="Kelola data keluarga dan anak yang terhubung ke RA Nurul Falah." /><Notice tone="error" text={userErrorMessage(workspaceQuery.error, 'Data keluarga gagal dimuat.')} /></div>
+    return <div className="v2-stack"><PageHeader eyebrow="KELUARGA" title="Data Keluarga" /><Notice tone="error" text={userErrorMessage(workspaceQuery.error, 'Data keluarga gagal dimuat.')} /></div>
   }
 
   return <div className="v2-stack parent-family-page">
     <PageHeader
       eyebrow="KELUARGA"
       title="Data Keluarga"
-      subtitle="Kelola data Orang Tua/Wali, anak, dan riwayat verifikasi dalam satu tempat."
     />
 
     {message && <Notice {...message} />}
-    <section className="family-verification-note"><ShieldCheck size={21} /><div><strong>Data resmi dilindungi proses verifikasi</strong><p>Pengajuan Anda tidak langsung mengubah data sekolah. Guru akan memeriksa kecocokan terlebih dahulu.</p></div></section>
-
     <nav className="family-tabs" role="tablist" aria-label="Bagian Data Keluarga">
       <button
         type="button"
