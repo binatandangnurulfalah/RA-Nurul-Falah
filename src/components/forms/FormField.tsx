@@ -13,7 +13,7 @@ export function FormField({ label, children, helper, error, required = false, fu
   return (
     <label className={`form-field${full ? ' full' : ''}${error ? ' has-error' : ''}`}>
       <span className="form-field__label">{label}{required ? <b aria-hidden="true"> *</b> : null}</span>
-      {children}
+      <span className="form-field__control">{children}</span>
       {error ? <small className="form-field__error" role="alert">{error}</small> : helper ? <small className="form-field__helper">{helper}</small> : null}
     </label>
   )
@@ -22,8 +22,11 @@ export function FormField({ label, children, helper, error, required = false, fu
 export function FormSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
     <fieldset className="form-section">
-      <legend>{title}</legend>
-      {description ? <p>{description}</p> : null}
+      <legend className="form-section__legend">{title}</legend>
+      <div className="form-section__header">
+        <h3 aria-hidden="true">{title}</h3>
+        {description ? <p>{description}</p> : null}
+      </div>
       <div className="form-section__grid">{children}</div>
     </fieldset>
   )
