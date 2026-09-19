@@ -58,7 +58,7 @@
     "20260919013756_stage12_11_parent_family_verification_v2.sql",
     "20260919013843_stage12_11_parent_verification_audit_whitelist.sql",
     "20260919020013_stage12_11_parent_details_rls_execute_fix.sql",
-    "20260919024000_refine_parent_child_file_uploads.sql"
+    "20260919023814_refine_parent_child_file_uploads.sql"
   ],
   "bootstrap_untracked": [
     "20260916035026_add_students_and_attendance.sql",
