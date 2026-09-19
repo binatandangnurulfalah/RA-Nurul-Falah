@@ -25,7 +25,9 @@ import {
 import { ProfileAvatar } from './components/ProfileAvatar'
 import { useDialogFocus } from './components/ui/useDialogFocus'
 import { announcementUnreadCountOptions } from './data/queries/announcements'
+import { verificationUnreadCountOptions } from './data/queries/parentVerification'
 import { useAnnouncementRealtime } from './data/useAnnouncementRealtime'
+import { useParentVerificationRealtime } from './data/useParentVerificationRealtime'
 import { type AppRole, supabase, type UserProfile } from './lib/supabase'
 import { ChildSelectionProvider, GlobalChildSwitcher } from './portal-v2/AppExperience'
 import './portal-v2.css'
@@ -156,7 +158,10 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
   const sheetRef = useRef<HTMLElement | null>(null)
   const unreadAnnouncementsQuery = useQuery(announcementUnreadCountOptions({ role: currentProfile.role, currentUserId: currentProfile.id }))
   const announcementCount = unreadAnnouncementsQuery.data ?? 0
+  const unreadVerificationQuery = useQuery(verificationUnreadCountOptions(currentProfile.role === 'parent' ? currentProfile.id : ''))
+  const verificationCount = currentProfile.role === 'parent' ? (unreadVerificationQuery.data ?? 0) : 0
   useAnnouncementRealtime(currentProfile.id)
+  useParentVerificationRealtime(currentProfile.id)
 
   const base = currentProfile.role === 'teacher' ? '/guru' : currentProfile.role === 'parent' ? '/orang-tua' : '/admin'
   const menu = menus[currentProfile.role]
@@ -234,6 +239,7 @@ function RolePortalShell({ profile }: { profile: UserProfile }) {
                   <span className="v2-nav-icon"><item.icon size={19} /></span>
                   <span>{item.label}</span>
                   {item.id === 'announcements' && announcementCount > 0 && <b>{announcementCount}</b>}
+                  {item.id === 'children' && verificationCount > 0 && <b>{Math.min(verificationCount, 99)}</b>}
                 </button>
               ))}
             </div>
