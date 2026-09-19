@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Camera, CameraOff, CheckCircle2, QrCode, RefreshCw } from 'lucide-react'
 import { Button, PageHeader } from '../components/ui'
 import { invokeObservedFunction } from '../lib/observed-services'
 import { reportOperationalError } from '../lib/observability'
@@ -378,7 +378,6 @@ export function AttendanceScannerNative() {
       <PageHeader
         eyebrow="ABSENSI QR"
         title="Scan Kehadiran"
-        subtitle="Pindai QR murid langsung dari kamera live untuk mencatat waktu masuk atau pulang."
       />
 
       <div className={`native-scanner-status ${scannerLive ? 'is-live' : ''}`} aria-live="polite">
@@ -445,7 +444,6 @@ export function AttendanceScannerNative() {
           <div className="native-summary-heading">
             <div>
               <h3 id="scanner-summary-title">Ringkasan Hari Ini</h3>
-              <p>Agregasi absensi hari ini sesuai akses akun yang sedang login.</p>
             </div>
           </div>
           {summaryError ? <p className="native-summary-error" role="status">{summaryError}</p> : null}
@@ -454,7 +452,6 @@ export function AttendanceScannerNative() {
             <SummaryStat label="Pulang" value={summary.checked_out_records} />
             <SummaryStat label="Terlambat" value={summary.late_records} />
           </div>
-          <div className="v2-security-note"><ShieldCheck /><p>QR hanya diproses oleh Admin atau Guru yang sedang login.</p></div>
         </section>
       </div>
     </div>
